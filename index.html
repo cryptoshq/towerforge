@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Defense — Dual Path</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+    <link rel="shortcut icon" href="assets/favicon.svg">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Main Menu -->
+    <div id="main-menu" class="screen active">
+        <div class="menu-bg"></div>
+        <div class="menu-content">
+            <h1 class="game-title">TOWER<span class="title-accent">FORGE</span></h1>
+            <p class="subtitle">Dual Path Defense</p>
+            <div class="menu-buttons">
+                <button class="menu-btn primary" id="btn-play">PLAY</button>
+                <button class="menu-btn weekly" id="btn-weekly">WEEKLY CHALLENGE</button>
+                <button class="menu-btn" id="btn-continue" style="display:none">CONTINUE</button>
+                <button class="menu-btn" id="btn-research">RESEARCH LAB</button>
+                <button class="menu-btn" id="btn-achievements">ACHIEVEMENTS</button>
+                <button class="menu-btn" id="btn-howtoplay">HOW TO PLAY</button>
+                <button class="menu-btn" id="btn-settings">SETTINGS</button>
+            </div>
+            <div class="menu-meta-progress" id="menu-meta-progress"></div>
+            <div class="version">v2.0 &mdash; TowerForge</div>
+        </div>
+    </div>
+
+    <!-- Difficulty Select -->
+    <div id="difficulty-select" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-difficulty">&larr; BACK</button>
+            <h2>CHOOSE YOUR PATH</h2>
+        </div>
+        <div class="difficulty-cards" id="difficulty-cards"></div>
+    </div>
+
+    <!-- Map Select -->
+    <div id="map-select" class="screen">
+        <div class="map-select-header" id="map-select-header">
+            <button class="back-btn map-back-btn" id="btn-back-maps">&larr; BACK</button>
+            <div class="map-select-title-group">
+                <h2 class="map-select-title" id="map-select-title">SELECT MAP</h2>
+                <div class="map-select-subtitle" id="map-select-subtitle">Choose your battlefield</div>
+            </div>
+            <div class="map-select-progress" id="map-select-progress"></div>
+        </div>
+        <div class="map-cards-grid" id="map-cards"></div>
+    </div>
+
+    <!-- Research Screen -->
+    <div id="research-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-research">&larr; BACK</button>
+            <h2>RESEARCH LAB</h2>
+            <div class="research-points-display">
+                <span class="rp-icon">&#9733;</span>
+                <span id="research-points">0</span> RP
+            </div>
+        </div>
+        <div class="research-tree" id="research-tree"></div>
+    </div>
+
+    <!-- Achievements Screen -->
+    <div id="achievements-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-achievements">&larr; BACK</button>
+            <h2>ACHIEVEMENTS</h2>
+        </div>
+        <div class="achievements-grid" id="achievements-grid"></div>
+    </div>
+
+    <!-- How To Play Screen -->
+    <div id="howtoplay-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-howtoplay">&larr; BACK</button>
+            <h2>HOW TO PLAY</h2>
+        </div>
+        <div class="howtoplay-content" id="howtoplay-content"></div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-settings">&larr; BACK</button>
+            <h2>SETTINGS</h2>
+        </div>
+        <div class="settings-content">
+            <div class="setting-row">
+                <label>Difficulty</label>
+                <div class="difficulty-selector" id="main-difficulty-selector"></div>
+            </div>
+            <div class="setting-row">
+                <label>Music Volume</label>
+                <input type="range" id="music-volume" min="0" max="100" value="70">
+                <span id="music-vol-val">70%</span>
+            </div>
+            <div class="setting-row">
+                <label>SFX Volume</label>
+                <input type="range" id="sfx-volume" min="0" max="100" value="80">
+                <span id="sfx-vol-val">80%</span>
+            </div>
+            <div class="setting-row">
+                <label>Screen Shake</label>
+                <input type="range" id="shake-intensity" min="0" max="100" value="100">
+                <span id="shake-val">100%</span>
+            </div>
+            <div class="setting-row">
+                <label>Show Range Circles</label>
+                <label class="toggle"><input type="checkbox" id="show-ranges"><span class="slider"></span></label>
+            </div>
+            <div class="setting-row">
+                <label>Auto-Start Waves</label>
+                <label class="toggle"><input type="checkbox" id="auto-start"><span class="slider"></span></label>
+            </div>
+            <div class="settings-keybinds">
+                <div class="settings-keybinds-header">
+                    <label>Keybind Hotkeys</label>
+                    <button type="button" class="keybind-reset-btn" id="btn-reset-hotkeys">RESET DEFAULTS</button>
+                </div>
+                <div class="settings-hotkey-grid" id="settings-hotkey-grid"></div>
+                <p class="settings-keybinds-hint">Click a key to remap it. Press Escape to cancel capture. Number keys 1-8 remain reserved for tower slots.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <!-- Top HUD -->
+        <div class="game-hud-top">
+            <div class="hud-item" id="hud-wave">
+                <span class="hud-label">WAVE</span>
+                <span class="hud-value" id="hud-wave-val">0 / 30</span>
+                <span class="hud-meta" id="hud-threat-val"></span>
+            </div>
+            <div class="hud-item" id="hud-gold">
+                <span class="hud-label">GOLD</span>
+                <span class="hud-value gold-text" id="hud-gold-val">200</span>
+            </div>
+            <div class="hud-item" id="hud-lives">
+                <span class="hud-label">LIVES</span>
+                <span class="hud-value lives-text" id="hud-lives-val">20</span>
+            </div>
+            <div class="hud-item" id="hud-score">
+                <span class="hud-label">SCORE</span>
+                <span class="hud-value" id="hud-score-val">0</span>
+            </div>
+            <div class="hud-controls">
+                <button class="hud-btn" id="btn-speed" title="Game Speed">1x</button>
+                <button class="hud-btn" id="btn-pause" title="Pause">&#10074;&#10074;</button>
+                <button class="hud-btn" id="btn-settings-ingame" title="Settings">&#9881;</button>
+                <button class="hud-btn" id="btn-menu-ingame" title="Menu">&#9776;</button>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Tower Sidebar -->
+        <div class="tower-sidebar" id="tower-sidebar">
+            <h3 class="sidebar-title">TOWERS</h3>
+            <div class="tower-list" id="tower-list"></div>
+            <div class="sidebar-divider"></div>
+            <h3 class="sidebar-title">ABILITIES</h3>
+            <div class="ability-bar" id="ability-bar"></div>
+        </div>
+
+        <!-- Tower Info Panel -->
+        <div class="tower-info-panel" id="tower-info" style="display:none">
+            <div class="tower-info-header">
+                <span class="tower-info-name" id="info-name">Arrow Tower</span>
+                <span class="tower-info-tier" id="info-tier">Tier 1</span>
+                <button class="close-btn" id="btn-close-info">&times;</button>
+            </div>
+            <div class="tower-info-path" id="info-path"></div>
+            <div class="tower-info-stats" id="info-stats"></div>
+            <div class="tower-info-mastery" id="info-mastery"></div>
+            <div class="tower-targeting" id="info-targeting"></div>
+            <div class="tower-info-actions" id="info-actions"></div>
+        </div>
+
+        <!-- Path Choice Modal -->
+        <div class="modal-overlay" id="path-choice-modal" style="display:none">
+            <div class="modal path-modal">
+                <div class="permanent-warning">&#9888; PERMANENT CHOICE &#9888;</div>
+                <h2 class="path-modal-title">CHOOSE YOUR PATH</h2>
+                <p class="modal-subtitle" id="path-tower-name"></p>
+                <div class="path-current-stats" id="path-current-stats"></div>
+                <div class="path-choices">
+                    <div class="path-card" id="path-a-card">
+                        <div class="path-card-glow"></div>
+                        <div class="path-hotkey-hint">A</div>
+                        <h3 id="path-a-name">Path A</h3>
+                        <p id="path-a-desc"></p>
+                        <div id="path-a-stats"></div>
+                        <button class="path-btn" id="btn-path-a">CHOOSE</button>
+                    </div>
+                    <div class="path-divider"><span>OR</span></div>
+                    <div class="path-card" id="path-b-card">
+                        <div class="path-card-glow"></div>
+                        <div class="path-hotkey-hint">B</div>
+                        <h3 id="path-b-name">Path B</h3>
+                        <p id="path-b-desc"></p>
+                        <div id="path-b-stats"></div>
+                        <button class="path-btn" id="btn-path-b">CHOOSE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wave Start Button -->
+        <button class="wave-start-btn" id="btn-start-wave">
+            <span class="wave-btn-text">START WAVE</span>
+            <span class="wave-btn-key">[SPACE]</span>
+        </button>
+
+        <!-- Skip Wave Button -->
+        <button class="wave-skip-btn" id="btn-skip-wave" style="display:none">
+            <span class="wave-btn-text">SKIP WAVE</span>
+        </button>
+
+        <!-- Wave Info Banner -->
+        <div class="wave-banner" id="wave-banner" style="display:none">
+            <span id="wave-banner-text">WAVE 1</span>
+        </div>
+
+        <!-- In-Game Settings Panel -->
+        <div id="settings-panel" class="settings-panel" style="display:none">
+            <div class="settings-content">
+                <h3>SETTINGS</h3>
+                <div class="settings-group">
+                    <label>Difficulty</label>
+                    <div class="difficulty-selector" id="difficulty-selector"></div>
+                </div>
+                <div class="settings-group">
+                    <label>Music Volume</label>
+                    <input type="range" id="set-music" min="0" max="100" value="70">
+                </div>
+                <div class="settings-group">
+                    <label>SFX Volume</label>
+                    <input type="range" id="set-sfx" min="0" max="100" value="80">
+                </div>
+                <div class="settings-group">
+                    <label>Screen Shake</label>
+                    <input type="range" id="set-shake" min="0" max="100" value="100">
+                </div>
+                <div class="settings-group">
+                    <label><input type="checkbox" id="set-show-ranges"> Show Tower Ranges</label>
+                </div>
+                <div class="settings-group">
+                    <label><input type="checkbox" id="set-auto-start"> Auto-Start Waves</label>
+                </div>
+                <div class="settings-group">
+                    <label><input type="checkbox" id="set-show-fps"> Show FPS Counter</label>
+                </div>
+                <button class="settings-close-btn" id="btn-close-settings">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Menu -->
+    <div class="modal-overlay" id="pause-menu" style="display:none">
+        <div class="modal">
+            <h2>PAUSED</h2>
+            <div class="pause-buttons">
+                <button class="menu-btn" id="btn-resume">RESUME</button>
+                <button class="menu-btn" id="btn-restart">RESTART</button>
+                <button class="menu-btn" id="btn-quit">QUIT TO MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over -->
+    <div class="modal-overlay" id="gameover-screen" style="display:none">
+        <div class="modal gameover-modal">
+            <h2 class="gameover-title">DEFEATED</h2>
+            <p class="gameover-wave" id="gameover-wave">Wave 0</p>
+            <div class="gameover-stats" id="gameover-stats"></div>
+            <div class="gameover-rp" id="gameover-rp"></div>
+            <div class="gameover-buttons">
+                <button class="menu-btn primary" id="btn-retry">RETRY</button>
+                <button class="menu-btn" id="btn-gameover-menu">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory -->
+    <div class="modal-overlay" id="victory-screen" style="display:none">
+        <div class="modal victory-modal">
+            <h2 class="victory-title">VICTORY!</h2>
+            <div class="victory-stats" id="victory-stats"></div>
+            <div class="victory-rp" id="victory-rp"></div>
+            <div class="victory-buttons">
+                <button class="menu-btn primary" id="btn-next-map">NEXT MAP</button>
+                <button class="menu-btn" id="btn-play-again">PLAY AGAIN</button>
+                <button class="menu-btn" id="btn-victory-menu">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Endless Mode Modal -->
+    <div class="modal-overlay" id="endless-modal" style="display:none">
+        <div class="modal endless-modal">
+            <h2 class="victory-title">VICTORY!</h2>
+            <p class="endless-subtitle">You survived all waves!</p>
+            <p class="endless-desc">Continue into Endless Mode? Waves will keep getting harder with new modifiers, more elites, and scaling enemies. How far can you go?</p>
+            <div class="endless-buttons">
+                <button class="menu-btn primary" id="btn-endless-yes">ENTER ENDLESS MODE</button>
+                <button class="menu-btn" id="btn-endless-no">CLAIM VICTORY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Endless Mutator Draft -->
+    <div class="modal-overlay" id="endless-draft-modal" style="display:none">
+        <div class="modal endless-draft-modal">
+            <h2 class="victory-title">ENDLESS MUTATOR DRAFT</h2>
+            <p class="endless-subtitle" id="endless-draft-subtitle">Choose a mutator to add to your run.</p>
+            <div class="endless-draft-current" id="endless-draft-current"></div>
+            <div class="endless-draft-choices" id="endless-draft-choices"></div>
+            <div class="endless-draft-actions">
+                <button class="menu-btn" id="btn-endless-draft-reroll">REROLL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Achievement Notification -->
+    <div class="achievement-popup" id="achievement-popup" style="display:none">
+        <div class="achievement-icon">&#127942;</div>
+        <div class="achievement-text">
+            <span class="achievement-label">ACHIEVEMENT UNLOCKED</span>
+            <span class="achievement-name" id="achievement-name"></span>
+        </div>
+    </div>
+
+    <!-- Floating Combat Text Container -->
+    <div id="floating-text-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/gameState.js"></script>
+    <script src="js/canvas.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/effects.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/enemy.js"></script>
+    <script src="js/projectile.js"></script>
+    <script src="js/tower.js"></script>
+    <script src="js/wave.js"></script>
+    <script src="js/abilities.js"></script>
+    <script src="js/synergy.js"></script>
+    <script src="js/research.js"></script>
+    <script src="js/achievements.js"></script>
+    <script src="js/leaderboard.js"></script>
+    <script src="js/save.js"></script>
+    <script src="js/towerIcons.js"></script>
+    <script src="js/towerRendering.js"></script>
+    <script src="js/enemyRendering.js"></script>
+    <script src="js/vfxRendering.js"></script>
+    <script src="js/uiRendering.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/tutorial.js"></script>
+    <script src="js/debug.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

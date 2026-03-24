@@ -1,0 +1,12 @@
+{
+  "name": "towerforge",
+  "version": "1.0.0",
+  "description": "Tower Defense - Dual Path",
+  "scripts": {
+    "start": "npx serve -p 3000",
+    "dev": "npx serve -p 3000"
+  },
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}
