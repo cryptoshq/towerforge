@@ -37,6 +37,199 @@ const EnemyRenderer = {
         return cracks;
     },
 
+    _getCaptainAuraStyle(profileId, fallbackColor) {
+        const color = fallbackColor || '#ffbe70';
+        switch (profileId) {
+            case 'veil_ambusher':
+                return {
+                    id: 'veil_ambusher',
+                    auraColor: '#c690ff',
+                    accentColor: '#e5c5ff',
+                    label: 'AMBUSH CAPTAIN',
+                    labelColor: '#f0dfff',
+                };
+            case 'blight_matron':
+                return {
+                    id: 'blight_matron',
+                    auraColor: '#9ee08a',
+                    accentColor: '#d8ffc6',
+                    label: 'MATRON CAPTAIN',
+                    labelColor: '#e7ffd7',
+                };
+            default:
+                return {
+                    id: 'default',
+                    auraColor: color,
+                    accentColor: '#ffdca1',
+                    label: 'CAPTAIN',
+                    labelColor: '#ffdca1',
+                };
+        }
+    },
+
+    _drawCaptainTelegraph(ctx, enemy, x, y, size, t, anim) {
+        const style = this._getCaptainAuraStyle(enemy.captainProfileId, enemy.captainAuraColor);
+        const pulse = 0.7 + Math.sin(t * 7 + anim.flickerSeed) * 0.2;
+        const auraR = (enemy.captainAuraRadius || 160) * (0.96 + pulse * 0.04);
+
+        ctx.save();
+
+        if (style.id === 'veil_ambusher') {
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.35);
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.lineDashOffset = -t * 28;
+            ctx.beginPath();
+            ctx.arc(x, y, auraR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.strokeStyle = colorAlpha(style.accentColor, 0.45);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x, y, auraR * 0.86, t * 2.4, t * 2.4 + Math.PI * 0.9);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(x, y, auraR * 0.86, t * 2.4 + Math.PI, t * 2.4 + Math.PI * 1.9);
+            ctx.stroke();
+
+            // Directional ambush chevrons.
+            ctx.strokeStyle = style.accentColor;
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 3; i++) {
+                const a = t * 1.8 + i * (Math.PI * 2 / 3);
+                const cx = x + Math.cos(a) * (auraR + 8);
+                const cy = y + Math.sin(a) * (auraR + 8);
+                const nx = Math.cos(a);
+                const ny = Math.sin(a);
+                const tx = -ny;
+                const ty = nx;
+                ctx.beginPath();
+                ctx.moveTo(cx - tx * 4 - nx * 2, cy - ty * 4 - ny * 2);
+                ctx.lineTo(cx, cy);
+                ctx.lineTo(cx + tx * 4 - nx * 2, cy + ty * 4 - ny * 2);
+                ctx.stroke();
+            }
+        } else if (style.id === 'blight_matron') {
+            const ripple = 1 + Math.sin(t * 2.2 + anim.flickerSeed) * 0.03;
+            const outer = auraR * ripple;
+            const inner = auraR * 0.84;
+
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.28);
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.arc(x, y, outer, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = colorAlpha(style.accentColor, 0.45);
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.arc(x, y, inner, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Healer-chain glyphs around the ring.
+            ctx.strokeStyle = colorAlpha(style.accentColor, 0.75);
+            ctx.lineWidth = 1.4;
+            for (let i = 0; i < 6; i++) {
+                const a = t * 1.2 + i * (Math.PI * 2 / 6);
+                const gx = x + Math.cos(a) * (inner + 6);
+                const gy = y + Math.sin(a) * (inner + 6);
+                ctx.beginPath();
+                ctx.moveTo(gx - 3, gy);
+                ctx.lineTo(gx + 3, gy);
+                ctx.moveTo(gx, gy - 3);
+                ctx.lineTo(gx, gy + 3);
+                ctx.stroke();
+            }
+        } else {
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.22);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, auraR, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        const ly = y - size - 30;
+        ctx.font = 'bold 8px "Share Tech Mono"';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = style.labelColor;
+        ctx.fillText(style.label, x, ly);
+
+        // Captain crest, varied by captain role.
+        ctx.strokeStyle = style.labelColor;
+        ctx.lineWidth = 1.6;
+        if (style.id === 'veil_ambusher') {
+            ctx.beginPath();
+            ctx.moveTo(x - 8, ly + 5);
+            ctx.lineTo(x - 2, ly - 3);
+            ctx.lineTo(x + 2, ly + 5);
+            ctx.lineTo(x + 8, ly - 3);
+            ctx.stroke();
+        } else if (style.id === 'blight_matron') {
+            ctx.beginPath();
+            ctx.moveTo(x - 6, ly + 4);
+            ctx.lineTo(x + 6, ly + 4);
+            ctx.moveTo(x, ly - 2);
+            ctx.lineTo(x, ly + 10);
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(x - 7, ly + 5);
+            ctx.lineTo(x - 2, ly - 1);
+            ctx.lineTo(x + 2, ly + 5);
+            ctx.lineTo(x + 7, ly - 1);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    _drawCommandedTelegraph(ctx, enemy, x, y, size, t) {
+        const style = this._getCaptainAuraStyle(enemy.captainAuraProfileId, enemy.captainAuraColor);
+
+        ctx.save();
+        if (style.id === 'veil_ambusher') {
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.55);
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([4, 3]);
+            ctx.lineDashOffset = -t * 18;
+            ctx.beginPath();
+            ctx.arc(x, y, size + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 1.85);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.strokeStyle = colorAlpha(style.accentColor, 0.6);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(x, y, size + 8, t * 1.6, t * 1.6 + Math.PI * 0.55);
+            ctx.stroke();
+        } else if (style.id === 'blight_matron') {
+            const pulse = 0.78 + Math.sin(t * 5) * 0.14;
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.55);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x, y, (size + 5) * pulse, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = colorAlpha(style.accentColor, 0.75);
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(x - 2.5, y);
+            ctx.lineTo(x + 2.5, y);
+            ctx.moveTo(x, y - 2.5);
+            ctx.lineTo(x, y + 2.5);
+            ctx.stroke();
+        } else {
+            ctx.strokeStyle = colorAlpha(style.auraColor, 0.45);
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.arc(x, y, size + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 1.8);
+            ctx.stroke();
+        }
+        ctx.restore();
+    },
+
     draw(ctx, enemy) {
         if (!enemy.alive) return;
 
@@ -102,6 +295,51 @@ const EnemyRenderer = {
             ctx.fill();
             ctx.shadowBlur = 0;
             ctx.restore();
+        }
+
+        // === BONUS OBJECTIVE TARGET MARKER ===
+        if (enemy.isObjectiveTarget) {
+            const pulse = 0.6 + Math.sin(t * 8 + anim.flickerSeed) * 0.3;
+            const ringR = size + 8 + pulse * 2;
+
+            ctx.save();
+            ctx.strokeStyle = colorAlpha('#ffd580', 0.75);
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#ffcf6a';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(x, y, ringR, t * 1.6, t * 1.6 + Math.PI * 1.2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(x, y, ringR, t * 1.6 + Math.PI, t * 1.6 + Math.PI * 2.2);
+            ctx.stroke();
+
+            const ty = y - size - 22;
+            ctx.shadowBlur = 0;
+            ctx.font = 'bold 8px "Share Tech Mono"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffe19b';
+            ctx.fillText('TARGET', x, ty);
+
+            ctx.fillStyle = colorAlpha('#ffe19b', 0.25);
+            ctx.beginPath();
+            ctx.moveTo(x, ty - 6);
+            ctx.lineTo(x + 6, ty);
+            ctx.lineTo(x, ty + 6);
+            ctx.lineTo(x - 6, ty);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // === CAPTAIN MARKER / COMMAND AURA ===
+        if (enemy.isCaptain) {
+            this._drawCaptainTelegraph(ctx, enemy, x, y, size, t, anim);
+        } else if (enemy.captainAuraActive) {
+            // Allied unit currently under command aura.
+            this._drawCommandedTelegraph(ctx, enemy, x, y, size, t);
         }
 
         // === DIFFICULTY-SPECIFIC PRE-BODY EFFECTS ===

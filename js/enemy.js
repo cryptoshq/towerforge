@@ -13,6 +13,7 @@ const STATUS_EFFECTS = {
     frenzy: { name: 'Frenzy', color: '#ff2200', icon: 'F', priority: 2 },
     fortified: { name: 'Fortified', color: '#888888', icon: 'T', priority: 1 },
     regen: { name: 'Regenerating', color: '#44ff44', icon: 'R', priority: 1 },
+    commanded: { name: 'Commanded', color: '#ffbe70', icon: 'C', priority: 2 },
 };
 
 // Death animation types
@@ -127,6 +128,7 @@ class Enemy {
         this.size = def.size;
         this.color = def.color;
         this.isBoss = def.isBoss || false;
+        this.isObjectiveTarget = false;
 
         // Path following
         this.pathIndex = 0;
@@ -197,6 +199,21 @@ class Enemy {
         this.frenzy = false; // from wave modifier
         this.fortified = false;
         this.fortifiedReduction = 0;
+
+        // Captain / aura state
+        this.isCaptain = false;
+        this.captainProfileId = null;
+        this.captainAuraRadius = 0;
+        this.captainAuraColor = '#ffbe70';
+        this.captainAuraName = '';
+        this.captainAuraProfileId = null;
+        this.captainAuraActive = false;
+        this.captainSpeedMult = 1;
+        this.captainDamageReduction = 0;
+        this.captainArmorBonus = 0;
+        this.captainStealthCooldownMult = 1;
+        this.captainRegenRate = 0;
+        this.captainSupportCastRate = 1;
 
         // Formation tracking
         this.formationId = null;
@@ -320,6 +337,7 @@ class Enemy {
         if (this.frenzy) effects.push(STATUS_EFFECTS.frenzy);
         if (this.fortified) effects.push(STATUS_EFFECTS.fortified);
         if (this.regenRate > 0) effects.push(STATUS_EFFECTS.regen);
+        if (this.captainAuraActive && !this.isCaptain) effects.push(STATUS_EFFECTS.commanded);
         // Sort by priority descending so most important show first
         effects.sort((a, b) => b.priority - a.priority);
         return effects;
@@ -387,11 +405,12 @@ class Enemy {
         }
 
         // Health regeneration
-        if (this.regenRate > 0 && this.hp < this.maxHp) {
+        const totalRegenRate = Math.max(0, (this.regenRate || 0) + (this.captainRegenRate || 0));
+        if (totalRegenRate > 0 && this.hp < this.maxHp) {
             this.regenTimer += dt;
             if (this.regenTimer >= 0.5) { // Regen tick every 0.5s
                 this.regenTimer -= 0.5;
-                const healAmount = this.regenRate * 0.5;
+                const healAmount = totalRegenRate * 0.5;
                 this.hp = Math.min(this.maxHp, this.hp + healAmount);
                 // Small green float text for regen
                 if (healAmount >= 1) {
@@ -455,7 +474,7 @@ class Enemy {
                 this.stealthTimer -= dt;
                 if (this.stealthTimer <= 0) {
                     this.invisible = false;
-                    this.stealthCooldown = 3.0;
+                    this.stealthCooldown = 3.0 * Math.max(0.35, this.captainStealthCooldownMult || 1);
                 }
             }
             if (this.stealthCooldown > 0) this.stealthCooldown -= dt;
@@ -463,14 +482,15 @@ class Enemy {
 
         // Healer behavior
         if (this.type === 'healer') {
+            const supportCastRate = Math.max(0.5, this.captainSupportCastRate || 1);
             if (this.healCastTimer > 0) {
                 this.healCastTimer -= dt;
                 if (this.healCastTimer <= 0) {
                     this._castHealerPulse();
-                    this.healCooldown = 2.0;
+                    this.healCooldown = 2.0 / supportCastRate;
                 }
             } else {
-                this.healCooldown -= dt;
+                this.healCooldown -= dt * supportCastRate;
                 if (this.healCooldown <= 0) {
                     this.healCastMaxTimer = 0.65;
                     this.healCastTimer = this.healCastMaxTimer;
@@ -481,14 +501,15 @@ class Enemy {
 
         // Shield enemy aura: periodically re-apply shields
         if (this.type === 'shield') {
+            const supportCastRate = Math.max(0.5, this.captainSupportCastRate || 1);
             if (this.shieldAuraCastTimer > 0) {
                 this.shieldAuraCastTimer -= dt;
                 if (this.shieldAuraCastTimer <= 0) {
                     this._castShieldAura();
-                    this.shieldAuraCooldown = 3.0;
+                    this.shieldAuraCooldown = 3.0 / supportCastRate;
                 }
             } else {
-                this.shieldAuraCooldown -= dt;
+                this.shieldAuraCooldown -= dt * supportCastRate;
                 if (this.shieldAuraCooldown <= 0) {
                     this.shieldAuraCastMaxTimer = 0.7;
                     this.shieldAuraCastTimer = this.shieldAuraCastMaxTimer;
@@ -518,7 +539,7 @@ class Enemy {
                     this.stealthTimer -= dt;
                     if (this.stealthTimer <= 0) {
                         this.invisible = false;
-                        this.stealthCooldown = def.phaseInterval || 4.0;
+                        this.stealthCooldown = (def.phaseInterval || 4.0) * Math.max(0.35, this.captainStealthCooldownMult || 1);
                     }
                 }
 
@@ -590,6 +611,9 @@ class Enemy {
         }
         if (this.slow > 0) spd *= (1 - this.slow);
         if (GameState.globalSlow > 0) spd *= (1 - GameState.globalSlow);
+        if (this.captainSpeedMult && Number.isFinite(this.captainSpeedMult) && this.captainSpeedMult > 0) {
+            spd *= this.captainSpeedMult;
+        }
 
         // Boss speed burst
         if (this.bossSpeedBurstTimer > 0) {
@@ -903,6 +927,7 @@ class Enemy {
         }
         // Research armor pierce
         armorPierce += (GameState.researchBonuses.armorPierce || 0);
+        armor += (this.captainArmorBonus || 0);
         armor = armor * (1 - Math.min(armorPierce, 1));
 
         let dmg = Math.max(amount - armor, 1);
@@ -911,6 +936,9 @@ class Enemy {
         if (this.fortified) {
             dmg *= (1 - this.fortifiedReduction);
         }
+        if (this.captainDamageReduction > 0) {
+            dmg *= (1 - this.captainDamageReduction);
+        }
 
         // Mark vulnerability
         if (this.marked) dmg *= (1 + this.markVuln);
@@ -918,6 +946,22 @@ class Enemy {
 
         // Global buff
         if (GameState.globalDmgBuff > 0) dmg *= (1 + GameState.globalDmgBuff);
+
+        // Doctrine modifiers
+        const de = GameState.doctrineEffects || {};
+        if (de.globalDamageMult && Number.isFinite(de.globalDamageMult) && de.globalDamageMult > 0) {
+            dmg *= de.globalDamageMult;
+        }
+        if ((this.isElite || this.isBoss) && de.eliteBossDamageMult && Number.isFinite(de.eliteBossDamageMult) && de.eliteBossDamageMult > 0) {
+            dmg *= de.eliteBossDamageMult;
+        }
+
+        if (typeof WaveSystem !== 'undefined' && typeof WaveSystem.getCurrentTacticalModifiers === 'function') {
+            const tactical = WaveSystem.getCurrentTacticalModifiers();
+            if (tactical.towerDamageMult && Number.isFinite(tactical.towerDamageMult) && tactical.towerDamageMult > 0) {
+                dmg *= tactical.towerDamageMult;
+            }
+        }
 
         // Boss shield
         if (this.bossShieldActive && this.bossShieldHp > 0) {

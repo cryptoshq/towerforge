@@ -201,6 +201,10 @@ const Input = {
 
         // Middle mouse button for panning
         gameCanvas.addEventListener('mousedown', (e) => {
+            if (this._handleMouseHotkey(e)) {
+                return;
+            }
+
             if (e.button === 1) {
                 // Middle mouse button — start panning
                 e.preventDefault();
@@ -305,26 +309,9 @@ const Input = {
             }
         });
 
-        // Right click — context menu or overclock
+        // Right click — disabled for in-game context actions
         gameCanvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            const rect = gameCanvas.getBoundingClientRect();
-            const screenX = e.clientX - rect.left;
-            const screenY = e.clientY - rect.top;
-
-            if (!isInGameArea(screenX, screenY)) return;
-
-            const logical = screenToLogical(screenX, screenY);
-            const grid = worldToGrid(logical.x, logical.y);
-
-            for (const t of GameState.towers) {
-                if (dist({x: logical.x, y: logical.y}, t) < (CONFIG.TOWER_FOOTPRINT || 14) + 8) {
-                    this._showContextMenu(screenX, screenY, t);
-                    return;
-                }
-            }
-
-            // No tower right-clicked — hide context menu
             this._hideContextMenu();
         });
 
@@ -375,6 +362,9 @@ const Input = {
             } else if (screen === 'mapselect') {
                 MenuSystem.showScreen('difficulty');
                 Audio.play('click');
+            } else if (screen === 'doctrine') {
+                MenuSystem.showScreen('mapselect');
+                Audio.play('click');
             }
         });
 
@@ -395,6 +385,20 @@ const Input = {
                 } else if (e.code === 'KeyR') {
                     e.preventDefault();
                     WaveSystem.rerollEndlessMutatorDraft();
+                }
+                return;
+            }
+
+            if (typeof WaveSystem !== 'undefined' && WaveSystem.tacticalEventModalOpen) {
+                if (e.code === 'Digit1') {
+                    e.preventDefault();
+                    WaveSystem.pickTacticalChoice(0);
+                } else if (e.code === 'Digit2') {
+                    e.preventDefault();
+                    WaveSystem.pickTacticalChoice(1);
+                } else if (e.code === 'Digit3') {
+                    e.preventDefault();
+                    WaveSystem.pickTacticalChoice(2);
                 }
                 return;
             }
@@ -447,23 +451,7 @@ const Input = {
 
             // Pause / deselect
             if (this._matchesHotkey(e, 'pause')) {
-                if (this.shortcutOverlayVisible) {
-                    this._hideShortcutOverlay();
-                } else if (this.contextMenuVisible) {
-                    this._hideContextMenu();
-                } else if (GameState.selectedTowerType) {
-                    GameState.selectedTowerType = null;
-                    UIRenderer._updateSidebarSelection();
-                } else if (GameState.selectedTower) {
-                    UIRenderer.hideTowerInfo();
-                } else if (document.getElementById('path-choice-modal').style.display === 'flex') {
-                    if (UIRenderer._stopPathPreviewAnimations) {
-                        UIRenderer._stopPathPreviewAnimations();
-                    }
-                    document.getElementById('path-choice-modal').style.display = 'none';
-                } else {
-                    togglePause();
-                }
+                this._handlePauseHotkeyAction();
             }
 
             // Tower hotkeys 1-8
@@ -591,7 +579,7 @@ const Input = {
 
         for (const [actionId, defaultCode] of Object.entries(this.defaultHotkeys)) {
             const candidate = this._normalizeHotkeyCode(fromSettings[actionId]) || defaultCode;
-            const finalCode = (!this._isModifierCode(candidate) && !seen.has(candidate))
+            const finalCode = (this._isHotkeyCodeBindable(candidate) && !seen.has(candidate))
                 ? candidate
                 : defaultCode;
             merged[actionId] = finalCode;
@@ -624,7 +612,7 @@ const Input = {
         }
 
         const normalized = this._normalizeHotkeyCode(code);
-        if (!normalized || this._isModifierCode(normalized) || this._isReservedHotkeyCode(normalized)) {
+        if (!this._isHotkeyCodeBindable(normalized)) {
             return { ok: false, reason: 'invalid-key' };
         }
 
@@ -665,12 +653,53 @@ const Input = {
             code === 'MetaLeft' || code === 'MetaRight';
     },
 
+    _isDisallowedMouseHotkeyCode(code) {
+        return code === 'MouseLeft' || code === 'MouseRight';
+    },
+
+    _isHotkeyCodeBindable(code) {
+        return !!code && !this._isModifierCode(code) && !this._isReservedHotkeyCode(code) && !this._isDisallowedMouseHotkeyCode(code);
+    },
+
     _isReservedHotkeyCode(code) {
         return /^Digit[1-8]$/.test(code);
     },
 
+    mouseButtonToHotkeyCode(button) {
+        switch (button) {
+            case 0: return 'MouseLeft';
+            case 1: return 'MouseMiddle';
+            case 2: return 'MouseRight';
+            case 3: return 'MouseBack';
+            case 4: return 'MouseForward';
+            default:
+                return Number.isFinite(button) && button > 4 ? `MouseButton${button + 1}` : '';
+        }
+    },
+
+    _eventToHotkeyCode(e) {
+        if (!e) return '';
+        if (typeof e.code === 'string' && e.code) return this._normalizeHotkeyCode(e.code);
+        if (typeof e.button === 'number') return this.mouseButtonToHotkeyCode(e.button);
+        if (typeof e.hotkeyCode === 'string' && e.hotkeyCode) return this._normalizeHotkeyCode(e.hotkeyCode);
+        return '';
+    },
+
+    _isMouseHotkeyCode(code) {
+        return typeof code === 'string' && code.startsWith('Mouse');
+    },
+
+    getHotkeyActionForCode(code) {
+        const normalized = this._normalizeHotkeyCode(code);
+        if (!normalized) return null;
+        for (const [actionId, actionCode] of Object.entries(this.hotkeys)) {
+            if (actionCode === normalized) return actionId;
+        }
+        return null;
+    },
+
     _matchesHotkey(e, actionId) {
-        return e.code === this.getHotkeyCode(actionId);
+        return this._eventToHotkeyCode(e) === this.getHotkeyCode(actionId);
     },
 
     _isShowShortcutsHotkey(e) {
@@ -678,6 +707,134 @@ const Input = {
         if (e.code !== code) return false;
         if (code === 'Slash') return !!e.shiftKey;
         return true;
+    },
+
+    _handlePauseHotkeyAction() {
+        if (this.shortcutOverlayVisible) {
+            this._hideShortcutOverlay();
+        } else if (this.contextMenuVisible) {
+            this._hideContextMenu();
+        } else if (GameState.selectedTowerType) {
+            GameState.selectedTowerType = null;
+            UIRenderer._updateSidebarSelection();
+        } else if (GameState.selectedTower) {
+            UIRenderer.hideTowerInfo();
+        } else if (document.getElementById('path-choice-modal').style.display === 'flex') {
+            if (UIRenderer._stopPathPreviewAnimations) {
+                UIRenderer._stopPathPreviewAnimations();
+            }
+            document.getElementById('path-choice-modal').style.display = 'none';
+        } else {
+            togglePause();
+        }
+    },
+
+    _handleMouseHotkey(e) {
+        if (GameState.screen !== 'game') return false;
+        if (typeof e.button !== 'number') return false;
+
+        const code = this.mouseButtonToHotkeyCode(e.button);
+        if (!code || !this._isMouseHotkeyCode(code)) return false;
+
+        const actionId = this.getHotkeyActionForCode(code);
+        if (!actionId) return false;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (actionId === 'showShortcuts') {
+            this._toggleShortcutOverlay();
+            return true;
+        }
+
+        if (actionId === 'pause') {
+            this._handlePauseHotkeyAction();
+            return true;
+        }
+
+        if (actionId === 'startWave') {
+            if (GameState.gamePhase === 'idle') {
+                WaveSystem.startWave();
+            }
+            return true;
+        }
+
+        if (actionId.startsWith('ability')) {
+            if (GameState.gamePhase === 'playing') {
+                const idx = Number.parseInt(actionId.slice('ability'.length), 10) - 1;
+                if (Number.isFinite(idx) && idx >= 0) {
+                    AbilitySystem.useAbility(idx, GameState.mouseX, GameState.mouseY);
+                }
+            }
+            return true;
+        }
+
+        if (actionId === 'speedUp') {
+            cycleSpeed();
+            return true;
+        }
+
+        if (actionId === 'speedReset') {
+            GameState.gameSpeed = GameState.activeChallenges.includes('speed_run') ? 2 : 1;
+            document.getElementById('btn-speed').textContent = GameState.gameSpeed + 'x';
+            return true;
+        }
+
+        if (actionId === 'sellTower') {
+            if (this.multiSelectedTowers.length > 0) {
+                this._multiSell();
+            } else if (GameState.selectedTower) {
+                GameState.selectedTower.sell();
+                document.getElementById('tower-info').style.display = 'none';
+                UIRenderer.updateSidebarCosts();
+            }
+            return true;
+        }
+
+        if (actionId === 'upgradeTower') {
+            if (this.multiSelectedTowers.length > 0) {
+                this._multiUpgrade();
+            } else if (GameState.selectedTower) {
+                const upgInfo = GameState.selectedTower.getUpgradeCost();
+                if (upgInfo) {
+                    if (upgInfo.needsPath) {
+                        UIRenderer.showPathChoice(GameState.selectedTower);
+                    } else if (GameState.gold >= upgInfo.cost) {
+                        GameState.selectedTower.upgrade();
+                        UIRenderer.showTowerInfo(GameState.selectedTower);
+                        UIRenderer.updateSidebarCosts();
+                    }
+                }
+            }
+            return true;
+        }
+
+        if (actionId === 'cycleTower') {
+            if (GameState.towers.length > 0) {
+                const current = GameState.selectedTower;
+                const idx = current ? GameState.towers.indexOf(current) : -1;
+                const next = GameState.towers[(idx + 1) % GameState.towers.length];
+                UIRenderer.showTowerInfo(next);
+            }
+            return true;
+        }
+
+        if (actionId === 'toggleRanges') {
+            GameState.settings.showRanges = !GameState.settings.showRanges;
+            return true;
+        }
+
+        if (actionId === 'toggleFPS') {
+            GameState.settings.showFPS = !GameState.settings.showFPS;
+            return true;
+        }
+
+        if (actionId === 'selectAll') {
+            this._selectAllTowers();
+            return true;
+        }
+
+        return false;
     },
 
     _formatHotkeyCode(code) {
@@ -700,10 +857,16 @@ const Input = {
         if (code === 'Enter') return 'Enter';
         if (code === 'Delete') return 'Del';
         if (code === 'Backspace') return 'Backspace';
+        if (code === 'MouseMiddle') return 'Mouse MMB';
+        if (code === 'MouseBack') return 'Mouse 4';
+        if (code === 'MouseForward') return 'Mouse 5';
+        if (code === 'MouseButton6') return 'Mouse 6';
+        if (code === 'MouseButton7') return 'Mouse 7';
 
         if (code.startsWith('Key')) return code.slice(3);
         if (code.startsWith('Digit')) return code.slice(5);
         if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+        if (code.startsWith('MouseButton')) return 'Mouse ' + code.replace('MouseButton', '');
         if (code.startsWith('Arrow')) return code.slice(5);
 
         return code;
@@ -1044,7 +1207,7 @@ const Input = {
             ['Ctrl+' + this.getHotkeyLabel('selectAll'), 'Select All Towers'],
             ['Arrows', 'Pan Camera'],
             ['Middle Mouse', 'Pan Camera'],
-            ['Right Click', 'Context Menu'],
+            ['Tower Panel', 'Overclock Button'],
             ['Scroll Wheel', 'Cycle Target Mode'],
             ['Double Click', 'Quick Upgrade'],
         ];

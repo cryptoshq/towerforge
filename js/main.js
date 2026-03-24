@@ -191,12 +191,18 @@ function initGame() {
 function startGame(mapIndex) {
     console.log(`[TowerForge] Starting new game on map ${mapIndex}: ${MAPS[mapIndex].name}`);
 
+    const isWeeklyRun = !!(GameState.weeklyChallengeRun && GameState.weeklyChallengeRun.active);
+    if (isWeeklyRun) {
+        GameState.activeDoctrineId = null;
+    }
+    GameState.pendingMapIndex = null;
+
     // Reset all game state
     GameState.reset();
     GameState.mapIndex = mapIndex;
     GameState.maxWave = MAPS[mapIndex].waves;
 
-    if (GameState.weeklyChallengeRun && GameState.weeklyChallengeRun.active) {
+    if (isWeeklyRun) {
         GameState.activeChallenges = Array.isArray(GameState.weeklyChallengeRun.modifiers)
             ? [...GameState.weeklyChallengeRun.modifiers]
             : [];
@@ -288,6 +294,15 @@ function startGame(mapIndex) {
             '#ffd27a',
             12
         );
+    } else {
+        const doctrine = GameState.getActiveDoctrine ? GameState.getActiveDoctrine() : null;
+        if (doctrine) {
+            showWaveBanner(doctrine.name.toUpperCase());
+            Effects.addFloatingText(logicalWidth / 2, 58, doctrine.bonusText || '', '#8fd8ff', 12);
+            if (doctrine.drawbackText) {
+                Effects.addFloatingText(logicalWidth / 2, 76, doctrine.drawbackText, '#ffb3b3', 11);
+            }
+        }
     }
 
     // Log to debug
@@ -299,6 +314,8 @@ function startGame(mapIndex) {
         }
         if (weeklyRun && weeklyRun.active) {
             DebugLog.log('system', `Weekly challenge: ${weeklyRun.weekId || 'unknown'} (${GameState.settings.difficulty})`);
+        } else if (GameState.activeDoctrineId) {
+            DebugLog.log('system', `Doctrine: ${GameState.activeDoctrineId}`);
         }
     }
 }
@@ -322,12 +339,20 @@ function startGameFromSave() {
         bgDirty = true;
 
         const waveBtn = document.getElementById('btn-start-wave');
-        if (waveBtn) waveBtn.classList.remove('hidden');
+        if (waveBtn) {
+            const lockStartButton = !!(WaveSystem.endlessDraftModalOpen || WaveSystem.tacticalEventModalOpen);
+            waveBtn.classList.toggle('hidden', lockStartButton);
+        }
         const speedBtn = document.getElementById('btn-speed');
         if (speedBtn) speedBtn.textContent = GameState.gameSpeed + 'x';
 
         if (GameState.weeklyChallengeRun && GameState.weeklyChallengeRun.active) {
             showWaveBanner(`WEEKLY CHALLENGE ${GameState.weeklyChallengeRun.weekId || ''}`.trim());
+        } else {
+            const doctrine = GameState.getActiveDoctrine ? GameState.getActiveDoctrine() : null;
+            if (doctrine) {
+                showWaveBanner(doctrine.name.toUpperCase());
+            }
         }
 
         sessionStartTime = performance.now();
@@ -360,7 +385,7 @@ function restartGame() {
 // ===== RETURN TO MENU =====
 function returnToMenu() {
     // Hide all game-related overlays
-    const overlays = ['gameover-screen', 'victory-screen', 'pause-screen', 'tower-info'];
+    const overlays = ['gameover-screen', 'victory-screen', 'pause-screen', 'tower-info', 'endless-modal', 'endless-draft-modal', 'tactical-event-modal'];
     for (const id of overlays) {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -369,6 +394,7 @@ function returnToMenu() {
     // Reset game state
     GameState.gamePhase = 'idle';
     GameState.screen = 'menu';
+    GameState.pendingMapIndex = null;
     simulationClockMs = performance.now();
 
     // Stop game-specific systems
@@ -635,6 +661,10 @@ function handleEnemyLeak(enemy) {
 
     GameState.lives -= lifeLoss;
     GameState.stats.leaksThisGame++;
+
+    if (typeof WaveSystem !== 'undefined' && typeof WaveSystem.recordLeak === 'function') {
+        WaveSystem.recordLeak(enemy);
+    }
 
     if (lifeLoss > 0) {
         Effects.addFloatingText(

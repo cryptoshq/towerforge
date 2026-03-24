@@ -5,6 +5,21 @@ const MenuSystem = {
     menuParticles: [],
     menuAnimId: null,
     _hotkeyCaptureAction: null,
+    _lastDoctrineSpotlightId: null,
+    _doctrineSpotlightAnimTimer: null,
+    _doctrineSelectionContext: null,
+    _menuReactiveLevel: 0,
+    _menuReactiveLow: 0,
+    _menuReactiveMid: 0,
+    _menuReactiveHigh: 0,
+    _menuBeatPulse: 0,
+    _menuMotionPhase: 0,
+    _menuPrevReactive: 0,
+    _menuLastFrameMs: 0,
+    _menuPointerX: 0,
+    _menuPointerY: 0,
+    _menuPointerTargetX: 0,
+    _menuPointerTargetY: 0,
 
     init() {
         // Create animated menu background canvas
@@ -63,6 +78,10 @@ const MenuSystem = {
         });
         document.getElementById('btn-back-maps').addEventListener('click', () => {
             this.showScreen('difficulty');
+            Audio.play('click');
+        });
+        document.getElementById('btn-back-doctrines').addEventListener('click', () => {
+            this.showScreen('mapselect');
             Audio.play('click');
         });
         document.getElementById('btn-back-research').addEventListener('click', () => {
@@ -196,6 +215,14 @@ const MenuSystem = {
             Audio.play('click');
         });
 
+        const doctrineStartBtn = document.getElementById('btn-doctrine-start');
+        if (doctrineStartBtn) {
+            doctrineStartBtn.addEventListener('click', () => {
+                this.startRunWithDoctrine();
+                Audio.play('click');
+            });
+        }
+
         // Settings controls
         document.getElementById('music-volume').addEventListener('input', (e) => {
             const v = e.target.value / 100;
@@ -240,6 +267,9 @@ const MenuSystem = {
         document.addEventListener('keydown', (e) => {
             this._handleHotkeyCaptureKeydown(e);
         }, true);
+        document.addEventListener('mousedown', (e) => {
+            this._handleHotkeyCaptureMousedown(e);
+        }, true);
 
         // Show continue button if save exists
         this._updateContinueButton();
@@ -258,10 +288,24 @@ const MenuSystem = {
         const existing = document.getElementById('menu-canvas-bg');
         if (existing) existing.remove();
 
+        const existingMotion = document.getElementById('menu-motion-layer');
+        if (existingMotion) existingMotion.remove();
+
         const canvas = document.createElement('canvas');
         canvas.id = 'menu-canvas-bg';
         const menuEl = document.getElementById('main-menu');
-        menuEl.insertBefore(canvas, menuEl.firstChild);
+        const bgEl = menuEl.querySelector('.menu-bg') || menuEl;
+        bgEl.appendChild(canvas);
+
+        const motionLayer = document.createElement('div');
+        motionLayer.id = 'menu-motion-layer';
+        motionLayer.innerHTML = `
+            <span class="menu-aurora menu-aurora-a" aria-hidden="true"></span>
+            <span class="menu-aurora menu-aurora-b" aria-hidden="true"></span>
+            <span class="menu-aurora menu-aurora-c" aria-hidden="true"></span>
+            <span class="menu-grid-sweep" aria-hidden="true"></span>
+        `;
+        bgEl.appendChild(motionLayer);
 
         this.menuCanvas = canvas;
         this.menuCtx = canvas.getContext('2d');
@@ -273,6 +317,18 @@ const MenuSystem = {
         };
         resize();
         window.addEventListener('resize', resize);
+
+        window.addEventListener('pointermove', (event) => {
+            const nx = ((event.clientX / Math.max(1, window.innerWidth)) - 0.5) * 2;
+            const ny = ((event.clientY / Math.max(1, window.innerHeight)) - 0.5) * 2;
+            this._menuPointerTargetX = Math.max(-1, Math.min(1, nx));
+            this._menuPointerTargetY = Math.max(-1, Math.min(1, ny));
+        }, { passive: true });
+
+        window.addEventListener('pointerleave', () => {
+            this._menuPointerTargetX = 0;
+            this._menuPointerTargetY = 0;
+        });
 
         // Create particles
         this.menuParticles = [];
@@ -309,6 +365,70 @@ const MenuSystem = {
         this._animateMenu();
     },
 
+    _updateMenuReactiveState(dt, tSec) {
+        const metrics = (typeof Audio !== 'undefined' && typeof Audio.getMenuReactiveData === 'function')
+            ? Audio.getMenuReactiveData()
+            : null;
+
+        const fallbackLevel = 0.08 + Math.sin(tSec * 0.8) * 0.03;
+        const targetLevel = metrics && Number.isFinite(metrics.level) ? metrics.level : fallbackLevel;
+        const targetLow = metrics && Number.isFinite(metrics.low) ? metrics.low : targetLevel * 0.8;
+        const targetMid = metrics && Number.isFinite(metrics.mid) ? metrics.mid : targetLevel * 0.7;
+        const targetHigh = metrics && Number.isFinite(metrics.high) ? metrics.high : targetLevel * 0.55;
+
+        const lerpK = Math.min(1, dt * 7.5);
+        this._menuReactiveLevel += (targetLevel - this._menuReactiveLevel) * lerpK;
+        this._menuReactiveLow += (targetLow - this._menuReactiveLow) * lerpK;
+        this._menuReactiveMid += (targetMid - this._menuReactiveMid) * lerpK;
+        this._menuReactiveHigh += (targetHigh - this._menuReactiveHigh) * lerpK;
+
+        const rise = this._menuReactiveLevel - this._menuPrevReactive;
+        if (rise > 0.02) {
+            this._menuBeatPulse = Math.min(1, this._menuBeatPulse + rise * 10);
+        }
+        this._menuBeatPulse = Math.max(0, this._menuBeatPulse - dt * 1.7);
+        this._menuPrevReactive = this._menuReactiveLevel;
+
+        this._menuMotionPhase += dt * (0.35 + this._menuReactiveMid * 0.9);
+        this._menuPointerX += (this._menuPointerTargetX - this._menuPointerX) * Math.min(1, dt * 4.5);
+        this._menuPointerY += (this._menuPointerTargetY - this._menuPointerY) * Math.min(1, dt * 4.5);
+
+        const idleX = Math.sin(this._menuMotionPhase * 1.07) * (5 + this._menuReactiveLow * 8);
+        const idleY = Math.cos(this._menuMotionPhase * 0.84) * (4 + this._menuReactiveMid * 6);
+        const motionX = idleX + this._menuPointerX * 8;
+        const motionY = idleY + this._menuPointerY * 5;
+
+        const style = document.getElementById('main-menu')?.style;
+        if (style) {
+            const overlayOpacity = 0.74 + this._menuReactiveMid * 0.35;
+            const vignetteOpacity = 0.92 + this._menuBeatPulse * 0.25;
+            const canvasOpacity = 0.68 + this._menuReactiveLevel * 0.24;
+            const auroraOpacity = 0.11 + this._menuReactiveLevel * 0.18 + this._menuBeatPulse * 0.18;
+            const gridOpacity = 0.22 + this._menuReactiveHigh * 0.22 + this._menuBeatPulse * 0.16;
+            const panelGlowOpacity = 0.28 + this._menuReactiveLevel * 0.4 + this._menuBeatPulse * 0.22;
+            const saturation = 0.96 + this._menuReactiveLevel * 0.36;
+
+            style.setProperty('--menu-reactive', this._menuReactiveLevel.toFixed(4));
+            style.setProperty('--menu-bass', this._menuReactiveLow.toFixed(4));
+            style.setProperty('--menu-mid', this._menuReactiveMid.toFixed(4));
+            style.setProperty('--menu-treble', this._menuReactiveHigh.toFixed(4));
+            style.setProperty('--menu-beat', this._menuBeatPulse.toFixed(4));
+            style.setProperty('--menu-motion-x', `${motionX.toFixed(2)}px`);
+            style.setProperty('--menu-motion-y', `${motionY.toFixed(2)}px`);
+            style.setProperty('--menu-motion-x-soft', `${(motionX * 0.2).toFixed(2)}px`);
+            style.setProperty('--menu-motion-y-soft', `${(motionY * 0.12).toFixed(2)}px`);
+            style.setProperty('--menu-motion-x-panel', `${(motionX * 0.16).toFixed(2)}px`);
+            style.setProperty('--menu-motion-y-panel', `${(motionY * 0.12).toFixed(2)}px`);
+            style.setProperty('--menu-overlay-opacity', overlayOpacity.toFixed(3));
+            style.setProperty('--menu-vignette-opacity', vignetteOpacity.toFixed(3));
+            style.setProperty('--menu-canvas-opacity', canvasOpacity.toFixed(3));
+            style.setProperty('--menu-aurora-opacity', auroraOpacity.toFixed(3));
+            style.setProperty('--menu-grid-opacity', gridOpacity.toFixed(3));
+            style.setProperty('--menu-panel-glow-opacity', panelGlowOpacity.toFixed(3));
+            style.setProperty('--menu-sat', saturation.toFixed(3));
+        }
+    },
+
     _animateMenu() {
         if (GameState.screen !== 'menu') {
             this.menuAnimId = requestAnimationFrame(() => this._animateMenu());
@@ -318,11 +438,31 @@ const MenuSystem = {
         const ctx = this.menuCtx;
         const w = this.menuCanvas.width;
         const h = this.menuCanvas.height;
+        const nowMs = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now()
+            : Date.now();
+        const dt = this._menuLastFrameMs > 0
+            ? Math.max(0.001, Math.min(0.05, (nowMs - this._menuLastFrameMs) / 1000))
+            : (1 / 60);
+        this._menuLastFrameMs = nowMs;
+
+        this._updateMenuReactiveState(dt, nowMs * 0.001);
 
         ctx.clearRect(0, 0, w, h);
 
+        const centerX = w * 0.5 + this._menuPointerX * 24;
+        const centerY = h * 0.42 + this._menuPointerY * 18;
+        const glowRadius = Math.max(w, h) * (0.46 + this._menuReactiveLow * 0.12 + this._menuBeatPulse * 0.06);
+        const bgGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
+        bgGlow.addColorStop(0, `rgba(108,132,255,${0.08 + this._menuReactiveLevel * 0.18 + this._menuBeatPulse * 0.14})`);
+        bgGlow.addColorStop(1, 'rgba(10,14,44,0)');
+        ctx.fillStyle = bgGlow;
+        ctx.fillRect(0, 0, w, h);
+
         // Draw connection lines between nearby particles (not orbs)
         const smallParticles = this.menuParticles.filter(p => !p.isOrb);
+        const linkDist = 150 + this._menuReactiveLow * 42;
+        const linkAlphaBase = 0.045 + this._menuReactiveHigh * 0.06 + this._menuBeatPulse * 0.04;
         for (let i = 0; i < smallParticles.length; i++) {
             for (let j = i + 1; j < smallParticles.length; j++) {
                 const a = smallParticles[i];
@@ -330,9 +470,9 @@ const MenuSystem = {
                 const dx = a.x - b.x;
                 const dy = a.y - b.y;
                 const d = Math.sqrt(dx * dx + dy * dy);
-                if (d < 150) {
-                    const alpha = (1 - d / 150) * 0.08;
-                    ctx.strokeStyle = `rgba(120,120,255,${alpha})`;
+                if (d < linkDist) {
+                    const alpha = (1 - d / linkDist) * linkAlphaBase;
+                    ctx.strokeStyle = `rgba(126,142,255,${alpha})`;
                     ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.moveTo(a.x, a.y);
@@ -344,9 +484,12 @@ const MenuSystem = {
 
         // Draw and update particles
         for (const p of this.menuParticles) {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.pulse += p.pulseSpeed * 0.02;
+            const speedMult = 1 + this._menuReactiveLevel * 0.75;
+            const driftX = Math.sin(p.pulse * 0.75 + this._menuMotionPhase) * 0.06 * (this._menuReactiveMid + 0.08);
+            const driftY = Math.cos(p.pulse * 0.62 + this._menuMotionPhase * 0.8) * 0.06 * (this._menuReactiveHigh + 0.06);
+            p.x += p.vx * speedMult + driftX;
+            p.y += p.vy * speedMult + driftY;
+            p.pulse += p.pulseSpeed * (0.015 + this._menuReactiveHigh * 0.014);
 
             // Wrap around
             if (p.x < -50) p.x = w + 50;
@@ -354,24 +497,26 @@ const MenuSystem = {
             if (p.y < -50) p.y = h + 50;
             if (p.y > h + 50) p.y = -50;
 
-            const pulseAlpha = p.alpha * (0.7 + Math.sin(p.pulse) * 0.3);
+            const pulseAlpha = p.alpha * (0.66 + Math.sin(p.pulse) * 0.34) * (0.84 + this._menuReactiveLevel * 0.55);
 
             if (p.isOrb) {
                 // Large soft orbs
-                const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                const orbRadius = p.size * (1 + this._menuReactiveLow * 0.11 + Math.sin(p.pulse * 0.85) * 0.04);
+                const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, orbRadius);
                 gradient.addColorStop(0, `hsla(${p.hue},60%,60%,${pulseAlpha})`);
                 gradient.addColorStop(1, `hsla(${p.hue},60%,60%,0)`);
                 ctx.fillStyle = gradient;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, orbRadius, 0, Math.PI * 2);
                 ctx.fill();
             } else {
                 // Small bright dots
                 ctx.fillStyle = `hsla(${p.hue},70%,75%,${pulseAlpha})`;
                 ctx.shadowColor = `hsla(${p.hue},70%,75%,${pulseAlpha * 0.5})`;
-                ctx.shadowBlur = 6;
+                ctx.shadowBlur = 4 + this._menuReactiveHigh * 6;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                const dotSize = p.size * (1 + this._menuReactiveHigh * 0.18);
+                ctx.arc(p.x, p.y, dotSize, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.shadowBlur = 0;
             }
@@ -396,13 +541,14 @@ const MenuSystem = {
                 const modeText = info.weeklyMode
                     ? `WEEKLY${info.weeklyWeekId ? ` ${info.weeklyWeekId}` : ''}`
                     : (info.endlessMode ? 'ENDLESS' : 'CAMPAIGN');
+                const doctrineText = info.doctrineName ? ` | ${info.doctrineName}` : '';
                 const challengeText = info.activeChallenges.length > 0
                     ? ` +${info.activeChallenges.length} MOD`
                     : '';
                 const when = this._formatRelativeTime(info.savedAt);
                 const elapsed = this._formatClock(info.elapsedTimeSec);
 
-                btn.innerHTML = `CONTINUE<span class="btn-subtitle">${info.mapName} — Wave ${info.wave} | ${info.difficultyName} | ${modeText}${challengeText}${elapsed ? ` | ${elapsed}` : ''}${when ? ` | ${when}` : ''}</span>`;
+                btn.innerHTML = `CONTINUE<span class="btn-subtitle">${info.mapName} — Wave ${info.wave} | ${info.difficultyName} | ${modeText}${doctrineText}${challengeText}${elapsed ? ` | ${elapsed}` : ''}${when ? ` | ${when}` : ''}</span>`;
             } catch (e) {
                 btn.textContent = 'CONTINUE';
             }
@@ -490,6 +636,9 @@ const MenuSystem = {
         const spec = this._getWeeklyChallengeSpec();
 
         GameState.settings.difficulty = spec.difficulty;
+        GameState.activeDoctrineId = null;
+        GameState.pendingMapIndex = null;
+        GameState.pendingDoctrineId = null;
         GameState.weeklyChallengeRun = {
             active: true,
             weekId: spec.weekId,
@@ -502,6 +651,303 @@ const MenuSystem = {
 
         SaveSystem.savePersistent();
         startGame(spec.mapIndex);
+    },
+
+    _getDoctrineById(doctrineId) {
+        if (!doctrineId || !Array.isArray(CONFIG.DOCTRINES)) return null;
+        return CONFIG.DOCTRINES.find(d => d.id === doctrineId) || null;
+    },
+
+    openDoctrineSelect(mapIndex) {
+        if (!Number.isFinite(mapIndex) || mapIndex < 0 || mapIndex >= MAPS.length) return;
+
+        GameState.pendingMapIndex = mapIndex;
+        GameState.weeklyChallengeRun = null;
+
+        const doctrineList = Array.isArray(CONFIG.DOCTRINES) ? CONFIG.DOCTRINES : [];
+        if (doctrineList.length === 0) {
+            GameState.activeDoctrineId = null;
+            startGame(mapIndex);
+            return;
+        }
+
+        const currentId = GameState.pendingDoctrineId || GameState.activeDoctrineId;
+        const hasCurrent = doctrineList.some(d => d.id === currentId);
+        GameState.pendingDoctrineId = hasCurrent ? currentId : doctrineList[0].id;
+
+        this.showScreen('doctrine');
+    },
+
+    renderDoctrineSelect() {
+        const cardsEl = document.getElementById('doctrine-cards');
+        const summaryEl = document.getElementById('doctrine-summary');
+        const spotlightEl = document.getElementById('doctrine-spotlight');
+        if (!cardsEl || !summaryEl || !spotlightEl) return;
+
+        const mapIndex = Number.isFinite(GameState.pendingMapIndex) ? GameState.pendingMapIndex : GameState.mapIndex;
+        const map = MAPS[mapIndex];
+        const diffKey = GameState.settings.difficulty || 'normal';
+        const diffPreset = CONFIG.DIFFICULTY_PRESETS[diffKey] || CONFIG.DIFFICULTY_PRESETS.normal;
+        const challengeCount = Array.isArray(GameState._pendingChallenges) ? GameState._pendingChallenges.length : 0;
+
+        this._doctrineSelectionContext = {
+            diffPreset,
+            map,
+            challengeCount,
+        };
+
+        const mapName = map ? map.name : 'Unknown';
+        const challengeText = challengeCount > 0 ? `+${challengeCount} active` : 'None';
+        summaryEl.innerHTML = `
+            <div class="doctrine-summary-head">
+                <span class="d-summary-title">Mission Briefing</span>
+                <span class="d-summary-note">Weekly uses fixed rules (no doctrine).</span>
+            </div>
+            <div class="doctrine-summary-grid">
+                <div class="d-summary-chip"><span>Map</span><strong>${mapName}</strong></div>
+                <div class="d-summary-chip"><span>Difficulty</span><strong>${diffPreset.name}</strong></div>
+                <div class="d-summary-chip"><span>Challenges</span><strong>${challengeText}</strong></div>
+                <div class="d-summary-chip"><span>Base Start</span><strong>${diffPreset.startingGold}g / ${diffPreset.startingLives} lives</strong></div>
+            </div>
+        `;
+
+        cardsEl.innerHTML = '';
+        const doctrineList = Array.isArray(CONFIG.DOCTRINES) ? CONFIG.DOCTRINES : [];
+        if (doctrineList.length === 0) {
+            cardsEl.innerHTML = '<div class="doctrine-summary">No doctrines configured.</div>';
+            return;
+        }
+
+        let selectedId = GameState.pendingDoctrineId;
+        if (!selectedId || !doctrineList.some(d => d.id === selectedId)) {
+            selectedId = doctrineList[0].id;
+            GameState.pendingDoctrineId = selectedId;
+        }
+
+        for (let idx = 0; idx < doctrineList.length; idx++) {
+            const doctrine = doctrineList[idx];
+            const card = document.createElement('div');
+            card.className = 'doctrine-card';
+            if (doctrine.id === selectedId) card.classList.add('is-selected');
+            card.dataset.doctrineId = doctrine.id;
+            card.style.background = doctrine.style && doctrine.style.gradient
+                ? doctrine.style.gradient
+                : 'linear-gradient(135deg, rgba(32,32,62,0.95), rgba(20,20,42,0.92))';
+            card.style.setProperty('--doctrine-accent', doctrine.style && doctrine.style.accent ? doctrine.style.accent : '#aab4ff');
+            card.style.setProperty('--doctrine-index', String(idx));
+
+            const effects = doctrine.effects || {};
+            const projectedGold = Math.max(0, Math.floor(diffPreset.startingGold + (effects.startGold || 0)));
+            const projectedLives = Math.max(1, Math.floor(diffPreset.startingLives + (effects.startLives || 0)));
+
+            const tags = [];
+            if ((effects.startLives || 0) > 0) tags.push('DEFENSE');
+            if ((effects.startGold || 0) < 0) tags.push('LOW SUPPLY');
+            if ((effects.interestRateDelta || 0) > 0 || (effects.interestCapDelta || 0) > 0) tags.push('ECON');
+            if ((effects.abilityCooldownMult || 1) < 1) tags.push('ABILITY');
+            if ((effects.eliteBossDamageMult || 1) > 1) tags.push('BOSS');
+            if ((effects.globalDamageMult || 1) < 1) tags.push('RISK');
+            if (tags.length === 0) tags.push('BALANCED');
+            const tagMarkup = tags.slice(0, 3)
+                .map((tag) => `<span class="doctrine-tag">${tag}</span>`)
+                .join('');
+
+            const codeName = doctrine.id ? doctrine.id.replace(/_/g, '-').toUpperCase() : 'UNKNOWN';
+            const selectedLabel = doctrine.id === selectedId ? 'SELECTED' : 'SELECT';
+
+            card.innerHTML = `
+                <div class="doctrine-card-head">
+                    <div class="doctrine-icon">${doctrine.icon || ''}</div>
+                    <div class="doctrine-title-wrap">
+                        <div class="doctrine-name">${doctrine.name}</div>
+                        <div class="doctrine-short">Code: ${codeName}</div>
+                    </div>
+                    <div class="doctrine-select-indicator">${selectedLabel}</div>
+                </div>
+                <div class="doctrine-summary-text">${doctrine.summary || ''}</div>
+                <div class="doctrine-tag-row">${tagMarkup}</div>
+                <div class="doctrine-start-stats">
+                    <div class="d-start-stat">
+                        <span class="d-start-label">Start Gold</span>
+                        <span class="d-start-value">${projectedGold}g</span>
+                    </div>
+                    <div class="d-start-stat">
+                        <span class="d-start-label">Start Lives</span>
+                        <span class="d-start-value">${projectedLives}</span>
+                    </div>
+                </div>
+                <div class="doctrine-effects">
+                    <div class="doctrine-effect bonus">BONUS: ${doctrine.bonusText || 'None'}</div>
+                    <div class="doctrine-effect drawback">DRAWBACK: ${doctrine.drawbackText || 'None'}</div>
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                this._selectDoctrineInView(doctrine.id);
+                Audio.play('click');
+            });
+
+            cardsEl.appendChild(card);
+        }
+
+        this._selectDoctrineInView(selectedId, { fromRender: true });
+    },
+
+    _updateDoctrineStartButton(doctrineId) {
+        const startBtn = document.getElementById('btn-doctrine-start');
+        if (!startBtn) return;
+
+        const selectedDoctrine = this._getDoctrineById(doctrineId);
+        const shortName = selectedDoctrine && typeof selectedDoctrine.name === 'string'
+            ? selectedDoctrine.name.replace(/\s+Doctrine$/i, '').toUpperCase()
+            : '';
+        startBtn.textContent = shortName ? `START RUN (${shortName})` : 'START RUN';
+    },
+
+    _setDoctrineSelectedCardState(doctrineId) {
+        const cards = document.querySelectorAll('.doctrine-card');
+        cards.forEach((card) => {
+            const isSelected = card.dataset.doctrineId === doctrineId;
+            card.classList.toggle('is-selected', isSelected);
+            const indicator = card.querySelector('.doctrine-select-indicator');
+            if (indicator) indicator.textContent = isSelected ? 'SELECTED' : 'SELECT';
+        });
+    },
+
+    _selectDoctrineInView(doctrineId, options = {}) {
+        const doctrine = this._getDoctrineById(doctrineId);
+        if (!doctrine) return;
+
+        const prevDoctrineId = GameState.pendingDoctrineId;
+        GameState.pendingDoctrineId = doctrine.id;
+        this._setDoctrineSelectedCardState(doctrine.id);
+        this._updateDoctrineStartButton(doctrine.id);
+
+        const ctx = this._doctrineSelectionContext || {};
+        this._renderDoctrineSpotlight(doctrine, ctx.diffPreset, ctx.map, ctx.challengeCount);
+
+        if (options.fromRender) {
+            this._lastDoctrineSpotlightId = doctrine.id;
+        } else if (prevDoctrineId === doctrine.id) {
+            return;
+        }
+    },
+
+    _renderDoctrineSpotlight(doctrine, diffPreset, map, challengeCount) {
+        const spotlightEl = document.getElementById('doctrine-spotlight');
+        const nameEl = document.getElementById('doctrine-spotlight-name');
+        const codeEl = document.getElementById('doctrine-spotlight-code');
+        const emblemEl = document.getElementById('doctrine-spotlight-emblem');
+        const summaryEl = document.getElementById('doctrine-spotlight-summary');
+        const bonusEl = document.getElementById('doctrine-spotlight-bonus');
+        const drawbackEl = document.getElementById('doctrine-spotlight-drawback');
+        const metricsEl = document.getElementById('doctrine-spotlight-metrics');
+        if (!spotlightEl || !nameEl || !codeEl || !emblemEl || !summaryEl || !bonusEl || !drawbackEl || !metricsEl) return;
+
+        const doctrineId = doctrine && doctrine.id ? doctrine.id : 'none';
+        const shouldAnimate = this._lastDoctrineSpotlightId !== null && this._lastDoctrineSpotlightId !== doctrineId;
+        spotlightEl.dataset.doctrine = doctrineId;
+        spotlightEl.style.setProperty('--spot-accent', doctrine.style && doctrine.style.accent ? doctrine.style.accent : '#90a2ff');
+        spotlightEl.style.setProperty('--spot-gradient', doctrine.style && doctrine.style.gradient
+            ? doctrine.style.gradient
+            : 'linear-gradient(135deg, rgba(28, 34, 86, 0.95), rgba(18, 22, 58, 0.94))');
+
+        const codeName = doctrineId.replace(/_/g, '-').toUpperCase();
+        nameEl.textContent = doctrine.name || 'Doctrine';
+        codeEl.textContent = `Code: ${codeName}`;
+        emblemEl.textContent = doctrine.icon || '?';
+        summaryEl.textContent = doctrine.summary || '';
+        bonusEl.textContent = `BONUS: ${doctrine.bonusText || 'None'}`;
+        drawbackEl.textContent = `DRAWBACK: ${doctrine.drawbackText || 'None'}`;
+
+        const effects = doctrine.effects || {};
+        const projectedGold = Math.max(0, Math.floor((diffPreset && diffPreset.startingGold ? diffPreset.startingGold : 0) + (effects.startGold || 0)));
+        const projectedLives = Math.max(1, Math.floor((diffPreset && diffPreset.startingLives ? diffPreset.startingLives : 1) + (effects.startLives || 0)));
+
+        const metrics = [];
+        metrics.push({
+            label: 'Projected Start',
+            value: `${projectedGold}g / ${projectedLives} lives`,
+        });
+
+        if (Number.isFinite(effects.interestRateDelta) && effects.interestRateDelta !== 0) {
+            const ratePct = (effects.interestRateDelta * 100).toFixed(1).replace(/\.0$/, '');
+            metrics.push({
+                label: 'Interest Rate',
+                value: `${effects.interestRateDelta > 0 ? '+' : ''}${ratePct}%`,
+            });
+        }
+
+        if (Number.isFinite(effects.interestCapDelta) && effects.interestCapDelta !== 0) {
+            metrics.push({
+                label: 'Interest Cap',
+                value: `${effects.interestCapDelta > 0 ? '+' : ''}${Math.floor(effects.interestCapDelta)}`,
+            });
+        }
+
+        if (Number.isFinite(effects.abilityCooldownMult) && effects.abilityCooldownMult !== 1) {
+            metrics.push({
+                label: 'Ability Cooldown',
+                value: `x${effects.abilityCooldownMult.toFixed(2)}`,
+            });
+        }
+
+        if (Number.isFinite(effects.globalDamageMult) && effects.globalDamageMult !== 1) {
+            metrics.push({
+                label: 'Global Damage',
+                value: `x${effects.globalDamageMult.toFixed(2)}`,
+            });
+        }
+
+        if (Number.isFinite(effects.eliteBossDamageMult) && effects.eliteBossDamageMult !== 1) {
+            metrics.push({
+                label: 'Elite/Boss Damage',
+                value: `x${effects.eliteBossDamageMult.toFixed(2)}`,
+            });
+        }
+
+        metrics.push({
+            label: 'Mission Context',
+            value: `${map && map.name ? map.name : 'Unknown'} | ${diffPreset && diffPreset.name ? diffPreset.name : 'Unknown'}`,
+        });
+
+        metrics.push({
+            label: 'Challenge Pack',
+            value: challengeCount > 0 ? `+${challengeCount} active` : 'None active',
+        });
+
+        metricsEl.innerHTML = metrics
+            .map((item) => `<div class="d-metric-row"><span>${item.label}</span><strong>${item.value}</strong></div>`)
+            .join('');
+
+        if (shouldAnimate) {
+            spotlightEl.classList.remove('is-switching');
+            spotlightEl.offsetWidth;
+            spotlightEl.classList.add('is-switching');
+            if (this._doctrineSpotlightAnimTimer) clearTimeout(this._doctrineSpotlightAnimTimer);
+            this._doctrineSpotlightAnimTimer = setTimeout(() => {
+                spotlightEl.classList.remove('is-switching');
+                this._doctrineSpotlightAnimTimer = null;
+            }, 520);
+        }
+
+        this._lastDoctrineSpotlightId = doctrineId;
+    },
+
+    startRunWithDoctrine() {
+        const mapIndex = Number.isFinite(GameState.pendingMapIndex) ? GameState.pendingMapIndex : null;
+        if (mapIndex === null || mapIndex < 0 || mapIndex >= MAPS.length) {
+            this.showScreen('mapselect');
+            return;
+        }
+
+        const doctrine = this._getDoctrineById(GameState.pendingDoctrineId);
+        GameState.activeDoctrineId = doctrine ? doctrine.id : null;
+        if (doctrine) {
+            GameState.pendingDoctrineId = doctrine.id;
+        }
+
+        startGame(mapIndex);
     },
 
     _updateMetaProgressPanel() {
@@ -539,9 +985,20 @@ const MenuSystem = {
 
         GameState.screen = screen;
 
+        if (screen !== 'doctrine') {
+            this._lastDoctrineSpotlightId = null;
+            if (this._doctrineSpotlightAnimTimer) {
+                clearTimeout(this._doctrineSpotlightAnimTimer);
+                this._doctrineSpotlightAnimTimer = null;
+            }
+            const spotlight = document.getElementById('doctrine-spotlight');
+            if (spotlight) spotlight.classList.remove('is-switching');
+        }
+
         switch (screen) {
             case 'menu':
                 document.getElementById('main-menu').classList.add('active');
+                GameState.pendingMapIndex = null;
                 this._updateContinueButton();
                 this._updateWeeklyChallengeButton();
                 this._updateMetaProgressPanel();
@@ -555,6 +1012,10 @@ const MenuSystem = {
             case 'mapselect':
                 document.getElementById('map-select').classList.add('active');
                 this.renderMapSelect();
+                break;
+            case 'doctrine':
+                document.getElementById('doctrine-select').classList.add('active');
+                this.renderDoctrineSelect();
                 break;
             case 'research':
                 document.getElementById('research-screen').classList.add('active');
@@ -579,11 +1040,30 @@ const MenuSystem = {
         const container = document.getElementById('difficulty-cards');
         container.innerHTML = '';
 
+        const difficultyScreen = document.getElementById('difficulty-select');
+        if (difficultyScreen && !difficultyScreen.dataset.pointerReactiveBound) {
+            difficultyScreen.dataset.pointerReactiveBound = '1';
+            difficultyScreen.addEventListener('pointermove', (event) => {
+                const rect = difficultyScreen.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return;
+                const x = ((event.clientX - rect.left) / rect.width) * 100;
+                const y = ((event.clientY - rect.top) / rect.height) * 100;
+                difficultyScreen.style.setProperty('--diff-pointer-x', `${Math.max(0, Math.min(100, x)).toFixed(2)}%`);
+                difficultyScreen.style.setProperty('--diff-pointer-y', `${Math.max(0, Math.min(100, y)).toFixed(2)}%`);
+            }, { passive: true });
+            difficultyScreen.addEventListener('pointerleave', () => {
+                difficultyScreen.style.setProperty('--diff-pointer-x', '50%');
+                difficultyScreen.style.setProperty('--diff-pointer-y', '38%');
+            });
+        }
+
         const diffData = {
             easy: {
                 icon: '\u{1F6E1}', // shield
                 title: 'TRAINING GROUNDS',
                 story: '"Once a peaceful meadow, now the first line of defense. The creatures here are young and weak \u2014 perfect for learning the art of tower placement. But do not be deceived: even the weakest enemy can slip through."',
+                rank: 'TIER I',
+                pressure: 'LOW PRESSURE',
                 boss: 'Grub King',
                 bossAbilities: ['Summon Minions', 'Regenerate', 'Slow'],
                 enemyPool: ['Grunt', 'Scout', 'Swarmling', 'Medic'],
@@ -594,6 +1074,8 @@ const MenuSystem = {
                 icon: '\u{2694}', // swords
                 title: 'THE BATTLEFIELD',
                 story: '"The scars of ancient wars mark this terrain. Heavy infantry marches in formation, shielded soldiers advance under cover, and battle-hardened medics keep the ranks alive. Strategy meets survival."',
+                rank: 'TIER II',
+                pressure: 'BALANCED FRONTS',
                 boss: 'Stone Colossus',
                 bossAbilities: ['High Armor', 'Stomp', 'Enrage'],
                 enemyPool: ['Grunt', 'Scout', 'Brute', 'Guardian', 'Medic', 'Splitter'],
@@ -604,6 +1086,8 @@ const MenuSystem = {
                 icon: '\u{1F525}', // fire
                 title: 'THE GAUNTLET',
                 story: '"They call it the Gauntlet because you must run it alone. Shadows strike from nowhere, spirits phase through your attacks, and berserkers grow stronger as they bleed. You will lose towers. You will lose lives."',
+                rank: 'TIER III',
+                pressure: 'SPIKE WAVES',
                 boss: 'Infernal Lord',
                 bossAbilities: ['Fire Trail', 'Summon Berserkers', 'Enrage'],
                 enemyPool: ['Shadow', 'Phantom', 'Berserker', 'Brute', 'Guardian', 'Buzzer'],
@@ -614,6 +1098,8 @@ const MenuSystem = {
                 icon: '\u{1F480}', // skull
                 title: 'THE VOID',
                 story: '"We do not speak of what dwells in the Void. It has no name \u2014 only hunger. Ancient dragons wake from eternal slumber. If you face the Nightmare, you have already lost everything worth protecting."',
+                rank: 'TIER IV',
+                pressure: 'SUSTAINED OVERLOAD',
                 boss: 'Void Emperor',
                 bossAbilities: ['Teleport', 'Shield', 'Mass Summon', 'Time Warp'],
                 enemyPool: ['All enemy types', 'Elite variants', 'Double modifiers'],
@@ -623,23 +1109,54 @@ const MenuSystem = {
         };
 
         const presets = CONFIG.DIFFICULTY_PRESETS;
+        const baseline = presets.easy || {
+            enemyHpMult: 1,
+            enemySpeedMult: 1,
+            startingLives: 30,
+            startingGold: 300,
+        };
+
+        const clampPct = (v) => Math.max(6, Math.min(100, Math.round(v)));
+
+        let idx = 0;
         for (const key of Object.keys(presets)) {
             const p = presets[key];
             const d = diffData[key];
             if (!d) continue;
 
+            const threatScore = Math.round((p.enemyHpMult * 0.62 + p.enemySpeedMult * 0.38) * 100);
+            const economyScore = Math.round((p.startingGold / Math.max(1, baseline.startingGold)) * 100);
+            const survivalScore = Math.round((p.startingLives / Math.max(1, baseline.startingLives)) * 100);
+
+            const threatFill = clampPct((threatScore / 210) * 100);
+            const economyFill = clampPct((economyScore / 130) * 100);
+            const survivalFill = clampPct((survivalScore / 130) * 100);
+
             const card = document.createElement('div');
-            card.className = 'diff-card';
+            card.className = `diff-card diff-card-${key}`;
             card.style.background = d.gradient;
             card.style.borderColor = d.border;
+            card.style.setProperty('--diff-accent', d.border);
+            card.style.setProperty('--diff-gradient', d.gradient);
+            card.style.setProperty('--card-index', String(idx));
+            idx++;
 
             card.innerHTML = `
+                <div class="diff-card-fx" aria-hidden="true">
+                    <span class="diff-fx-grid"></span>
+                    <span class="diff-fx-scan"></span>
+                </div>
                 <div class="diff-card-header">
+                    <div class="diff-card-rank">${d.rank || ''}</div>
                     <span class="diff-card-icon">${d.icon}</span>
                     <div class="diff-card-title" style="color:${d.border}">${d.title}</div>
                     <div class="diff-card-subtitle">${p.name} Difficulty</div>
                 </div>
                 <div class="diff-card-story">${d.story}</div>
+                <div class="diff-card-pressure">
+                    <span class="diff-pressure-label">Threat Profile</span>
+                    <span class="diff-pressure-value">${d.pressure || p.name}</span>
+                </div>
                 <div class="diff-card-section">
                     <div class="diff-card-label">BOSS: ${d.boss}</div>
                     <div class="diff-card-tags">${d.bossAbilities.map(a => `<span class="diff-tag">${a}</span>`).join('')}</div>
@@ -654,7 +1171,44 @@ const MenuSystem = {
                     <div class="diff-stat"><span class="diff-stat-label">Lives</span><span class="diff-stat-val">${p.startingLives}</span></div>
                     <div class="diff-stat"><span class="diff-stat-label">Gold</span><span class="diff-stat-val">${p.startingGold}</span></div>
                 </div>
+                <div class="diff-card-meter">
+                    <div class="diff-meter-row">
+                        <span>THREAT</span>
+                        <div class="diff-meter-track"><i class="diff-meter-fill" style="width:${threatFill}%"></i></div>
+                        <b>${threatScore}</b>
+                    </div>
+                    <div class="diff-meter-row">
+                        <span>SUPPLY</span>
+                        <div class="diff-meter-track"><i class="diff-meter-fill" style="width:${economyFill}%"></i></div>
+                        <b>${economyScore}</b>
+                    </div>
+                    <div class="diff-meter-row">
+                        <span>SURVIVAL</span>
+                        <div class="diff-meter-track"><i class="diff-meter-fill" style="width:${survivalFill}%"></i></div>
+                        <b>${survivalScore}</b>
+                    </div>
+                </div>
+                <div class="diff-card-cta"><span>DEPLOY TO THIS THEATER</span><em>ENTER</em></div>
             `;
+
+            card.addEventListener('mousemove', (event) => {
+                const rect = card.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) return;
+                const nx = (event.clientX - rect.left) / rect.width;
+                const ny = (event.clientY - rect.top) / rect.height;
+                const tiltX = (0.5 - ny) * 8;
+                const tiltY = (nx - 0.5) * 10;
+                card.style.setProperty('--tilt-x', `${tiltX.toFixed(2)}deg`);
+                card.style.setProperty('--tilt-y', `${tiltY.toFixed(2)}deg`);
+                card.style.setProperty('--diff-hover-x', `${(nx * 100).toFixed(2)}%`);
+                card.style.setProperty('--diff-hover-y', `${(ny * 100).toFixed(2)}%`);
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.setProperty('--tilt-x', '0deg');
+                card.style.setProperty('--tilt-y', '0deg');
+                card.style.setProperty('--diff-hover-x', '50%');
+                card.style.setProperty('--diff-hover-y', '50%');
+            });
 
             card.addEventListener('click', () => {
                 GameState.settings.difficulty = key;
@@ -670,6 +1224,7 @@ const MenuSystem = {
     renderMapSelect() {
         const container = document.getElementById('map-cards');
         container.innerHTML = '';
+        this._hideMapHoverPreview();
 
         // Determine which maps to show based on selected difficulty
         const diffKey = GameState.settings.difficulty || 'easy';
@@ -684,6 +1239,33 @@ const MenuSystem = {
             normal:    { accent: '#e0c040', label: 'THE BATTLEFIELD',  subtitle: 'Standard combat against organized forces', icon: '\u{2694}' },
             hard:      { accent: '#e06040', label: 'THE GAUNTLET',     subtitle: 'Relentless enemies with deadly abilities', icon: '\u{1F525}' },
             nightmare: { accent: '#c020e0', label: 'THE VOID',         subtitle: 'Face the ultimate horrors of the abyss', icon: '\u{1F480}' },
+        };
+
+        const diffIntel = {
+            easy: {
+                boss: 'Grub King',
+                icon: '\u{1F9E0}',
+                doctrine: 'Training lanes reward clean tower fundamentals.',
+                tags: ['ONBOARDING', 'LOW SWARM', 'ECON BOOST'],
+            },
+            normal: {
+                boss: 'Stone Colossus',
+                icon: '\u{1FAA8}',
+                doctrine: 'Balanced fronts favor adaptive targeting and tempo.',
+                tags: ['STANDARD LINE', 'ARMOR MIX', 'MID SPIKE'],
+            },
+            hard: {
+                boss: 'Infernal Lord',
+                icon: '\u{1F525}',
+                doctrine: 'Aggressive waves punish slow setup and weak lanes.',
+                tags: ['BURST ARC', 'STEALTH THREATS', 'MICRO TEST'],
+            },
+            nightmare: {
+                boss: 'Void Emperor',
+                icon: '\u{1F480}',
+                doctrine: 'Endgame doctrine checks with sustained pressure loops.',
+                tags: ['ELITE DENSITY', 'DOUBLE MOD', 'NO MISTAKES'],
+            },
         };
 
         // Enemy pools per difficulty
@@ -721,11 +1303,21 @@ const MenuSystem = {
 
         const theme = diffThemes[diffKey] || diffThemes.easy;
         const enemies = diffEnemies[diffKey] || diffEnemies.easy;
+        const intel = diffIntel[diffKey] || diffIntel.easy;
+        const compactNumber = (value) => {
+            if (!Number.isFinite(value) || value <= 0) return '--';
+            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+            if (value >= 10000) return `${Math.round(value / 1000)}K`;
+            if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+            return `${Math.floor(value)}`;
+        };
 
         // Apply theme accent as CSS variable
         const mapSelect = document.getElementById('map-select');
         mapSelect.style.setProperty('--map-accent', theme.accent);
-        mapSelect.style.background = `radial-gradient(ellipse at 50% 0%, color-mix(in srgb, ${theme.accent} 8%, #181830) 0%, #181830 60%)`;
+        mapSelect.style.setProperty('--map-accent-soft', `color-mix(in srgb, ${theme.accent} 26%, #7f8fff)`);
+        mapSelect.classList.remove('map-select-theme-easy', 'map-select-theme-normal', 'map-select-theme-hard', 'map-select-theme-nightmare');
+        mapSelect.classList.add(`map-select-theme-${diffKey}`);
 
         // Update header
         const titleEl = document.getElementById('map-select-title');
@@ -735,14 +1327,21 @@ const MenuSystem = {
 
         // Progress
         const progressEl = document.getElementById('map-select-progress');
+        let completed = 0;
+        let unlockedCount = 0;
+        let totalBestScore = 0;
+        for (let i = startIdx; i < endIdx && i < MAPS.length; i++) {
+            if (GameState.mapScores[i] > 0) completed++;
+            if (GameState.unlockedMaps[i]) unlockedCount++;
+            if (Number.isFinite(GameState.mapScores[i])) totalBestScore += Math.max(0, GameState.mapScores[i]);
+        }
+        const total = Math.min(endIdx, MAPS.length) - startIdx;
         if (progressEl) {
-            let completed = 0;
-            for (let i = startIdx; i < endIdx && i < MAPS.length; i++) {
-                if (GameState.mapScores[i] > 0) completed++;
-            }
-            const total = Math.min(endIdx, MAPS.length) - startIdx;
             progressEl.textContent = `${completed}/${total} COMPLETED`;
         }
+
+        const totalMaps = total;
+        const completionPct = totalMaps > 0 ? (completed / totalMaps) * 100 : 0;
 
         // Enemy bar
         let enemyBar = document.getElementById('map-select-enemies');
@@ -753,8 +1352,40 @@ const MenuSystem = {
             const header = document.getElementById('map-select-header');
             header.parentNode.insertBefore(enemyBar, header.nextSibling);
         }
-        enemyBar.innerHTML = `<span class="map-select-enemies-label">Enemies:</span>` +
+        enemyBar.innerHTML = `<span class="map-select-enemies-label">Threat Feed</span>` +
             enemies.map(e => `<span class="map-enemy-chip"><span class="map-enemy-dot" style="background:${e.color};box-shadow:0 0 6px ${e.color}"></span>${e.name}</span>`).join('');
+
+        // Operations overview panel
+        let overview = document.getElementById('map-select-overview');
+        if (!overview) {
+            overview = document.createElement('div');
+            overview.id = 'map-select-overview';
+            overview.className = 'map-select-overview';
+            enemyBar.parentNode.insertBefore(overview, enemyBar.nextSibling);
+        }
+        overview.innerHTML = `
+            <div class="mso-main">
+                <div class="mso-kicker">Operations Brief</div>
+                <h3 class="mso-title">${theme.label}</h3>
+                <p class="mso-copy">${intel.doctrine}</p>
+                <div class="mso-progress-wrap">
+                    <div class="mso-progress-track"><span style="width:${completionPct.toFixed(1)}%"></span></div>
+                    <div class="mso-progress-meta">
+                        <span>${completed}/${totalMaps} sectors secured</span>
+                        <span>${unlockedCount}/${totalMaps} unlocked</span>
+                    </div>
+                </div>
+            </div>
+            <aside class="mso-boss">
+                <div class="mso-boss-emblem">${intel.icon}</div>
+                <div class="mso-boss-name">${intel.boss}</div>
+                <div class="mso-boss-sub">Prime Target</div>
+                <div class="mso-boss-tags">
+                    ${(intel.tags || []).map(tag => `<span class="mso-tag">${tag}</span>`).join('')}
+                </div>
+                <div class="mso-boss-score">Group Best ${compactNumber(totalBestScore)} pts</div>
+            </aside>
+        `;
 
         // Render map cards for this difficulty group only
         for (let i = startIdx; i < endIdx && i < MAPS.length; i++) {
@@ -763,7 +1394,8 @@ const MenuSystem = {
             const mapNum = i - startIdx + 1;
 
             const card = document.createElement('div');
-            card.className = `map-card ${unlocked ? '' : 'locked'}`;
+            card.className = `map-card ${unlocked ? 'is-ready' : 'locked'}`;
+            card.style.setProperty('--map-order', String(mapNum));
 
             // Mini map preview
             const previewDiv = document.createElement('div');
@@ -776,6 +1408,10 @@ const MenuSystem = {
                 const previewCtx = previewCanvas.getContext('2d');
                 MapSystem.drawMiniMap(previewCtx, i, 280, 160);
                 previewDiv.appendChild(previewCanvas);
+                const overlay = document.createElement('div');
+                overlay.className = 'map-preview-overlay';
+                overlay.innerHTML = `<span class="map-preview-wave">${map.waves} waves</span>`;
+                previewDiv.appendChild(overlay);
             } else {
                 previewDiv.innerHTML = `<div class="map-lock">\u{1F512}</div>`;
                 previewDiv.style.background = map.bgColor;
@@ -790,11 +1426,17 @@ const MenuSystem = {
             const bestScore = GameState.mapScores[i];
             const bestWave = GameState.mapWaveRecords[i];
 
+            const statusHtml = unlocked
+                ? (bestScore > 0
+                    ? '<div class="map-card-status cleared">CLEARED</div>'
+                    : '<div class="map-card-status ready">READY</div>')
+                : '<div class="map-card-status locked">LOCKED</div>';
+
             // Number badge + theme badge
             const numberBadge = `<div class="map-card-number">${mapNum}</div>`;
             const themeBadge = `<div class="map-card-theme">${map.theme}</div>`;
 
-            card.innerHTML = numberBadge + themeBadge;
+            card.innerHTML = numberBadge + themeBadge + statusHtml;
             card.appendChild(previewDiv);
 
             const bodyDiv = document.createElement('div');
@@ -802,9 +1444,11 @@ const MenuSystem = {
 
             let bestHTML = '';
             if (bestScore > 0) {
-                bestHTML = `<div class="map-best"><span class="best-score">${bestScore.toLocaleString()} pts</span> | Wave ${bestWave}</div>`;
+                bestHTML = `<div class="map-best"><span class="best-score">${compactNumber(bestScore)} pts</span><span class="best-wave">W${bestWave}</span></div>`;
             } else if (!unlocked) {
-                bestHTML = `<div class="map-best" style="color:#ff5050">Complete previous map to unlock</div>`;
+                bestHTML = `<div class="map-best locked-note">Clear previous sector</div>`;
+            } else {
+                bestHTML = `<div class="map-best pending-note">No clear record</div>`;
             }
 
             bodyDiv.innerHTML = `
@@ -813,8 +1457,13 @@ const MenuSystem = {
                     <div class="map-difficulty">${starsHTML}</div>
                 </div>
                 <div class="map-desc">${map.desc}</div>
+                <div class="map-card-metrics">
+                    <div class="map-metric"><span class="map-metric-label">Waves</span><strong>${map.waves}</strong></div>
+                    <div class="map-metric"><span class="map-metric-label">Best Wave</span><strong>${bestWave > 0 ? bestWave : '--'}</strong></div>
+                    <div class="map-metric"><span class="map-metric-label">Best Score</span><strong>${bestScore > 0 ? compactNumber(bestScore) : '--'}</strong></div>
+                </div>
                 <div class="map-card-footer">
-                    <div class="map-meta">${map.waves} waves</div>
+                    <div class="map-meta">Sector ${mapNum}</div>
                     ${bestHTML}
                 </div>
             `;
@@ -828,21 +1477,10 @@ const MenuSystem = {
                 card.appendChild(hint);
             }
 
-            // Hover preview — large floating map preview + details
-            if (unlocked) {
-                card.addEventListener('mouseenter', (e) => {
-                    this._showMapHoverPreview(i, e.currentTarget);
-                });
-                card.addEventListener('mouseleave', () => {
-                    this._hideMapHoverPreview();
-                });
-            }
-
             if (unlocked) {
                 card.addEventListener('click', () => {
                     this._hideMapHoverPreview();
-                    GameState.weeklyChallengeRun = null;
-                    startGame(i);
+                    this.openDoctrineSelect(i);
                     Audio.play('click');
                 });
             }
@@ -1035,7 +1673,7 @@ const MenuSystem = {
             btn.dataset.action = action.id;
 
             const isCapturing = this._hotkeyCaptureAction === action.id;
-            btn.textContent = isCapturing ? 'PRESS KEY...' : Input.getHotkeyLabel(action.id);
+            btn.textContent = isCapturing ? 'PRESS KEY/MOUSE...' : Input.getHotkeyLabel(action.id);
             if (isCapturing) btn.classList.add('is-capturing');
 
             btn.addEventListener('click', () => {
@@ -1072,6 +1710,35 @@ const MenuSystem = {
         }
 
         const result = Input.setHotkey(this._hotkeyCaptureAction, e.code);
+        if (!result || !result.ok) return;
+
+        this._hotkeyCaptureAction = null;
+        this._renderHotkeySettings();
+        this._refreshHotkeyDependentUI();
+        SaveSystem.savePersistent();
+        Audio.play('click');
+    },
+
+    _handleHotkeyCaptureMousedown(e) {
+        if (!this._hotkeyCaptureAction) return;
+        if (GameState.screen !== 'settings') {
+            this._cancelHotkeyCapture();
+            return;
+        }
+
+        if (typeof Input === 'undefined' || typeof Input.setHotkey !== 'function' || typeof Input.mouseButtonToHotkeyCode !== 'function') {
+            this._cancelHotkeyCapture();
+            return;
+        }
+
+        const mouseCode = Input.mouseButtonToHotkeyCode(e.button);
+        if (!mouseCode) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+        const result = Input.setHotkey(this._hotkeyCaptureAction, mouseCode);
         if (!result || !result.ok) return;
 
         this._hotkeyCaptureAction = null;
@@ -1135,7 +1802,7 @@ const MenuSystem = {
             <p>Click a tower to change its targeting priority: Closest, Strongest, Weakest, First (nearest to exit), Last, or Fastest. Use <span class="key">Mouse Wheel</span> to cycle modes.</p>
 
             <h3>OVERCLOCK</h3>
-            <p>Right-click a tower to overclock it: +50% attack speed for 10 seconds, then it's disabled for 5 seconds. Use strategically during tough waves!</p>
+            <p>Use the tower panel <span class="key">OVERCLOCK</span> action: +50% attack speed for 10 seconds, then disabled for 5 seconds. Save it for heavy pressure waves.</p>
 
             <h3>ABILITIES</h3>
             <p>Use <span class="key">${abilityHotkeys.join(' ')}</span> to activate powerful abilities with cooldowns:</p>

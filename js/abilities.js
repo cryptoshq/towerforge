@@ -59,6 +59,16 @@ const AbilitySystem = {
 
         ab.ready = false;
         let cd = ab.cooldown;
+        const de = GameState.doctrineEffects || {};
+        if (de.abilityCooldownMult && Number.isFinite(de.abilityCooldownMult) && de.abilityCooldownMult > 0) {
+            cd *= de.abilityCooldownMult;
+        }
+        if (typeof WaveSystem !== 'undefined' && typeof WaveSystem.getCurrentTacticalModifiers === 'function') {
+            const tactical = WaveSystem.getCurrentTacticalModifiers();
+            if (tactical.abilityCooldownMult && Number.isFinite(tactical.abilityCooldownMult) && tactical.abilityCooldownMult > 0) {
+                cd *= tactical.abilityCooldownMult;
+            }
+        }
         // Emergency protocol
         if (GameState.researchBonuses.emergencyCdr && GameState.lives <= 10) {
             cd *= (1 - GameState.researchBonuses.emergencyCdr);

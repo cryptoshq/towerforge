@@ -271,6 +271,9 @@ const ResearchSystem = {
         const rpEl = document.getElementById('research-points');
         if (rpEl) rpEl.textContent = GameState.researchPoints;
 
+        // ---- Refresh overview metrics panel ----
+        this._renderOverviewPanel();
+
         // Scroll to center on first render
         this._scrollToCenter(container);
 
@@ -278,22 +281,106 @@ const ResearchSystem = {
         this._startAmbientLoop();
     },
 
+    _renderOverviewPanel() {
+        const panel = document.getElementById('research-overview');
+        if (!panel) return;
+
+        const total = this.getTotalProgress();
+        const availableNow = this._countPurchasableNodes();
+        const rp = Math.max(0, Number(GameState.researchPoints) || 0);
+        const completionPct = total.total > 0 ? Math.round((total.purchased / total.total) * 100) : 0;
+
+        const branchSummaries = Object.entries(RESEARCH).map(([key, branch]) => {
+            const v = this._getBranchProgressValues(branch);
+            const color = this.branchColors[key] ? this.branchColors[key].main : '#9ab';
+            const pct = v.total > 0 ? Math.round((v.purchased / v.total) * 100) : 0;
+            return `<div class="research-branch-chip" style="--branch-main:${color}">
+                <span class="rbc-icon">${this.branchIcons[key] || '•'}</span>
+                <span class="rbc-name">${branch.name}</span>
+                <span class="rbc-progress">${v.purchased}/${v.total}</span>
+                <span class="rbc-bar"><i style="width:${pct}%"></i></span>
+            </div>`;
+        }).join('');
+
+        const bonusList = this._collectActiveBonusLines(6)
+            .map((line) => `<span class="research-bonus-pill">${line}</span>`)
+            .join('');
+
+        panel.innerHTML = `
+            <div class="research-overview-main">
+                <div class="research-overview-kicker">Research Command Deck</div>
+                <div class="research-overview-title-row">
+                    <h3>Progress Network</h3>
+                    <div class="research-overview-rp">${rp} RP</div>
+                </div>
+                <div class="research-overview-stats">
+                    <div class="ros-item"><span>Unlocked Nodes</span><strong>${total.purchased}/${total.total}</strong></div>
+                    <div class="ros-item"><span>Completion</span><strong>${completionPct}%</strong></div>
+                    <div class="ros-item"><span>Purchasable Now</span><strong>${availableNow}</strong></div>
+                </div>
+                <div class="research-overview-branches">${branchSummaries}</div>
+            </div>
+            <aside class="research-overview-side">
+                <div class="research-overview-side-title">Active Doctrine Bonuses</div>
+                <div class="research-overview-bonuses">${bonusList || '<span class="research-bonus-pill">No unlocked bonuses yet.</span>'}</div>
+                <div class="research-overview-hint">Drag to pan • Scroll to move around tree • Click available node to unlock</div>
+            </aside>
+        `;
+    },
+
+    _countPurchasableNodes() {
+        let count = 0;
+        for (const branch of Object.values(RESEARCH)) {
+            for (const row of branch.nodes) {
+                for (const node of row) {
+                    if (this.canPurchase(node)) count++;
+                }
+            }
+        }
+        return count;
+    },
+
+    _collectActiveBonusLines(limit = 6) {
+        const out = [];
+        const rb = GameState.researchBonuses || {};
+        for (const [key, value] of Object.entries(rb)) {
+            if (!this._isMeaningfulBonusValue(value)) continue;
+            const label = this._effectLabel(key);
+            out.push(`${label}: ${this._formatBonusValue(value)}`);
+            if (out.length >= limit) break;
+        }
+        return out;
+    },
+
+    _isMeaningfulBonusValue(value) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return Math.abs(value) > 0.00001;
+        if (typeof value === 'string') return value.trim().length > 0;
+        return value != null;
+    },
+
+    _formatBonusValue(value) {
+        if (typeof value === 'boolean') return value ? 'Enabled' : 'Off';
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) return '—';
+            if (Math.abs(value) > 0 && Math.abs(value) < 1) {
+                const pct = Math.round(value * 100);
+                return `${pct > 0 ? '+' : ''}${pct}%`;
+            }
+            const rounded = Math.round(value * 100) / 100;
+            return `${rounded > 0 ? '+' : ''}${rounded}`;
+        }
+        return String(value);
+    },
+
     // -------------------------------------------------------
     // Background grid
     // -------------------------------------------------------
     _renderBackgroundGrid(parent) {
         const grid = document.createElement('div');
-        grid.style.cssText = `
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background-image:
-                radial-gradient(circle at ${this.CENTER_X}px ${this.CENTER_Y}px,
-                    rgba(50,50,120,0.10) 0%, transparent 40%),
-                linear-gradient(rgba(35,35,80,0.06) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(35,35,80,0.06) 1px, transparent 1px);
-            background-size: 100% 100%, 80px 80px, 80px 80px;
-            pointer-events: none; z-index: 0;
-        `;
+        grid.className = 'research-tree-grid';
+        grid.style.setProperty('--center-x', `${this.CENTER_X}px`);
+        grid.style.setProperty('--center-y', `${this.CENTER_Y}px`);
         parent.appendChild(grid);
     },
 
@@ -303,24 +390,11 @@ const ResearchSystem = {
     _renderStartNode(parent, pos) {
         const el = document.createElement('div');
         const sz = 100;
-        el.style.cssText = `
-            position: absolute;
-            left: ${pos.x - sz / 2}px;
-            top: ${pos.y - sz / 2}px;
-            width: ${sz}px; height: ${sz}px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(245,204,80,0.20) 0%, rgba(30,30,60,0.95) 65%);
-            border: 2.5px solid rgba(245,204,80,0.7);
-            box-shadow: 0 0 40px rgba(245,204,80,0.25), 0 0 80px rgba(245,204,80,0.08), inset 0 0 25px rgba(245,204,80,0.08);
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            z-index: 5;
-            font-family: 'Orbitron', sans-serif;
-            color: #f5cc50; font-size: 11px; font-weight: 700;
-            letter-spacing: 3px; text-shadow: 0 0 10px rgba(245,204,80,0.5);
-            animation: startNodePulse 4s ease-in-out infinite;
-            pointer-events: none;
-        `;
+        el.className = 'research-start-node';
+        el.style.left = `${pos.x - sz / 2}px`;
+        el.style.top = `${pos.y - sz / 2}px`;
+        el.style.width = `${sz}px`;
+        el.style.height = `${sz}px`;
         el.innerHTML = `<span style="font-size:28px;margin-bottom:3px;opacity:0.9">\u2726</span>START`;
         parent.appendChild(el);
 
@@ -379,28 +453,14 @@ const ResearchSystem = {
 
             const lbl = document.createElement('div');
             lbl.className = `research-branch-label branch-${branchKey}`;
-            lbl.style.cssText = `
-                position: absolute; z-index: 3;
-                font-family: 'Orbitron', sans-serif;
-                font-size: 12px; font-weight: 600;
-                letter-spacing: 3px;
-                color: ${colors.main};
-                text-shadow: 0 0 12px ${colors.glow};
-                white-space: nowrap;
-                pointer-events: none;
-                text-align: center;
-                background: rgba(12,12,28,0.15);
-                padding: 6px 14px;
-                border-radius: 6px;
-                border: 1px solid ${colors.main}22;
-                min-width: 196px;
-            `;
+            lbl.style.setProperty('--branch-main', colors.main);
+            lbl.style.setProperty('--branch-glow', colors.glow);
 
             // Temporary placement for measurement pass.
             lbl.style.left = cx + 'px';
             lbl.style.top = cy + 'px';
 
-            lbl.innerHTML = `<span style="opacity:0.5;font-size:9px;margin-right:4px">${arrows[branchKey]}</span> ${branch.icon} ${branch.name} <span style="opacity:0.45;font-size:9px;margin-left:4px">${progress}</span>`;
+            lbl.innerHTML = `<span class="rbl-arrow">${arrows[branchKey]}</span> ${branch.icon} ${branch.name} <span class="rbl-progress">${progress}</span>`;
             parent.appendChild(lbl);
             labelsByBranch[branchKey] = lbl;
         }
@@ -435,88 +495,39 @@ const ResearchSystem = {
             left: ${x - half}px;
             top: ${y - half}px;
             width: ${sz}px; height: ${sz}px;
-            background: linear-gradient(145deg, rgba(35,35,70,0.9), rgba(20,20,45,0.95));
-            border: 2px solid rgba(70,70,130,0.45);
-            border-radius: 14px;
-            display: flex; align-items: center; justify-content: center;
-            flex-direction: column;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.25s, border-color 0.25s, opacity 0.25s;
-            font-size: 24px;
             z-index: 3;
-            user-select: none;
         `;
+        el.style.setProperty('--branch-main', colors.main);
+        el.style.setProperty('--branch-glow', colors.glow);
 
         // ---- State classes ----
         if (purchased) {
             el.classList.add('purchased');
-            el.style.borderColor = colors.main;
-            el.style.background = `linear-gradient(145deg, ${colors.bg}, rgba(245,204,80,0.05))`;
-            el.style.boxShadow = `0 0 16px ${colors.glow}, inset 0 0 10px rgba(245,204,80,0.04)`;
         } else if (canBuy) {
             el.classList.add('available');
-            el.style.borderColor = '#60cc60';
-            el.style.boxShadow = '0 0 14px rgba(96,204,96,0.25)';
-            el.style.animation = 'nodeAvailablePulse 2.5s ease-in-out infinite';
         } else if (!prereqsMet) {
             el.classList.add('locked');
-            el.style.opacity = '0.25';
-            el.style.borderColor = 'rgba(60,60,90,0.35)';
-            el.style.cursor = 'not-allowed';
         } else {
             // prereqs met but can't afford
-            el.style.borderColor = 'rgba(90,90,150,0.45)';
-            el.style.opacity = '0.55';
+            el.classList.add('gated');
         }
 
         // ---- Icon ----
         const iconSpan = document.createElement('span');
         iconSpan.className = 'node-icon';
         iconSpan.textContent = node.icon;
-        iconSpan.style.cssText = 'font-size:24px; line-height:1; pointer-events:none;';
         el.appendChild(iconSpan);
 
         // ---- Name label below node ----
         const nameLabel = document.createElement('div');
-        nameLabel.style.cssText = `
-            position: absolute;
-            bottom: -22px; left: 50%;
-            transform: translateX(-50%);
-            white-space: nowrap;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 9px;
-            color: ${purchased ? colors.main : 'rgba(140,140,180,0.7)'};
-            pointer-events: none;
-            text-shadow: ${purchased ? '0 0 6px ' + colors.glow : 'none'};
-            letter-spacing: 0.5px;
-            max-width: 130px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            text-align: center;
-            background: rgba(12,12,30,0.85);
-            padding: 1px 6px;
-            border-radius: 3px;
-        `;
+        nameLabel.className = `research-node-name${purchased ? ' purchased' : ''}`;
         nameLabel.textContent = node.name;
         el.appendChild(nameLabel);
 
         // ---- Cost badge ----
         if (!purchased) {
             const costBadge = document.createElement('span');
-            costBadge.className = 'node-cost';
-            costBadge.style.cssText = `
-                position: absolute;
-                top: -8px; right: -10px;
-                font-family: 'Share Tech Mono', monospace;
-                font-size: 9px;
-                background: rgba(10,10,28,0.92);
-                padding: 2px 5px;
-                border-radius: 4px;
-                border: 1px solid ${canBuy ? 'rgba(96,204,96,0.45)' : 'rgba(70,70,110,0.35)'};
-                color: ${canBuy ? '#60cc60' : 'rgba(200,180,100,0.7)'};
-                pointer-events: none;
-                z-index: 4;
-            `;
+            costBadge.className = `node-cost${canBuy ? ' can-buy' : ''}`;
             costBadge.textContent = node.cost + ' RP';
             el.appendChild(costBadge);
         }
@@ -524,31 +535,18 @@ const ResearchSystem = {
         // ---- Purchased checkmark overlay ----
         if (purchased) {
             const check = document.createElement('div');
-            check.style.cssText = `
-                position: absolute; top: -7px; right: -7px;
-                width: 18px; height: 18px;
-                background: ${colors.main};
-                color: #1a1a2e;
-                border-radius: 50%;
-                font-size: 11px; font-weight: 700;
-                display: flex; align-items: center; justify-content: center;
-                box-shadow: 0 0 8px ${colors.glow};
-                pointer-events: none;
-                z-index: 5;
-            `;
+            check.className = 'research-node-check';
+            check.style.setProperty('--branch-main', colors.main);
+            check.style.setProperty('--branch-glow', colors.glow);
             check.textContent = '\u2713';
             el.appendChild(check);
         }
 
         // ---- Branch color accent line on top ----
         const accent = document.createElement('div');
-        accent.style.cssText = `
-            position: absolute; top: 0; left: 20%; right: 20%; height: 2px;
-            background: ${purchased ? colors.main : (canBuy ? '#60cc60' : 'transparent')};
-            border-radius: 0 0 2px 2px;
-            opacity: ${purchased ? 0.8 : 0.5};
-            pointer-events: none;
-        `;
+        accent.className = 'research-node-accent';
+        if (purchased) accent.classList.add('purchased');
+        else if (canBuy) accent.classList.add('available');
         el.appendChild(accent);
 
         // ---- Click handler ----

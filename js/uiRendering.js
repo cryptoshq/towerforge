@@ -143,6 +143,10 @@ const UIRenderer = {
     _getWaveThreatHint() {
         if (typeof WaveSystem === 'undefined') return '';
 
+        if (WaveSystem.tacticalEventModalOpen) {
+            return 'TACTICAL DIRECTIVE READY';
+        }
+
         if (GameState.gamePhase === 'idle') {
             const nextWave = GameState.wave + 1;
             const preview = WaveSystem.getWavePreview(nextWave);
@@ -151,6 +155,12 @@ const UIRenderer = {
             }
             if (preview && preview.scenario && preview.scenario.name) {
                 return `NEXT SCENARIO: ${preview.scenario.name.toUpperCase()}`;
+            }
+            if (preview && preview.faction && preview.faction.name) {
+                return `NEXT FACTION: ${preview.faction.name.toUpperCase()}`;
+            }
+            if (preview && preview.arc && preview.arc.name) {
+                return `NEXT ARC: ${preview.arc.name.toUpperCase()}`;
             }
             if (preview && preview.mapPressure && preview.mapPressure.name) {
                 return `MAP PRESSURE: ${preview.mapPressure.name.toUpperCase()}`;
@@ -172,6 +182,20 @@ const UIRenderer = {
         }
 
         if (GameState.gamePhase === 'playing') {
+            if (WaveSystem.isBonusWave && typeof WaveSystem.getBonusObjectiveDisplay === 'function') {
+                const bonusObj = WaveSystem.getBonusObjectiveDisplay();
+                if (bonusObj) {
+                    if (bonusObj.type === 'priority_target') {
+                        return `BONUS OBJ: TARGETS ${bonusObj.remainingTargets}/${bonusObj.requiredTargets} • ${bonusObj.timeRemaining}s`;
+                    }
+                    return `BONUS OBJ: SURVIVE ${bonusObj.timeRemaining}s`;
+                }
+            }
+
+            if (Array.isArray(GameState.enemies) && GameState.enemies.some(enemy => enemy.alive && enemy.isCaptain)) {
+                return 'CAPTAIN AURA ACTIVE';
+            }
+
             const activeMods = WaveSystem.getActiveModifiers ? WaveSystem.getActiveModifiers() : [];
             if (activeMods.length > 0) {
                 return `MOD: ${activeMods[0].name.toUpperCase()}`;
@@ -186,7 +210,13 @@ const UIRenderer = {
 
     updateInterestPreview() {
         // Show interest preview between waves
-        const interest = Math.min(Math.floor(GameState.gold * CONFIG.INTEREST_RATE), CONFIG.INTEREST_CAP);
+        const de = GameState.doctrineEffects || {};
+        const tacticalProjected = (typeof WaveSystem !== 'undefined' && typeof WaveSystem.getProjectedTacticalModifiers === 'function')
+            ? WaveSystem.getProjectedTacticalModifiers()
+            : { interestRateDelta: 0, interestCapDelta: 0 };
+        const interestRate = Math.max(0, CONFIG.INTEREST_RATE + (GameState.researchBonuses.interestRate || 0) + (de.interestRateDelta || 0) + (tacticalProjected.interestRateDelta || 0));
+        const interestCap = Math.max(0, CONFIG.INTEREST_CAP + (GameState.researchBonuses.interestCap || 0) + (de.interestCapDelta || 0) + (tacticalProjected.interestCapDelta || 0));
+        const interest = Math.min(Math.floor(GameState.gold * interestRate), interestCap);
         const el = document.getElementById('hud-gold-val');
         if (interest > 0 && GameState.gamePhase === 'idle') {
             el.textContent = `${formatGold(GameState.gold)} (+${interest})`;
@@ -1243,6 +1273,8 @@ const UIRenderer = {
                     headerText = `BOSS AHEAD: ${previewData.bossName.toUpperCase()}`;
                 } else if (previewData.scenario && previewData.scenario.name) {
                     headerText = `SCENARIO: ${previewData.scenario.name.toUpperCase()}`;
+                } else if (previewData.faction && previewData.faction.name) {
+                    headerText = `FACTION: ${previewData.faction.name.toUpperCase()}`;
                 }
 
                 // Calculate panel dimensions
@@ -1251,11 +1283,15 @@ const UIRenderer = {
                 const hasElite = previewData.eliteChance && previewData.eliteChance > 0.05;
                 const threatTags = Array.isArray(previewData.threatTags) ? previewData.threatTags : [];
                 const hasThreatTags = threatTags.length > 0;
+                const objectiveLine = (previewData.isBonus && previewData.bonusInfo && previewData.bonusInfo.objectiveTitle)
+                    ? `Objective: ${previewData.bonusInfo.objectiveTitle}`
+                    : '';
+                const hasObjectiveLine = !!objectiveLine;
                 const showScouting = !!GameState.researchBonuses.scoutingReport;
                 const basePanelH = showScouting
                     ? (hasElite ? 60 : 50)
                     : (hasElite ? 48 : 38);
-                const panelH = basePanelH + (hasThreatTags ? 14 : 0);
+                const panelH = basePanelH + (hasObjectiveLine ? 10 : 0) + (hasThreatTags ? 14 : 0);
                 const minPanelX = viewLeft + 8;
                 const maxPanelX = Math.max(minPanelX, viewRight - totalWidth - 8);
                 const panelX = clamp((logicalWidth - totalWidth) / 2, minPanelX, maxPanelX);
@@ -1284,19 +1320,28 @@ const UIRenderer = {
                 ctx.fillStyle = previewData.isBonus ? '#ffd700' : '#778';
                 ctx.fillText(headerText, panelCenterX, previewY + 13);
 
+                let infoLineY = previewY + 23;
+                if (hasObjectiveLine) {
+                    ctx.font = '8px "Share Tech Mono"';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#ffe39a';
+                    ctx.fillText(objectiveLine.toUpperCase(), panelCenterX, infoLineY);
+                    infoLineY += 10;
+                }
+
                 if (hasThreatTags) {
                     const tagsText = threatTags.join('   ');
                     ctx.font = '8px "Share Tech Mono"';
                     ctx.textAlign = 'center';
                     ctx.fillStyle = '#9ba8c7';
-                    ctx.fillText(tagsText, panelCenterX, previewY + 23);
+                    ctx.fillText(tagsText, panelCenterX, infoLineY);
                 }
 
                 // Enemy groups — laid out horizontally
                 let offsetX = panelX + Math.max(10, (totalWidth - preview.length * colW) / 2);
                 ctx.font = '10px "Share Tech Mono"';
                 const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
-                const groupsBaseY = previewY + (hasThreatTags ? 36 : 26);
+                const groupsBaseY = previewY + 26 + (hasObjectiveLine ? 10 : 0) + (hasThreatTags ? 10 : 0);
                 for (const group of preview) {
                     // Colored dot
                     ctx.fillStyle = group.color;
@@ -1309,7 +1354,8 @@ const UIRenderer = {
                     // Text
                     ctx.fillStyle = '#bbb';
                     ctx.textAlign = 'left';
-                    ctx.fillText(`${group.count}x ${group.name}`, offsetX + 14, groupsBaseY + 3);
+                    const label = `${group.count}x ${group.name}${group.isObjectiveTarget ? ' [TARGET]' : ''}`;
+                    ctx.fillText(label, offsetX + 14, groupsBaseY + 3);
 
                     if (showScouting && group.type && ENEMIES[group.type]) {
                         const enemyDef = ENEMIES[group.type];

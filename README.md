@@ -46,6 +46,10 @@ Current regression suite includes:
 - `tests/playwright-skipwave-ui-test.js`
 - `tests/playwright-ui-alignment-test.js`
 - `tests/playwright-keybind-settings-test.js`
+- `tests/playwright-doctrine-flow-test.js`
+- `tests/playwright-tactical-choice-test.js`
+- `tests/playwright-bonus-objective-test.js`
+- `tests/playwright-faction-captain-test.js`
 - `tests/playwright-weekly-endless-meta-test.js`
 - `tests/playwright-audio-stress-test.js`
 
@@ -69,6 +73,10 @@ tests/    Playwright regression scripts
 - Campaign progression across difficulty bands and maps
 - Endless mode with persistent best-depth tracking
 - Weekly challenge generation and records
+- Pre-run doctrine selection for campaign and endless runs
+- Between-wave tactical choice events with timed tradeoffs
+- Objective-based bonus waves (survival and priority-target variants)
+- First enemy faction package (Siege Foundry) with captain aura behavior
 - Boss archetypes, map pressure, and scenario wave identities
 - Research lab and persistent unlock-style progression
 - Remappable hotkeys for core actions and abilities

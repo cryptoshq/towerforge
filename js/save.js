@@ -401,10 +401,31 @@ const SaveSystem = {
                 endlessDraftedDepths: Array.isArray(WaveSystem.endlessDraftedDepths)
                     ? [...WaveSystem.endlessDraftedDepths]
                     : [],
+                tacticalActiveEffects: Array.isArray(WaveSystem.activeTacticalEffects)
+                    ? WaveSystem.activeTacticalEffects.map((effect) => ({
+                        id: effect.id,
+                        name: effect.name,
+                        remainingWaves: effect.remainingWaves,
+                        modifiers: effect.modifiers && typeof effect.modifiers === 'object'
+                            ? { ...effect.modifiers }
+                            : {},
+                    }))
+                    : [],
+                tacticalEventModalOpen: !!WaveSystem.tacticalEventModalOpen,
+                tacticalEventChoiceIds: Array.isArray(WaveSystem.tacticalEventChoices)
+                    ? WaveSystem.tacticalEventChoices.map(choice => choice && choice.id).filter(Boolean)
+                    : [],
+                tacticalEventsTaken: Number.isFinite(WaveSystem.tacticalEventsTaken)
+                    ? Math.max(0, Math.floor(WaveSystem.tacticalEventsTaken))
+                    : 0,
             }
             : {
                 endlessDraftMutatorIds: [],
                 endlessDraftedDepths: [],
+                tacticalActiveEffects: [],
+                tacticalEventModalOpen: false,
+                tacticalEventChoiceIds: [],
+                tacticalEventsTaken: 0,
             };
 
         return {
@@ -414,6 +435,7 @@ const SaveSystem = {
             difficulty: GameState.settings.difficulty || 'normal',
             endlessMode: !!(typeof WaveSystem !== 'undefined' && WaveSystem.endlessMode),
             activeChallenges: [...(GameState.activeChallenges || [])],
+            activeDoctrineId: typeof GameState.activeDoctrineId === 'string' ? GameState.activeDoctrineId : null,
             weeklyChallengeRun: weeklyRun,
             waveState: waveState,
             wave: GameState.wave,
@@ -784,6 +806,9 @@ const SaveSystem = {
             const weekly = data.weeklyChallengeRun && typeof data.weeklyChallengeRun === 'object'
                 ? data.weeklyChallengeRun
                 : null;
+            const doctrine = (typeof data.activeDoctrineId === 'string' && Array.isArray(CONFIG.DOCTRINES))
+                ? CONFIG.DOCTRINES.find(d => d.id === data.activeDoctrineId)
+                : null;
 
             return {
                 mapIndex,
@@ -795,6 +820,8 @@ const SaveSystem = {
                 activeChallenges: Array.isArray(data.activeChallenges) ? data.activeChallenges : [],
                 weeklyMode: !!(weekly && weekly.active),
                 weeklyWeekId: weekly && typeof weekly.weekId === 'string' ? weekly.weekId : '',
+                doctrineId: doctrine ? doctrine.id : '',
+                doctrineName: doctrine ? doctrine.name : '',
                 savedAt: Number.isFinite(data._timestamp) ? data._timestamp : null,
                 elapsedTimeSec: Number.isFinite(data.time) ? data.time : 0,
             };
@@ -837,6 +864,14 @@ const SaveSystem = {
             WaveSystem.init(data.mapIndex);
             WaveSystem.endlessMode = !!data.endlessMode;
 
+            GameState.activeDoctrineId = typeof data.activeDoctrineId === 'string'
+                ? data.activeDoctrineId
+                : null;
+            GameState.pendingDoctrineId = GameState.activeDoctrineId;
+            if (typeof GameState.computeDoctrineEffects === 'function') {
+                GameState.computeDoctrineEffects();
+            }
+
             if (data.waveState && typeof data.waveState === 'object') {
                 WaveSystem.endlessDraftMutatorIds = Array.isArray(data.waveState.endlessDraftMutatorIds)
                     ? [...data.waveState.endlessDraftMutatorIds]
@@ -844,7 +879,46 @@ const SaveSystem = {
                 WaveSystem.endlessDraftedDepths = Array.isArray(data.waveState.endlessDraftedDepths)
                     ? [...data.waveState.endlessDraftedDepths]
                     : [];
+
+                WaveSystem.activeTacticalEffects = Array.isArray(data.waveState.tacticalActiveEffects)
+                    ? data.waveState.tacticalActiveEffects
+                        .filter(effect => effect && typeof effect === 'object')
+                        .map(effect => ({
+                            id: effect.id,
+                            name: effect.name,
+                            remainingWaves: Number.isFinite(effect.remainingWaves)
+                                ? Math.max(0, Math.floor(effect.remainingWaves))
+                                : 0,
+                            modifiers: effect.modifiers && typeof effect.modifiers === 'object'
+                                ? { ...effect.modifiers }
+                                : {},
+                        }))
+                        .filter(effect => effect.remainingWaves > 0)
+                    : [];
+                WaveSystem.tacticalEventsTaken = Number.isFinite(data.waveState.tacticalEventsTaken)
+                    ? Math.max(0, Math.floor(data.waveState.tacticalEventsTaken))
+                    : 0;
+
+                const tacticalChoiceIds = Array.isArray(data.waveState.tacticalEventChoiceIds)
+                    ? data.waveState.tacticalEventChoiceIds
+                    : [];
+                WaveSystem.tacticalEventChoices = tacticalChoiceIds
+                    .map(id => (typeof WaveSystem._getTacticalTemplateById === 'function'
+                        ? WaveSystem._getTacticalTemplateById(id)
+                        : null))
+                    .filter(Boolean);
+                WaveSystem.tacticalEventModalOpen = !!data.waveState.tacticalEventModalOpen && WaveSystem.tacticalEventChoices.length > 0;
+            } else {
+                WaveSystem.activeTacticalEffects = [];
+                WaveSystem.tacticalEventChoices = [];
+                WaveSystem.tacticalEventModalOpen = false;
+                WaveSystem.tacticalEventsTaken = 0;
             }
+
+            WaveSystem.currentTacticalWaveModifiers = typeof WaveSystem._getDefaultTacticalModifiers === 'function'
+                ? WaveSystem._getDefaultTacticalModifiers()
+                : null;
+            WaveSystem.currentTacticalWaveEffectNames = [];
 
             GameState.wave = data.wave;
             GameState.gold = data.gold;
@@ -908,6 +982,10 @@ const SaveSystem = {
                     ...data.stats,
                     towerTypesSet: new Set(data.stats.towerTypesSet || []),
                 };
+            }
+
+            if (typeof WaveSystem._restorePendingTacticalEventModal === 'function') {
+                WaveSystem._restorePendingTacticalEventModal();
             }
 
             return true;

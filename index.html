@@ -53,6 +53,47 @@
         <div class="map-cards-grid" id="map-cards"></div>
     </div>
 
+    <!-- Doctrine Select -->
+    <div id="doctrine-select" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-doctrines">&larr; BACK</button>
+            <h2>CHOOSE DOCTRINE</h2>
+        </div>
+        <div class="doctrine-content">
+            <div class="doctrine-summary" id="doctrine-summary"></div>
+            <div class="doctrine-main">
+                <div class="doctrine-left">
+                    <div class="doctrine-cards" id="doctrine-cards"></div>
+                </div>
+                <aside class="doctrine-spotlight" id="doctrine-spotlight" data-doctrine="fortress">
+                    <div class="d-spotlight-top">
+                        <span class="d-spotlight-kicker">Selected Doctrine</span>
+                        <h3 class="d-spotlight-name" id="doctrine-spotlight-name">Doctrine</h3>
+                        <div class="d-spotlight-code" id="doctrine-spotlight-code">Code: N/A</div>
+                    </div>
+                    <div class="d-spotlight-center">
+                        <div class="d-spotlight-emblem" id="doctrine-spotlight-emblem">?</div>
+                        <p class="d-spotlight-summary" id="doctrine-spotlight-summary"></p>
+                    </div>
+                    <div class="d-spotlight-effects">
+                        <div class="d-spotlight-effect positive" id="doctrine-spotlight-bonus">BONUS</div>
+                        <div class="d-spotlight-effect negative" id="doctrine-spotlight-drawback">DRAWBACK</div>
+                    </div>
+                    <div class="d-spotlight-metrics" id="doctrine-spotlight-metrics"></div>
+                    <div class="d-spotlight-fx" aria-hidden="true">
+                        <span class="d-fx-orbit"></span>
+                        <span class="d-fx-orbit d-fx-orbit-b"></span>
+                        <span class="d-fx-pulse"></span>
+                        <span class="d-fx-grid"></span>
+                    </div>
+                </aside>
+            </div>
+            <div class="doctrine-actions">
+                <button class="menu-btn primary" id="btn-doctrine-start">START RUN</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Research Screen -->
     <div id="research-screen" class="screen">
         <div class="screen-header">
@@ -63,6 +104,7 @@
                 <span id="research-points">0</span> RP
             </div>
         </div>
+        <div class="research-overview" id="research-overview"></div>
         <div class="research-tree" id="research-tree"></div>
     </div>
 
@@ -124,7 +166,7 @@
                     <button type="button" class="keybind-reset-btn" id="btn-reset-hotkeys">RESET DEFAULTS</button>
                 </div>
                 <div class="settings-hotkey-grid" id="settings-hotkey-grid"></div>
-                <p class="settings-keybinds-hint">Click a key to remap it. Press Escape to cancel capture. Number keys 1-8 remain reserved for tower slots.</p>
+                <p class="settings-keybinds-hint">Click a bind and press a keyboard key or mouse button. Press Escape to cancel capture. Number keys 1-8 remain reserved for tower slots.</p>
             </div>
         </div>
     </div>
@@ -326,6 +368,16 @@
             <div class="endless-draft-actions">
                 <button class="menu-btn" id="btn-endless-draft-reroll">REROLL</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tactical choice event modal -->
+    <div class="modal-overlay" id="tactical-event-modal" style="display:none">
+        <div class="modal tactical-event-modal">
+            <h2 class="victory-title">TACTICAL DIRECTIVE</h2>
+            <p class="endless-subtitle" id="tactical-event-subtitle">Choose one between-wave tactical option.</p>
+            <div class="tactical-event-active" id="tactical-event-active"></div>
+            <div class="tactical-event-choices" id="tactical-event-choices"></div>
         </div>
     </div>
 

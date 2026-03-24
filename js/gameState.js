@@ -1,6 +1,6 @@
 // ===== CENTRAL GAME STATE =====
 const GameState = {
-    screen: 'menu', // menu, mapselect, game, research, achievements, howtoplay, settings
+    screen: 'menu', // menu, difficulty, mapselect, doctrine, game, research, achievements, howtoplay, settings
     gamePhase: 'idle', // idle (between waves), playing, paused, gameover, victory
     mapIndex: 0,
     wave: 0,
@@ -82,6 +82,20 @@ const GameState = {
 
     // Weekly challenge run state (not persistent outside save slots)
     weeklyChallengeRun: null,
+
+    // Doctrine (Phase 5)
+    pendingMapIndex: null,
+    pendingDoctrineId: null,
+    activeDoctrineId: null,
+    doctrineEffects: {
+        startGold: 0,
+        startLives: 0,
+        interestRateDelta: 0,
+        interestCapDelta: 0,
+        abilityCooldownMult: 1,
+        globalDamageMult: 1,
+        eliteBossDamageMult: 1,
+    },
 
     // Stats for achievements
     stats: {
@@ -191,6 +205,15 @@ const GameState = {
         this.towerAbilityCooldowns = {};
         this.activeChallenges = [...(this._pendingChallenges || [])];
 
+        // Apply doctrine effects for this run
+        this.computeDoctrineEffects();
+        const de = this.doctrineEffects;
+        this.gold += (de.startGold || 0);
+        this.lives += (de.startLives || 0);
+        this.lives = Math.max(1, Math.floor(this.lives));
+        this.gold = Math.max(0, Math.floor(this.gold));
+        this.maxLives = this.lives;
+
         // Apply research bonuses
         this.computeResearchBonuses();
         const rb = this.researchBonuses;
@@ -234,5 +257,34 @@ const GameState = {
             }
         }
         this.researchBonuses = rb;
+    },
+
+    getActiveDoctrine() {
+        const doctrineId = this.activeDoctrineId;
+        if (!doctrineId || !Array.isArray(CONFIG.DOCTRINES)) return null;
+        return CONFIG.DOCTRINES.find(d => d.id === doctrineId) || null;
+    },
+
+    computeDoctrineEffects() {
+        const defaults = {
+            startGold: 0,
+            startLives: 0,
+            interestRateDelta: 0,
+            interestCapDelta: 0,
+            abilityCooldownMult: 1,
+            globalDamageMult: 1,
+            eliteBossDamageMult: 1,
+        };
+
+        const doctrine = this.getActiveDoctrine();
+        if (!doctrine || !doctrine.effects || typeof doctrine.effects !== 'object') {
+            this.doctrineEffects = { ...defaults };
+            return;
+        }
+
+        this.doctrineEffects = {
+            ...defaults,
+            ...doctrine.effects,
+        };
     },
 };

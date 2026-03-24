@@ -42,6 +42,76 @@ const CONFIG = {
         { id: 'no_upgrade', name: 'Base Only', desc: 'Cannot upgrade towers past Tier 2', icon: '\u26D4', rpBonus: 1.5 },
     ],
 
+    // ===== PRE-RUN DOCTRINES (Phase 5) =====
+    DOCTRINES: [
+        {
+            id: 'fortress',
+            name: 'Fortress Doctrine',
+            icon: '\u{1F6E1}',
+            summary: 'Stabilize defense at the cost of early economy.',
+            bonusText: '+8 starting lives',
+            drawbackText: '-100 starting gold',
+            style: {
+                accent: '#5ec4ff',
+                gradient: 'linear-gradient(135deg, rgba(20, 44, 78, 0.95), rgba(18, 30, 58, 0.94))',
+            },
+            effects: {
+                startLives: 8,
+                startGold: -100,
+            },
+        },
+        {
+            id: 'tempo',
+            name: 'Tempo Doctrine',
+            icon: '\u26A1',
+            summary: 'Accelerate ability rotation for tactical momentum.',
+            bonusText: '-25% ability cooldowns',
+            drawbackText: '-2 starting lives, -50 starting gold',
+            style: {
+                accent: '#f4d06f',
+                gradient: 'linear-gradient(135deg, rgba(78, 58, 20, 0.95), rgba(52, 36, 16, 0.92))',
+            },
+            effects: {
+                abilityCooldownMult: 0.75,
+                startLives: -2,
+                startGold: -50,
+            },
+        },
+        {
+            id: 'greed',
+            name: 'Greed Doctrine',
+            icon: '\u{1F4B0}',
+            summary: 'Scale income faster while surviving with fewer margins.',
+            bonusText: '+2% interest, +25 interest cap',
+            drawbackText: '-3 starting lives',
+            style: {
+                accent: '#7ee08a',
+                gradient: 'linear-gradient(135deg, rgba(24, 72, 38, 0.95), rgba(18, 48, 28, 0.92))',
+            },
+            effects: {
+                interestRateDelta: 0.02,
+                interestCapDelta: 25,
+                startLives: -3,
+            },
+        },
+        {
+            id: 'execution',
+            name: 'Execution Doctrine',
+            icon: '\u{1F3AF}',
+            summary: 'Improve elite and boss takedowns while losing baseline efficiency.',
+            bonusText: '+25% damage vs elite and boss enemies',
+            drawbackText: '-10% global damage',
+            style: {
+                accent: '#ff8a8a',
+                gradient: 'linear-gradient(135deg, rgba(82, 24, 24, 0.95), rgba(56, 18, 18, 0.92))',
+            },
+            effects: {
+                eliteBossDamageMult: 1.25,
+                globalDamageMult: 0.9,
+            },
+        },
+    ],
+
     // ===== TOWER UPGRADE COST SCALING FORMULA CONSTANTS =====
     UPGRADE_COST_BASE_MULT: 1.5,
     UPGRADE_COST_TIER_EXP: 1.15,
@@ -854,9 +924,9 @@ const MAPS = [
         desc: 'A peaceful valley — the perfect training ground.',
         bgColor: '#243824', pathColor: '#4a4030', gridColor: '#2a4a2a',
         theme: 'forest',
-        // Winding S-curve through lush forest, lots of build space on both sides
+        // River-cut ravines with alternating diagonal chokepoints
         waypoints: [
-            [0, 9], [6, 9], [6, 3], [13, 3], [13, 14], [20, 14], [20, 6], [29, 6]
+            [0, 9], [4, 9], [6, 6], [9, 6], [11, 11], [15, 11], [18, 4], [23, 4], [25, 10], [29, 10]
         ],
         // Decorative features rendered on the map
         decorations: [
@@ -881,9 +951,9 @@ const MAPS = [
         desc: 'Scorching heat and narrow passes test your defenses.',
         bgColor: '#3a3525', pathColor: '#5a4a30', gridColor: '#3a3828',
         theme: 'desert',
-        // Back-and-forth zigzag through canyons — more turns, longer path
+        // Broken canyon shelves with shifting elevation lanes
         waypoints: [
-            [0, 3], [8, 3], [8, 15], [16, 15], [16, 3], [22, 3], [22, 12], [29, 12]
+            [0, 3], [5, 3], [7, 8], [11, 8], [13, 2], [18, 2], [20, 12], [24, 12], [26, 6], [29, 6]
         ],
         decorations: [
             { type: 'cactus', x: 3, y: 8 }, { type: 'cactus', x: 12, y: 1 }, { type: 'cactus', x: 19, y: 9 },
@@ -905,9 +975,9 @@ const MAPS = [
         desc: 'Ice and cold slow everything — even your towers.',
         bgColor: '#202838', pathColor: '#3a4458', gridColor: '#283040',
         theme: 'ice',
-        // Multi-zigzag across frozen tundra — many tight turns
+        // Ice shelf switchbacks and wind-cut diagonal corridors
         waypoints: [
-            [0, 15], [5, 15], [5, 2], [11, 2], [11, 15], [17, 15], [17, 2], [23, 2], [23, 15], [29, 15]
+            [0, 15], [4, 15], [6, 11], [10, 11], [12, 3], [17, 3], [19, 13], [24, 13], [26, 6], [29, 6]
         ],
         decorations: [
             { type: 'icicle', x: 2, y: 1 }, { type: 'icicle', x: 8, y: 8 }, { type: 'icicle', x: 14, y: 10 },
@@ -928,10 +998,9 @@ const MAPS = [
         desc: 'Enemies emerge from the lava — fight fire with firepower.',
         bgColor: '#301818', pathColor: '#4a2a1a', gridColor: '#3a2020',
         theme: 'volcano',
-        // Complex double-back path through volcanic terrain
+        // Rift shelves and magma bridges with hard pivots
         waypoints: [
-            [0, 9], [4, 9], [4, 2], [10, 2], [10, 9], [7, 9], [7, 15], [16, 15],
-            [16, 9], [20, 9], [20, 2], [25, 2], [25, 15], [29, 15]
+            [0, 9], [3, 9], [5, 4], [9, 4], [11, 12], [15, 12], [17, 6], [21, 6], [23, 14], [29, 14]
         ],
         decorations: [
             { type: 'lava', x: 1, y: 14, w: 3, h: 3 }, { type: 'lava', x: 22, y: 5, w: 2, h: 3 },
@@ -952,10 +1021,9 @@ const MAPS = [
         desc: 'The final challenge — darkness consumes all.',
         bgColor: '#181028', pathColor: '#2a2045', gridColor: '#201838',
         theme: 'shadow',
-        // Spiral inward then escape — extremely long path, the ultimate challenge
+        // Nonlinear void corridors with deceptive reversals
         waypoints: [
-            [0, 1], [26, 1], [26, 7], [4, 7], [4, 11], [24, 11], [24, 15],
-            [10, 15], [10, 13], [20, 13], [20, 9], [12, 9], [12, 5], [17, 5], [17, 3], [29, 3]
+            [0, 1], [7, 1], [9, 6], [5, 10], [12, 10], [14, 4], [20, 4], [22, 12], [16, 15], [25, 15], [27, 8], [29, 8]
         ],
         decorations: [
             { type: 'portal', x: 14, y: 7, w: 2, h: 2 },
@@ -979,7 +1047,7 @@ const MAPS = [
         bgColor: '#2a2a20', pathColor: '#4a4030', gridColor: '#333028',
         theme: 'forest',
         waypoints: [
-            [0, 4], [7, 4], [7, 14], [14, 14], [14, 4], [21, 4], [21, 14], [29, 14]
+            [0, 4], [5, 4], [7, 9], [11, 9], [13, 3], [18, 3], [20, 13], [25, 13], [29, 10]
         ],
         decorations: [
             { type: 'tree', x: 2, y: 8 }, { type: 'tree', x: 10, y: 1 }, { type: 'tree', x: 18, y: 8 },
@@ -994,7 +1062,7 @@ const MAPS = [
         bgColor: '#302a1a', pathColor: '#5a4a30', gridColor: '#3a3020',
         theme: 'desert',
         waypoints: [
-            [0, 9], [5, 9], [5, 2], [12, 2], [12, 16], [20, 16], [20, 5], [29, 5]
+            [0, 9], [4, 9], [6, 4], [10, 4], [12, 14], [17, 14], [19, 6], [24, 6], [29, 11]
         ],
         decorations: [
             { type: 'cactus', x: 3, y: 14 }, { type: 'cactus', x: 15, y: 8 }, { type: 'cactus', x: 24, y: 12 },
@@ -1008,7 +1076,7 @@ const MAPS = [
         bgColor: '#1a2030', pathColor: '#3a3850', gridColor: '#252838',
         theme: 'ice',
         waypoints: [
-            [0, 2], [10, 2], [10, 8], [4, 8], [4, 14], [16, 14], [16, 6], [24, 6], [24, 14], [29, 14]
+            [0, 2], [7, 2], [9, 7], [5, 11], [12, 11], [14, 5], [19, 5], [21, 13], [29, 13]
         ],
         decorations: [
             { type: 'icicle', x: 7, y: 5 }, { type: 'icicle', x: 20, y: 10 },
@@ -1023,7 +1091,7 @@ const MAPS = [
         bgColor: '#2a1a10', pathColor: '#4a3020', gridColor: '#352218',
         theme: 'volcano',
         waypoints: [
-            [0, 8], [6, 8], [6, 2], [14, 2], [14, 16], [22, 16], [22, 8], [29, 8]
+            [0, 8], [4, 8], [6, 2], [12, 2], [14, 12], [18, 12], [20, 5], [25, 5], [29, 9]
         ],
         decorations: [
             { type: 'lava', x: 3, y: 13, w: 2, h: 2 }, { type: 'lava', x: 18, y: 5, w: 2, h: 2 },
@@ -1037,7 +1105,7 @@ const MAPS = [
         bgColor: '#1a2020', pathColor: '#304038', gridColor: '#222a28',
         theme: 'shadow',
         waypoints: [
-            [0, 15], [8, 15], [8, 3], [16, 3], [16, 15], [24, 15], [24, 3], [29, 3]
+            [0, 15], [6, 15], [8, 9], [4, 5], [12, 5], [14, 13], [20, 13], [22, 4], [29, 4]
         ],
         decorations: [
             { type: 'darkpool', x: 4, y: 8, w: 2, h: 2 }, { type: 'darkpool', x: 20, y: 9, w: 2, h: 2 },
@@ -1052,7 +1120,7 @@ const MAPS = [
         bgColor: '#301010', pathColor: '#4a2020', gridColor: '#381818',
         theme: 'volcano',
         waypoints: [
-            [0, 1], [12, 1], [12, 8], [4, 8], [4, 15], [20, 15], [20, 8], [26, 8], [26, 1], [29, 1]
+            [0, 1], [8, 1], [10, 6], [5, 10], [12, 10], [14, 3], [20, 3], [22, 13], [27, 13], [29, 9]
         ],
         decorations: [
             { type: 'lava', x: 8, y: 4, w: 2, h: 2 }, { type: 'lava', x: 22, y: 12, w: 2, h: 2 },
@@ -1066,7 +1134,7 @@ const MAPS = [
         bgColor: '#182838', pathColor: '#2a3a50', gridColor: '#203040',
         theme: 'ice',
         waypoints: [
-            [0, 9], [3, 9], [3, 2], [9, 2], [9, 15], [15, 15], [15, 2], [21, 2], [21, 15], [27, 15], [27, 9], [29, 9]
+            [0, 9], [3, 9], [5, 3], [9, 3], [11, 14], [15, 14], [17, 2], [22, 2], [24, 12], [29, 12]
         ],
         decorations: [
             { type: 'icicle', x: 6, y: 8 }, { type: 'icicle', x: 12, y: 8 }, { type: 'icicle', x: 18, y: 8 },
@@ -1081,7 +1149,7 @@ const MAPS = [
         bgColor: '#2a0a0a', pathColor: '#4a1a10', gridColor: '#381010',
         theme: 'volcano',
         waypoints: [
-            [0, 5], [5, 5], [5, 13], [10, 13], [10, 2], [18, 2], [18, 15], [24, 15], [24, 7], [29, 7]
+            [0, 5], [4, 5], [6, 12], [10, 12], [12, 3], [17, 3], [19, 14], [24, 14], [26, 7], [29, 7]
         ],
         decorations: [
             { type: 'lava', x: 2, y: 9, w: 2, h: 3 }, { type: 'lava', x: 14, y: 8, w: 3, h: 2 },
@@ -1097,8 +1165,8 @@ const MAPS = [
         bgColor: '#18102a', pathColor: '#2a2040', gridColor: '#201830',
         theme: 'shadow',
         waypoints: [
-            [0, 9], [4, 9], [4, 2], [12, 2], [12, 16], [8, 16], [8, 9], [16, 9],
-            [16, 16], [24, 16], [24, 2], [29, 2]
+            [0, 9], [4, 9], [6, 3], [11, 3], [13, 15], [9, 15], [11, 8], [17, 8],
+            [19, 15], [24, 15], [26, 4], [29, 4]
         ],
         decorations: [
             { type: 'portal', x: 10, y: 9, w: 2, h: 2 }, { type: 'portal', x: 20, y: 8, w: 2, h: 2 },
@@ -1113,7 +1181,7 @@ const MAPS = [
         bgColor: '#200a0a', pathColor: '#3a1a18', gridColor: '#2a1010',
         theme: 'volcano',
         waypoints: [
-            [0, 3], [6, 3], [6, 15], [12, 15], [12, 3], [18, 3], [18, 15], [24, 15], [24, 3], [29, 3]
+            [0, 3], [5, 3], [7, 14], [12, 14], [14, 4], [18, 4], [20, 15], [25, 15], [27, 5], [29, 5]
         ],
         decorations: [
             { type: 'lava', x: 3, y: 9, w: 2, h: 3 }, { type: 'lava', x: 9, y: 8, w: 2, h: 3 },
@@ -1129,7 +1197,7 @@ const MAPS = [
         bgColor: '#100828', pathColor: '#201840', gridColor: '#180e30',
         theme: 'shadow',
         waypoints: [
-            [0, 9], [3, 9], [3, 2], [10, 2], [10, 16], [17, 16], [17, 2], [24, 2], [24, 16], [29, 16]
+            [0, 9], [4, 9], [6, 3], [10, 3], [12, 15], [17, 15], [19, 2], [24, 2], [26, 14], [29, 14]
         ],
         decorations: [
             { type: 'portal', x: 7, y: 9, w: 2, h: 2 }, { type: 'portal', x: 21, y: 9, w: 2, h: 2 },
@@ -1144,7 +1212,7 @@ const MAPS = [
         bgColor: '#0a0818', pathColor: '#1a1430', gridColor: '#100c22',
         theme: 'shadow',
         waypoints: [
-            [0, 1], [14, 1], [14, 8], [4, 8], [4, 15], [24, 15], [24, 8], [18, 8], [18, 1], [29, 1]
+            [0, 1], [10, 1], [12, 7], [4, 7], [6, 15], [20, 15], [22, 8], [16, 8], [18, 2], [29, 2]
         ],
         decorations: [
             { type: 'portal', x: 10, y: 4, w: 3, h: 3 },
@@ -1161,7 +1229,7 @@ const MAPS = [
         bgColor: '#14082a', pathColor: '#221840', gridColor: '#1a0e32',
         theme: 'shadow',
         waypoints: [
-            [0, 1], [26, 1], [26, 16], [4, 16], [4, 5], [22, 5], [22, 12], [10, 12], [10, 8], [17, 8], [17, 10], [29, 10]
+            [0, 1], [24, 1], [26, 15], [6, 15], [8, 6], [21, 6], [23, 11], [11, 11], [13, 8], [17, 8], [19, 10], [29, 10]
         ],
         decorations: [
             { type: 'portal', x: 14, y: 8, w: 2, h: 2 },
@@ -1177,8 +1245,8 @@ const MAPS = [
         bgColor: '#0a0510', pathColor: '#180e28', gridColor: '#10081a',
         theme: 'shadow',
         waypoints: [
-            [0, 9], [4, 9], [4, 1], [10, 1], [10, 16], [16, 16], [16, 1], [22, 1],
-            [22, 16], [26, 16], [26, 5], [29, 5]
+            [0, 9], [4, 9], [6, 2], [10, 2], [12, 15], [16, 15], [18, 2], [22, 2],
+            [24, 14], [27, 14], [29, 6]
         ],
         decorations: [
             { type: 'portal', x: 7, y: 8, w: 2, h: 2 }, { type: 'portal', x: 19, y: 8, w: 2, h: 2 },
@@ -1194,8 +1262,8 @@ const MAPS = [
         bgColor: '#050310', pathColor: '#120a22', gridColor: '#0a0618',
         theme: 'shadow',
         waypoints: [
-            [0, 9], [3, 9], [3, 1], [8, 1], [8, 16], [13, 16], [13, 1], [18, 1],
-            [18, 16], [23, 16], [23, 1], [27, 1], [27, 9], [29, 9]
+            [0, 9], [3, 9], [5, 2], [8, 2], [10, 15], [13, 15], [15, 2], [18, 2],
+            [20, 15], [23, 15], [25, 2], [27, 2], [29, 9]
         ],
         decorations: [
             { type: 'portal', x: 14, y: 8, w: 3, h: 3 },

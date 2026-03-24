@@ -9,6 +9,9 @@ const Audio = {
     _pendingMusicStart: false,
     musicNodes: [],
     currentChord: 0,
+    _menuAnalyser: null,
+    _menuFreqData: null,
+    _menuReactiveSmooth: 0,
 
     // Sound pooling
     _soundPool: {},
@@ -208,6 +211,13 @@ const Audio = {
             this.musicGain.connect(this.masterGain);
             this.musicGain.gain.value = GameState.settings.musicVolume;
 
+            // Menu visualizer analyser (read-only side chain, no audible output)
+            this._menuAnalyser = this.ctx.createAnalyser();
+            this._menuAnalyser.fftSize = 256;
+            this._menuAnalyser.smoothingTimeConstant = 0.72;
+            this._menuFreqData = new Uint8Array(this._menuAnalyser.frequencyBinCount);
+            this.masterGain.connect(this._menuAnalyser);
+
             // Boss music gain (connects to master)
             this._bossGain = this.ctx.createGain();
             this._bossGain.connect(this.masterGain);
@@ -269,6 +279,57 @@ const Audio = {
         if (this._birdGain) this._birdGain.gain.value = this._birdActive ? v * 0.3 : 0;
         if (this._naturePadGain) this._naturePadGain.gain.value = this._naturePadActive ? v * 0.15 : 0;
         if (this._chimeGain) this._chimeGain.gain.value = this._chimeActive ? v * 0.12 : 0;
+    },
+
+    getMenuReactiveData() {
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() * 0.001
+            : Date.now() * 0.001;
+
+        if (!this.ctx || !this._menuAnalyser || !this._menuFreqData || this.ctx.state !== 'running') {
+            const idlePulse = 0.09 + Math.sin(now * 0.9) * 0.03;
+            const musicBias = this.musicPlaying ? (0.08 + this._musicIntensity * 0.24) : 0;
+            const target = Math.max(0, Math.min(1, idlePulse + musicBias));
+            this._menuReactiveSmooth += (target - this._menuReactiveSmooth) * 0.14;
+            const low = Math.max(0, Math.min(1, target * 0.95));
+            const mid = Math.max(0, Math.min(1, target * 0.75));
+            const high = Math.max(0, Math.min(1, target * 0.55));
+            return {
+                level: this._menuReactiveSmooth,
+                low,
+                mid,
+                high,
+            };
+        }
+
+        this._menuAnalyser.getByteFrequencyData(this._menuFreqData);
+        const bins = this._menuFreqData;
+        const len = bins.length;
+
+        const avgBand = (startNorm, endNorm) => {
+            const start = Math.max(0, Math.floor(len * startNorm));
+            const end = Math.max(start + 1, Math.min(len, Math.floor(len * endNorm)));
+            let sum = 0;
+            for (let i = start; i < end; i++) sum += bins[i];
+            return (sum / (end - start)) / 255;
+        };
+
+        const low = avgBand(0.01, 0.12);
+        const mid = avgBand(0.12, 0.4);
+        const high = avgBand(0.4, 0.9);
+
+        const weighted = low * 0.48 + mid * 0.34 + high * 0.18;
+        const intensityBias = this.musicPlaying ? (0.06 + this._musicIntensity * 0.18) : 0;
+        const target = Math.max(0, Math.min(1, weighted * 1.45 + intensityBias));
+
+        this._menuReactiveSmooth += (target - this._menuReactiveSmooth) * 0.24;
+
+        return {
+            level: this._menuReactiveSmooth,
+            low,
+            mid,
+            high,
+        };
     },
 
     // ===== SOUND POOLING =====

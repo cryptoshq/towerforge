@@ -595,6 +595,18 @@ const MapSystem = {
                 case 'flowers':
                     this._drawFlowers(ctx, x, y, ts);
                     break;
+                case 'mushroom':
+                    this._drawMushroom(ctx, x, y, ts);
+                    break;
+                case 'stump':
+                    this._drawStump(ctx, x, y, ts);
+                    break;
+                case 'grass_tall':
+                    this._drawTallGrass(ctx, x, y, ts);
+                    break;
+                case 'butterfly':
+                    this._drawButterfly(ctx, x, y, ts);
+                    break;
                 case 'pond':
                     this._drawPond(ctx, deco.x * ts, deco.y * ts, w, h);
                     break;
@@ -613,6 +625,21 @@ const MapSystem = {
                 case 'bones':
                     this._drawBones(ctx, x, y, ts);
                     break;
+                case 'tumbleweed':
+                    this._drawTumbleweed(ctx, x, y, ts);
+                    break;
+                case 'sandstone':
+                    this._drawSandstone(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'scorpion':
+                    this._drawScorpion(ctx, x, y, ts);
+                    break;
+                case 'mirage':
+                    this._drawMirage(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'vulture':
+                    this._drawVulture(ctx, x, y, ts);
+                    break;
                 case 'icicle':
                     this._drawIcicle(ctx, x, y, ts);
                     break;
@@ -624,6 +651,21 @@ const MapSystem = {
                     break;
                 case 'crystal':
                     this._drawCrystal(ctx, x, y, ts);
+                    break;
+                case 'snowflake':
+                    this._drawSnowflake(ctx, x, y, ts);
+                    break;
+                case 'frostpine':
+                    this._drawFrostpine(ctx, x, y, ts);
+                    break;
+                case 'iceberg':
+                    this._drawIceberg(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'penguins':
+                    this._drawPenguins(ctx, x, y, ts);
+                    break;
+                case 'aurora':
+                    this._drawAurora(ctx, deco.x * ts, deco.y * ts, w, h);
                     break;
                 case 'lava':
                     this._drawLavaPool(ctx, deco.x * ts, deco.y * ts, w, h);
@@ -640,6 +682,18 @@ const MapSystem = {
                 case 'crack':
                     this._drawCrack(ctx, x, y, ts);
                     break;
+                case 'lavaspout':
+                    this._drawLavaSpout(ctx, x, y, ts);
+                    break;
+                case 'obsidian':
+                    this._drawObsidian(ctx, x, y, ts);
+                    break;
+                case 'ashcloud':
+                    this._drawAshCloud(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'firefly':
+                    this._drawFirefly(ctx, x, y, ts);
+                    break;
                 case 'portal':
                     this._drawPortal(ctx, deco.x * ts, deco.y * ts, w, h);
                     break;
@@ -651,6 +705,21 @@ const MapSystem = {
                     break;
                 case 'voidcrystal':
                     this._drawVoidCrystal(ctx, x, y, ts);
+                    break;
+                case 'soultorch':
+                    this._drawSoulTorch(ctx, x, y, ts);
+                    break;
+                case 'darkpool':
+                    this._drawDarkPool(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'specter':
+                    this._drawSpecter(ctx, x, y, ts);
+                    break;
+                case 'voidrift':
+                    this._drawVoidRift(ctx, deco.x * ts, deco.y * ts, w, h);
+                    break;
+                case 'eyeball':
+                    this._drawEyeball(ctx, x, y, ts);
                     break;
             }
 
@@ -751,6 +820,420 @@ const MapSystem = {
             ctx.arc(fx, fy, 1.2 * scale, 0, Math.PI * 2);
             ctx.fill();
         }
+    },
+
+    _drawMushroom(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.fillStyle = '#d9d1c0';
+        ctx.fillRect(x - 2 * scale, y - 1 * scale, 4 * scale, 8 * scale);
+        ctx.fillStyle = '#d45a4a';
+        ctx.beginPath();
+        ctx.ellipse(x, y - 2 * scale, 8 * scale, 5 * scale, 0, Math.PI, 0, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#f5e8df';
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.arc(x - 3 * scale + i * 3 * scale, y - 3 * scale, 1.2 * scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    _drawStump(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.fillStyle = '#6c4a2a';
+        ctx.beginPath();
+        ctx.ellipse(x, y + 2 * scale, 6 * scale, 5 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#86613d';
+        ctx.beginPath();
+        ctx.ellipse(x, y - 1 * scale, 5 * scale, 3 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#52361f';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y - 1 * scale, 2.2 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+    },
+
+    _drawTallGrass(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.strokeStyle = '#4f9a4d';
+        ctx.lineWidth = 1.2;
+        for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x + i * 1.5 * scale, y + 6 * scale);
+            ctx.quadraticCurveTo(x + i * 2.2 * scale, y - 2 * scale, x + i * 1.1 * scale, y - 7 * scale);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#7acb74';
+        ctx.beginPath();
+        ctx.moveTo(x, y + 5 * scale);
+        ctx.lineTo(x + 2 * scale, y - 5 * scale);
+        ctx.stroke();
+    },
+
+    _drawButterfly(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const flap = 0.55 + Math.sin(t * 12 + x * 0.02 + y * 0.01) * 0.35;
+        ctx.save();
+        ctx.translate(x, y - 2 * scale);
+        ctx.fillStyle = '#ff8ed9';
+        ctx.globalAlpha = 0.82;
+        ctx.beginPath();
+        ctx.ellipse(-2.2 * scale, 0, 3.2 * scale, 2.1 * scale * flap, -0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(2.2 * scale, 0, 3.2 * scale, 2.1 * scale * flap, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#cce8ff';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(0, -2 * scale);
+        ctx.lineTo(0, 3 * scale);
+        ctx.stroke();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawTumbleweed(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const rot = t * 1.8 + (x + y) * 0.01;
+        ctx.save();
+        ctx.translate(x, y + 3 * scale);
+        ctx.rotate(rot);
+        ctx.strokeStyle = '#9b7b4e';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 6; i++) {
+            ctx.rotate(Math.PI / 3);
+            ctx.beginPath();
+            ctx.moveTo(-5 * scale, 0);
+            ctx.lineTo(5 * scale, 0);
+            ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, 6 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    _drawSandstone(ctx, x, y, w, h) {
+        ctx.fillStyle = '#8b6c43';
+        ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+        ctx.fillStyle = '#a98457';
+        ctx.fillRect(x + 2, y + 2, Math.max(2, w * 0.4), Math.max(2, h - 4));
+        ctx.strokeStyle = '#5a4329';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+    },
+
+    _drawScorpion(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.fillStyle = '#4a2d1e';
+        ctx.beginPath();
+        ctx.ellipse(x, y, 4 * scale, 3 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#70412a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 3 * scale, y - 1 * scale);
+        ctx.quadraticCurveTo(x + 8 * scale, y - 5 * scale, x + 5 * scale, y - 9 * scale);
+        ctx.stroke();
+        ctx.fillStyle = '#70412a';
+        ctx.beginPath();
+        ctx.arc(x + 5 * scale, y - 9 * scale, 1.2 * scale, 0, Math.PI * 2);
+        ctx.fill();
+    },
+
+    _drawMirage(ctx, x, y, w, h) {
+        const t = GameState.time;
+        ctx.save();
+        ctx.globalAlpha = 0.18 + Math.sin(t * 3 + x * 0.05) * 0.08;
+        const grad = ctx.createLinearGradient(x, y, x, y + h);
+        grad.addColorStop(0, 'rgba(180,220,255,0.35)');
+        grad.addColorStop(1, 'rgba(255,240,180,0.08)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h / 2, Math.max(2, w * 0.55), Math.max(2, h * 0.46), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    },
+
+    _drawVulture(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const wing = 1 + Math.sin(t * 6 + x * 0.03) * 0.25;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.strokeStyle = '#5a4a3a';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-7 * scale, 0);
+        ctx.quadraticCurveTo(-2 * scale, -3 * scale * wing, 0, 0);
+        ctx.quadraticCurveTo(2 * scale, -3 * scale * wing, 7 * scale, 0);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    _drawSnowflake(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        ctx.save();
+        ctx.translate(x, y + Math.sin(t * 2 + x * 0.02) * 1.5 * scale);
+        ctx.rotate(t * 0.6 + x * 0.01);
+        ctx.strokeStyle = '#cde7ff';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            ctx.rotate(Math.PI / 3);
+            ctx.beginPath();
+            ctx.moveTo(-5 * scale, 0);
+            ctx.lineTo(5 * scale, 0);
+            ctx.stroke();
+        }
+        ctx.restore();
+    },
+
+    _drawFrostpine(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.fillStyle = '#5a4430';
+        ctx.fillRect(x - 2 * scale, y + 2 * scale, 4 * scale, 10 * scale);
+        ctx.fillStyle = '#7fb8c8';
+        ctx.beginPath();
+        ctx.moveTo(x, y - 12 * scale);
+        ctx.lineTo(x - 10 * scale, y + 4 * scale);
+        ctx.lineTo(x + 10 * scale, y + 4 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#dbefff';
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 10 * scale);
+        ctx.lineTo(x - 4 * scale, y - 2 * scale);
+        ctx.lineTo(x + 4 * scale, y - 2 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawIceberg(ctx, x, y, w, h) {
+        ctx.fillStyle = '#80b7d8';
+        ctx.beginPath();
+        ctx.moveTo(x + 2, y + h - 2);
+        ctx.lineTo(x + w * 0.25, y + h * 0.2);
+        ctx.lineTo(x + w * 0.52, y + h * 0.34);
+        ctx.lineTo(x + w * 0.78, y + h * 0.12);
+        ctx.lineTo(x + w - 2, y + h - 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#cbe8ff';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(x + w * 0.28, y + h * 0.28, w * 0.3, h * 0.25);
+        ctx.globalAlpha = 1;
+    },
+
+    _drawPenguins(ctx, x, y, ts) {
+        const scale = ts / 40;
+        for (let i = -1; i <= 1; i++) {
+            const px = x + i * 4 * scale;
+            ctx.fillStyle = '#1b1f28';
+            ctx.beginPath();
+            ctx.ellipse(px, y + 2 * scale, 2.2 * scale, 3.4 * scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f2f4ff';
+            ctx.beginPath();
+            ctx.ellipse(px, y + 2.4 * scale, 1.1 * scale, 2.1 * scale, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    _drawAurora(ctx, x, y, w, h) {
+        const t = GameState.time;
+        ctx.save();
+        ctx.globalAlpha = 0.22 + Math.sin(t * 1.4 + x * 0.03) * 0.07;
+        const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+        grad.addColorStop(0, 'rgba(126,220,255,0.65)');
+        grad.addColorStop(0.5, 'rgba(160,255,200,0.45)');
+        grad.addColorStop(1, 'rgba(180,140,255,0.35)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(x, y + h * 0.8);
+        ctx.quadraticCurveTo(x + w * 0.25, y + h * 0.2, x + w * 0.5, y + h * 0.7);
+        ctx.quadraticCurveTo(x + w * 0.75, y + h * 1.2, x + w, y + h * 0.45);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x, y + h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    },
+
+    _drawLavaSpout(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const h = 7 * scale + Math.sin(t * 7 + x * 0.03) * 3 * scale;
+        ctx.fillStyle = '#ff6a2c';
+        ctx.beginPath();
+        ctx.moveTo(x - 2 * scale, y + 6 * scale);
+        ctx.lineTo(x, y - h);
+        ctx.lineTo(x + 2 * scale, y + 6 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffd18a';
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(x, y - h, 1.8 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawObsidian(ctx, x, y, ts) {
+        const scale = ts / 40;
+        ctx.fillStyle = '#2d2238';
+        ctx.beginPath();
+        ctx.moveTo(x, y - 10 * scale);
+        ctx.lineTo(x - 6 * scale, y + 4 * scale);
+        ctx.lineTo(x, y + 8 * scale);
+        ctx.lineTo(x + 6 * scale, y + 4 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#5a4a70';
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 10 * scale);
+        ctx.lineTo(x + 6 * scale, y + 4 * scale);
+        ctx.lineTo(x + 1 * scale, y + 1 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawAshCloud(ctx, x, y, w, h) {
+        const t = GameState.time;
+        ctx.save();
+        ctx.globalAlpha = 0.2 + Math.sin(t * 1.8 + x * 0.04) * 0.06;
+        ctx.fillStyle = '#6d5d66';
+        ctx.beginPath();
+        ctx.ellipse(x + w * 0.28, y + h * 0.58, w * 0.3, h * 0.38, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + w * 0.54, y + h * 0.42, w * 0.34, h * 0.4, 0, 0, Math.PI * 2);
+        ctx.ellipse(x + w * 0.78, y + h * 0.6, w * 0.24, h * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    },
+
+    _drawFirefly(ctx, x, y, ts) {
+        const t = GameState.time;
+        const glow = 0.2 + (Math.sin(t * 7 + x * 0.07 + y * 0.03) + 1) * 0.3;
+        ctx.save();
+        ctx.globalAlpha = glow;
+        ctx.fillStyle = '#ffd44f';
+        ctx.shadowColor = '#ffd44f';
+        ctx.shadowBlur = 7;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    },
+
+    _drawSoulTorch(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        ctx.fillStyle = '#3d2f28';
+        ctx.fillRect(x - 1.5 * scale, y - 2 * scale, 3 * scale, 11 * scale);
+        ctx.fillStyle = '#64d0ff';
+        ctx.globalAlpha = 0.45 + Math.sin(t * 9 + x * 0.05) * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 8 * scale);
+        ctx.quadraticCurveTo(x - 4 * scale, y - 3 * scale, x, y);
+        ctx.quadraticCurveTo(x + 4 * scale, y - 3 * scale, x, y - 8 * scale);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawDarkPool(ctx, x, y, w, h) {
+        const t = GameState.time;
+        const grad = ctx.createRadialGradient(x + w * 0.5, y + h * 0.5, 0, x + w * 0.5, y + h * 0.5, Math.max(w, h) * 0.55);
+        grad.addColorStop(0, '#2e2050');
+        grad.addColorStop(0.7, '#1a1132');
+        grad.addColorStop(1, '#0d0820');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(x + w * 0.5, y + h * 0.5, w * 0.46, h * 0.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(150,110,220,${0.2 + Math.sin(t * 2.3) * 0.06})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    },
+
+    _drawSpecter(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const floatY = Math.sin(t * 2.4 + x * 0.03) * 2 * scale;
+        ctx.save();
+        ctx.translate(x, y + floatY);
+        ctx.globalAlpha = 0.42;
+        ctx.fillStyle = '#bca8ff';
+        ctx.beginPath();
+        ctx.arc(0, -4 * scale, 5 * scale, Math.PI, 0);
+        ctx.lineTo(5 * scale, 6 * scale);
+        ctx.quadraticCurveTo(2 * scale, 4 * scale, 0, 6 * scale);
+        ctx.quadraticCurveTo(-2 * scale, 4 * scale, -5 * scale, 6 * scale);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.65;
+        ctx.fillStyle = '#1a1128';
+        ctx.beginPath();
+        ctx.arc(-1.6 * scale, -5 * scale, 0.9 * scale, 0, Math.PI * 2);
+        ctx.arc(1.6 * scale, -5 * scale, 0.9 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+    },
+
+    _drawVoidRift(ctx, x, y, w, h) {
+        const t = GameState.time;
+        const cx = x + w * 0.5;
+        const cy = y + h * 0.5;
+        const r = Math.max(4, Math.min(w, h) * 0.45);
+        const grad = ctx.createRadialGradient(cx, cy, r * 0.15, cx, cy, r);
+        grad.addColorStop(0, '#3d1b73');
+        grad.addColorStop(0.65, '#1f0f43');
+        grad.addColorStop(1, '#080412');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r * (0.9 + Math.sin(t * 2 + x * 0.01) * 0.06), r * 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(178,122,255,0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+    },
+
+    _drawEyeball(ctx, x, y, ts) {
+        const scale = ts / 40;
+        const t = GameState.time;
+        const pupilShift = Math.sin(t * 1.9 + x * 0.03) * 1.2 * scale;
+        ctx.fillStyle = '#e8d7c8';
+        ctx.beginPath();
+        ctx.ellipse(x, y, 7 * scale, 5 * scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#7a3cb8';
+        ctx.beginPath();
+        ctx.arc(x + pupilShift, y, 2.3 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1a1020';
+        ctx.beginPath();
+        ctx.arc(x + pupilShift, y, 1.1 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(140,80,130,0.45)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(x - 7 * scale, y);
+        ctx.lineTo(x - 10 * scale, y - 3 * scale);
+        ctx.moveTo(x + 7 * scale, y + 1 * scale);
+        ctx.lineTo(x + 10 * scale, y + 3 * scale);
+        ctx.stroke();
     },
 
     _drawPond(ctx, x, y, w, h) {
@@ -1295,9 +1778,113 @@ const MapSystem = {
         const offsetX = (w - CONFIG.CANVAS_TILES_X * ts) / 2;
         const offsetY = (h - CONFIG.CANVAS_TILES_Y * ts) / 2;
 
+        previewCtx.clearRect(0, 0, w, h);
+
         // Background
-        previewCtx.fillStyle = mapDef.bgColor;
+        const bgGrad = previewCtx.createLinearGradient(0, 0, 0, h);
+        bgGrad.addColorStop(0, brighten(mapDef.bgColor, 10));
+        bgGrad.addColorStop(1, brighten(mapDef.bgColor, -14));
+        previewCtx.fillStyle = bgGrad;
         previewCtx.fillRect(0, 0, w, h);
+
+        // Terrain micro-grid / texture
+        previewCtx.save();
+        previewCtx.globalAlpha = 0.08;
+        previewCtx.strokeStyle = mapDef.gridColor;
+        previewCtx.lineWidth = 1;
+        for (let c = 0; c <= CONFIG.CANVAS_TILES_X; c += 2) {
+            const x = offsetX + c * ts;
+            previewCtx.beginPath();
+            previewCtx.moveTo(x, offsetY);
+            previewCtx.lineTo(x, offsetY + CONFIG.CANVAS_TILES_Y * ts);
+            previewCtx.stroke();
+        }
+        for (let r = 0; r <= CONFIG.CANVAS_TILES_Y; r += 2) {
+            const y = offsetY + r * ts;
+            previewCtx.beginPath();
+            previewCtx.moveTo(offsetX, y);
+            previewCtx.lineTo(offsetX + CONFIG.CANVAS_TILES_X * ts, y);
+            previewCtx.stroke();
+        }
+        previewCtx.restore();
+
+        // Draw simplified decorations for map identity/readability.
+        if (Array.isArray(mapDef.decorations)) {
+            const decoColor = (type) => {
+                switch (type) {
+                    case 'tree':
+                    case 'bush':
+                    case 'grass_tall':
+                    case 'frostpine':
+                        return '#5bbf74';
+                    case 'flowers':
+                    case 'butterfly':
+                        return '#ff86d8';
+                    case 'rock':
+                    case 'stump':
+                    case 'sandstone':
+                    case 'obsidian':
+                    case 'iceberg':
+                        return '#9ea7bf';
+                    case 'pond':
+                    case 'oasis':
+                    case 'frozenpool':
+                    case 'darkpool':
+                        return '#54a8ff';
+                    case 'lava':
+                    case 'lavaspout':
+                    case 'embers':
+                    case 'crack':
+                        return '#ff7f4f';
+                    case 'portal':
+                    case 'voidrift':
+                    case 'shadowrift':
+                    case 'rune':
+                    case 'voidcrystal':
+                    case 'soultorch':
+                    case 'specter':
+                    case 'eyeball':
+                        return '#b07cff';
+                    case 'icicle':
+                    case 'snowpile':
+                    case 'snowflake':
+                    case 'crystal':
+                    case 'aurora':
+                    case 'penguins':
+                        return '#9dd7ff';
+                    default:
+                        return '#d0b27a';
+                }
+            };
+
+            previewCtx.save();
+            for (const deco of mapDef.decorations) {
+                if (!deco) continue;
+                const dw = (deco.w || 1) * ts;
+                const dh = (deco.h || 1) * ts;
+                const cx = offsetX + deco.x * ts + dw / 2;
+                const cy = offsetY + deco.y * ts + dh / 2;
+                previewCtx.fillStyle = decoColor(deco.type);
+
+                const areaType = (deco.w && deco.w > 1) || (deco.h && deco.h > 1) ||
+                    deco.type === 'pond' || deco.type === 'lava' || deco.type === 'oasis' ||
+                    deco.type === 'frozenpool' || deco.type === 'portal' || deco.type === 'voidrift' ||
+                    deco.type === 'darkpool' || deco.type === 'aurora' || deco.type === 'mirage';
+
+                if (areaType) {
+                    previewCtx.globalAlpha = 0.24;
+                    previewCtx.beginPath();
+                    previewCtx.ellipse(cx, cy, Math.max(2, dw * 0.42), Math.max(2, dh * 0.42), 0, 0, Math.PI * 2);
+                    previewCtx.fill();
+                } else {
+                    previewCtx.globalAlpha = 0.38;
+                    previewCtx.beginPath();
+                    previewCtx.arc(cx, cy, Math.max(1.6, ts * 0.22), 0, Math.PI * 2);
+                    previewCtx.fill();
+                }
+            }
+            previewCtx.restore();
+        }
 
         // Draw path from waypoints (orthogonal with rounded corners)
         const waypoints = mapDef.waypoints;
@@ -1354,5 +1941,12 @@ const MapSystem = {
             previewCtx.fill();
             previewCtx.shadowBlur = 0;
         }
+
+        // Border vignette for depth
+        const vignette = previewCtx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.25, w * 0.5, h * 0.5, Math.max(w, h) * 0.65);
+        vignette.addColorStop(0, 'rgba(0,0,0,0)');
+        vignette.addColorStop(1, 'rgba(0,0,0,0.32)');
+        previewCtx.fillStyle = vignette;
+        previewCtx.fillRect(0, 0, w, h);
     },
 };

@@ -12,6 +12,8 @@ const WaveSystem = {
     // Wave modifiers (applied every 5 waves)
     activeModifiers: [],
     currentScenario: null,
+    currentFaction: null,
+    currentWaveArc: null,
     currentMapPressure: null,
     availableModifiers: [
         { id: 'double_speed', name: 'Double Speed', desc: 'All enemies move 2x faster', icon: '>>',
@@ -46,6 +48,115 @@ const WaveSystem = {
         { id: 'stealth_ambush', name: 'Stealth Ambush', desc: 'Stealth and phantom units phase more aggressively.', threatTags: ['STEALTH'] },
         { id: 'siege_push', name: 'Siege Push', desc: 'Heavy targets become tougher and push steadily.', threatTags: ['SIEGE', 'ARMORED'] },
     ],
+
+    // Enemy faction layer (Phase 6)
+    factionTemplates: [
+        {
+            id: 'siege_foundry',
+            name: 'Siege Foundry',
+            desc: 'Forged armor columns with command captains and reinforced escorts.',
+            captainId: 'siege_foreman',
+            threatTags: ['FACTION: SIEGE FOUNDRY', 'CAPTAIN AURA', 'ARMORED'],
+        },
+        {
+            id: 'veil_swarm',
+            name: 'Veil Swarm',
+            desc: 'Ambush cadres phase in from fog lanes with burst commanders.',
+            captainId: 'veil_ambusher',
+            threatTags: ['FACTION: VEIL SWARM', 'CAPTAIN AURA', 'AMBUSH'],
+        },
+        {
+            id: 'blight_caravan',
+            name: 'Blight Caravan',
+            desc: 'Corrosive support convoys chain heals and sustain frontline pushes.',
+            captainId: 'blight_matron',
+            threatTags: ['FACTION: BLIGHT CARAVAN', 'CAPTAIN AURA', 'SUSTAIN'],
+        },
+    ],
+
+    waveArcTemplates: {
+        opener: {
+            id: 'opener',
+            name: 'Opener',
+            desc: 'Probe lanes with light pressure and scouting detachments.',
+            threatTags: ['ARC: OPENER'],
+        },
+        stress: {
+            id: 'stress',
+            name: 'Stress',
+            desc: 'Lane pressure spikes with heavier assault profiles.',
+            threatTags: ['ARC: STRESS', 'PRESSURE SPIKE'],
+        },
+        support: {
+            id: 'support',
+            name: 'Support',
+            desc: 'Support specialists accelerate sustain and utility pressure.',
+            threatTags: ['ARC: SUPPORT', 'SUSTAIN'],
+        },
+        mix: {
+            id: 'mix',
+            name: 'Mix',
+            desc: 'Mixed detachments blend rush and utility threats.',
+            threatTags: ['ARC: MIX', 'MIXED COMPS'],
+        },
+        climax: {
+            id: 'climax',
+            name: 'Climax',
+            desc: 'Peak pressure escalation before arc reset.',
+            threatTags: ['ARC: CLIMAX', 'PEAK THREAT'],
+        },
+    },
+
+    captainProfiles: {
+        siege_foreman: {
+            id: 'siege_foreman',
+            name: 'Siege Foreman',
+            prefix: 'Foreman',
+            color: '#ffbe70',
+            auraRadius: 170,
+            auraSpeedMult: 1.12,
+            auraDamageReduction: 0.18,
+            auraArmorBonus: 2,
+            hpMult: 1.8,
+            speedMultSelf: 0.92,
+            armorBonusSelf: 4,
+            rewardMult: 2.2,
+            fortifiedReduction: 0.12,
+        },
+        veil_ambusher: {
+            id: 'veil_ambusher',
+            name: 'Veil Ambusher',
+            prefix: 'Ambusher',
+            color: '#c690ff',
+            auraRadius: 180,
+            auraSpeedMult: 1.18,
+            auraDamageReduction: 0.08,
+            auraArmorBonus: 1,
+            auraStealthCooldownMult: 0.65,
+            hpMult: 1.55,
+            speedMultSelf: 1.14,
+            armorBonusSelf: 1,
+            rewardMult: 2.3,
+            fortifiedReduction: 0.08,
+        },
+        blight_matron: {
+            id: 'blight_matron',
+            name: 'Blight Matron',
+            prefix: 'Matron',
+            color: '#9ee08a',
+            auraRadius: 190,
+            auraSpeedMult: 1.04,
+            auraDamageReduction: 0.12,
+            auraArmorBonus: 1,
+            auraRegenPct: 0.006,
+            auraSupportCastRate: 1.24,
+            hpMult: 1.9,
+            speedMultSelf: 0.88,
+            armorBonusSelf: 3,
+            rewardMult: 2.4,
+            fortifiedReduction: 0.14,
+        },
+    },
 
     mapPressures: {
         forest: {
@@ -133,26 +244,58 @@ const WaveSystem = {
 
     // Bonus wave definitions (every 10 waves)
     bonusWaveTemplates: [
-        { name: 'Gold Rush', desc: 'Defeat all enemies for bonus gold!',
+        { name: 'Gold Rush', desc: 'Hold out until extraction and claim the convoy payout.',
             composition: (w, hp) => [
                 { type: 'swarm', count: 40, hpMult: hp * 0.4, delay: 0.12 },
             ],
-            bonusGold: 150, timeLimit: 20 },
-        { name: 'Elite Gauntlet', desc: 'A parade of elite enemies!',
+            bonusGold: 150, timeLimit: 20,
+            objective: {
+                type: 'survival_timer',
+                title: 'Hold The Line',
+                goalText: 'Survive until extraction timer ends.',
+                successText: 'Extraction successful',
+                failText: 'Defense collapsed',
+            },
+        },
+        { name: 'Elite Gauntlet', desc: 'Eliminate marked elite targets before the window closes.',
             composition: (w, hp) => [
-                { type: 'heavy', count: 8, hpMult: hp * 1.5, delay: 1.2, forceElite: true },
+                { type: 'heavy', count: 8, hpMult: hp * 1.5, delay: 1.2, forceElite: true, objectiveTarget: true },
             ],
-            bonusGold: 200, timeLimit: 30 },
-        { name: 'Speed Demons', desc: 'Ultra-fast enemies incoming!',
+            bonusGold: 200, timeLimit: 30,
+            objective: {
+                type: 'priority_target',
+                title: 'Priority Elimination',
+                goalText: 'Kill all marked elites before they escape.',
+                successText: 'All marked elites destroyed',
+                failText: 'Priority targets escaped',
+            },
+        },
+        { name: 'Speed Demons', desc: 'Withstand the rush and survive the timer.',
             composition: (w, hp) => [
                 { type: 'fast', count: 25, hpMult: hp * 0.6, delay: 0.2 },
             ],
-            bonusGold: 120, timeLimit: 15 },
-        { name: 'Boss Blitz', desc: 'Multiple mini-bosses at once!',
+            bonusGold: 120, timeLimit: 15,
+            objective: {
+                type: 'survival_timer',
+                title: 'Evade The Surge',
+                goalText: 'Survive until command recalls hostiles.',
+                successText: 'Rush contained',
+                failText: 'Rush overwhelmed defenses',
+            },
+        },
+        { name: 'Boss Blitz', desc: 'Destroy marked minibosses before timer expires.',
             composition: (w, hp) => [
-                { type: 'boss', count: 3, hpMult: hp * 0.6, delay: 3.0 },
+                { type: 'boss', count: 3, hpMult: hp * 0.6, delay: 3.0, objectiveTarget: true },
             ],
-            bonusGold: 300, timeLimit: 45 },
+            bonusGold: 300, timeLimit: 45,
+            objective: {
+                type: 'priority_target',
+                title: 'Boss Hunt',
+                goalText: 'Eliminate every marked miniboss.',
+                successText: 'Boss hunt complete',
+                failText: 'Miniboss escaped',
+            },
+        },
     ],
 
     // Wave statistics tracking
@@ -180,9 +323,87 @@ const WaveSystem = {
     currentBonusWave: null,
     bonusWaveTimer: 0,
     isBonusWave: false,
+    bonusObjectiveState: null,
 
     // Endless mode
     endlessMode: false,
+
+    // Between-wave tactical choice events (Phase 5)
+    tacticalEventTemplates: [
+        {
+            id: 'supply_cache',
+            name: 'Supply Cache',
+            icon: '\u{1F4E6}',
+            desc: 'Open reserve crates for immediate funding, but enemy outriders move faster next wave.',
+            rewardText: '+120 gold now',
+            riskText: 'Next wave enemies gain +12% speed',
+            immediate: { gold: 120 },
+            timed: { enemySpeedMult: 1.12 },
+            duration: 1,
+        },
+        {
+            id: 'field_repairs',
+            name: 'Field Repairs',
+            icon: '\u{1FA79}',
+            desc: 'Patch your base integrity, but near-term banking efficiency drops.',
+            rewardText: 'Restore +3 lives',
+            riskText: '-2% interest for 2 waves',
+            immediate: { lives: 3 },
+            timed: { interestRateDelta: -0.02 },
+            duration: 2,
+        },
+        {
+            id: 'volatile_payloads',
+            name: 'Volatile Payloads',
+            icon: '\u{1F4A3}',
+            desc: 'Empower your firepower, but enemies arrive with reinforced durability.',
+            rewardText: '+18% tower damage for 2 waves',
+            riskText: 'Enemies gain +10% HP for 2 waves',
+            immediate: {},
+            timed: { towerDamageMult: 1.18, enemyHpMult: 1.1 },
+            duration: 2,
+        },
+        {
+            id: 'cooldown_protocol',
+            name: 'Cooldown Protocol',
+            icon: '\u{23F1}',
+            desc: 'Lower ability cooldown pressure now, at the cost of reduced wave stipend.',
+            rewardText: '-22% ability cooldown for 2 waves',
+            riskText: '-10 wave bonus gold for 2 waves',
+            immediate: {},
+            timed: { abilityCooldownMult: 0.78, waveBonusFlat: -10 },
+            duration: 2,
+        },
+        {
+            id: 'bounty_contracts',
+            name: 'Bounty Contracts',
+            icon: '\u{1F4DC}',
+            desc: 'Issue premium bounties to improve enemy payouts, but targets become tougher.',
+            rewardText: '+25% kill gold for 2 waves',
+            riskText: 'Enemies gain +8% HP for 2 waves',
+            immediate: {},
+            timed: { killGoldMult: 1.25, enemyHpMult: 1.08 },
+            duration: 2,
+        },
+        {
+            id: 'reserve_drills',
+            name: 'Reserve Drills',
+            icon: '\u2699',
+            desc: 'Drill support crews for better wave stipends at the cost of increased lane pressure.',
+            rewardText: '+20 wave bonus gold for 2 waves',
+            riskText: 'Enemies gain +6% speed for 2 waves',
+            immediate: { gold: 60 },
+            timed: { waveBonusFlat: 20, enemySpeedMult: 1.06 },
+            duration: 2,
+        },
+    ],
+    activeTacticalEffects: [],
+    currentTacticalWaveModifiers: null,
+    currentTacticalWaveEffectNames: [],
+    tacticalEventChoices: [],
+    tacticalEventModalOpen: false,
+    tacticalEventsTaken: 0,
+    _tacticalBindingsReady: false,
 
     // Endless mutator draft state
     endlessDraftMutatorIds: [],
@@ -206,13 +427,24 @@ const WaveSystem = {
         this.currentBonusWave = null;
         this.bonusWaveTimer = 0;
         this.isBonusWave = false;
+        this.bonusObjectiveState = null;
         this.endlessMode = false;
         this.currentScenario = null;
+        this.currentFaction = null;
+        this.currentWaveArc = null;
         this.currentMapPressure = null;
         this.skipReadyShown = false;
         this.countdownTimer = 0;
         this.countdownActive = false;
         this.countdownCallback = null;
+        this.activeTacticalEffects = [];
+        this.currentTacticalWaveModifiers = this._getDefaultTacticalModifiers();
+        this.currentTacticalWaveEffectNames = [];
+        this.tacticalEventChoices = [];
+        this.tacticalEventModalOpen = false;
+        this.tacticalEventsTaken = 0;
+        this._hideTacticalEventModal();
+        this._ensureTacticalEventBindings();
         this.endlessDraftMutatorIds = [];
         this.endlessDraftedDepths = [];
         this.endlessDraftChoices = [];
@@ -282,6 +514,792 @@ const WaveSystem = {
         );
         if (available.length === 0) return this.availableModifiers[Math.floor(Math.random() * this.availableModifiers.length)];
         return available[Math.floor(Math.random() * available.length)];
+    },
+
+    _getCaptainProfileById(profileId) {
+        if (!profileId) return null;
+        return this.captainProfiles[profileId] || null;
+    },
+
+    _getMapDifficultyBand() {
+        const mapIdx = Number.isFinite(GameState.mapIndex) ? GameState.mapIndex : 0;
+        return Math.max(0, Math.min(3, Math.floor(mapIdx / 5)));
+    },
+
+    _getFactionCadenceProfile() {
+        const band = this._getMapDifficultyBand();
+
+        if (!this.endlessMode) {
+            switch (band) {
+                case 0: return { start: 8, interval: 8 };   // lighter onboarding cadence
+                case 1: return { start: 6, interval: 6 };   // baseline cadence
+                case 2: return { start: 5, interval: 5 };   // denser hard maps
+                default: return { start: 4, interval: 4 };  // dense nightmare maps
+            }
+        }
+
+        switch (band) {
+            case 0: return { start: 4, interval: 6 };
+            case 1: return { start: 2, interval: 4 };
+            case 2: return { start: 2, interval: 3 };
+            default: return { start: 1, interval: 2 };
+        }
+    },
+
+    _getArcCadenceProfile() {
+        const band = this._getMapDifficultyBand();
+
+        if (!this.endlessMode) {
+            switch (band) {
+                case 0:
+                    return {
+                        start: 3,
+                        interval: 2,
+                        order: ['opener', 'support', 'mix', 'stress', 'climax'],
+                    };
+                case 1:
+                    return {
+                        start: 1,
+                        interval: 1,
+                        order: ['opener', 'stress', 'support', 'mix', 'climax'],
+                    };
+                case 2:
+                    return {
+                        start: 1,
+                        interval: 1,
+                        order: ['opener', 'stress', 'mix', 'support', 'climax'],
+                    };
+                default:
+                    return {
+                        start: 1,
+                        interval: 1,
+                        order: ['stress', 'mix', 'support', 'climax', 'stress', 'climax'],
+                    };
+            }
+        }
+
+        switch (band) {
+            case 0:
+                return {
+                    start: 2,
+                    interval: 2,
+                    order: ['opener', 'support', 'mix', 'stress', 'climax'],
+                };
+            case 1:
+                return {
+                    start: 1,
+                    interval: 1,
+                    order: ['opener', 'stress', 'support', 'mix', 'climax'],
+                };
+            case 2:
+                return {
+                    start: 1,
+                    interval: 1,
+                    order: ['stress', 'support', 'mix', 'climax', 'stress'],
+                };
+            default:
+                return {
+                    start: 1,
+                    interval: 1,
+                    order: ['stress', 'mix', 'climax', 'support', 'climax'],
+                };
+        }
+    },
+
+    _getFactionForWave(waveNum) {
+        if (!Number.isFinite(waveNum) || waveNum <= 0) return null;
+        if (waveNum % 10 === 0) return null; // objective bonus waves stay focused
+        if (!Array.isArray(this.factionTemplates) || this.factionTemplates.length === 0) return null;
+        const cadence = this._getFactionCadenceProfile();
+
+        if (!this.endlessMode) {
+            if (waveNum < cadence.start) return null;
+            if (((waveNum - cadence.start) % cadence.interval) !== 0) return null;
+            const cycle = Math.floor((waveNum - cadence.start) / cadence.interval);
+            return this.factionTemplates[((cycle % this.factionTemplates.length) + this.factionTemplates.length) % this.factionTemplates.length];
+        }
+
+        if (waveNum <= GameState.maxWave) return null;
+        const depth = waveNum - GameState.maxWave;
+        if (depth < cadence.start) return null;
+        if (((depth - cadence.start) % cadence.interval) !== 0) return null;
+        const cycle = Math.floor((depth - cadence.start) / cadence.interval);
+        return this.factionTemplates[((cycle % this.factionTemplates.length) + this.factionTemplates.length) % this.factionTemplates.length];
+    },
+
+    _getWaveArcForWave(waveNum) {
+        if (!Number.isFinite(waveNum) || waveNum <= 0) return null;
+        if (waveNum % 10 === 0) return null;
+        const cadence = this._getArcCadenceProfile();
+        let anchor = waveNum;
+        if (this.endlessMode && waveNum > GameState.maxWave) {
+            anchor = Math.max(1, waveNum - GameState.maxWave);
+        }
+        if (anchor < cadence.start) return null;
+        if (((anchor - cadence.start) % cadence.interval) !== 0) return null;
+
+        const cycle = Math.floor((anchor - cadence.start) / cadence.interval);
+        const order = Array.isArray(cadence.order) && cadence.order.length > 0
+            ? cadence.order
+            : ['opener', 'stress', 'support', 'mix', 'climax'];
+        const idx = ((cycle % order.length) + order.length) % order.length;
+        const id = order[idx];
+        return this.waveArcTemplates[id] || null;
+    },
+
+    _injectFactionCaptainEntry(entries) {
+        if (!this.currentFaction || !this.currentFaction.captainId) return;
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        if (entries.some(entry => entry && entry.isCaptain)) return;
+
+        let captainType = 'heavy';
+        switch (this.currentFaction.id) {
+            case 'veil_swarm':
+                captainType = entries.some(entry => entry.type === 'stealth')
+                    ? 'stealth'
+                    : (entries.some(entry => entry.type === 'ghost') ? 'ghost' : 'fast');
+                break;
+            case 'blight_caravan':
+                captainType = entries.some(entry => entry.type === 'healer')
+                    ? 'healer'
+                    : (entries.some(entry => entry.type === 'toxic') ? 'toxic' : 'shield');
+                break;
+            default:
+                captainType = entries.some(entry => entry.type === 'heavy')
+                    ? 'heavy'
+                    : (entries.some(entry => entry.type === 'shield') ? 'shield' : 'heavy');
+                break;
+        }
+
+        entries.unshift({
+            type: captainType,
+            hpMult: 1.35,
+            delay: 0.4,
+            isElite: true,
+            eliteVariant: this._pickEliteVariant(),
+            isCaptain: true,
+            captainProfileId: this.currentFaction.captainId,
+        });
+    },
+
+    _applyFactionToEntry(entry) {
+        if (!this.currentFaction || !entry) return;
+
+        switch (this.currentFaction.id) {
+            case 'siege_foundry':
+                if (entry.type === 'heavy' || entry.type === 'shield' || entry.type === 'boss') {
+                    entry.hpMult *= 1.12;
+                    entry.delay = Math.max(0.08, entry.delay * 0.92);
+                }
+                if (entry.type === 'disruptor' || entry.type === 'toxic') {
+                    entry.hpMult *= 1.06;
+                }
+                break;
+            case 'veil_swarm':
+                if (entry.type === 'stealth' || entry.type === 'ghost' || entry.type === 'fast' || entry.type === 'swarmfast') {
+                    entry.delay = Math.max(0.06, entry.delay * 0.8);
+                    entry.hpMult *= 1.06;
+                }
+                if (entry.type === 'disruptor') {
+                    entry.delay = Math.max(0.08, entry.delay * 0.9);
+                }
+                break;
+            case 'blight_caravan':
+                if (entry.type === 'healer' || entry.type === 'shield' || entry.type === 'toxic') {
+                    entry.delay = Math.max(0.08, entry.delay * 0.86);
+                    entry.hpMult *= 1.1;
+                }
+                if (entry.type === 'heavy' || entry.type === 'berserker') {
+                    entry.hpMult *= 1.07;
+                }
+                break;
+        }
+    },
+
+    _applyFactionToEnemy(enemy) {
+        if (!this.currentFaction || !enemy) return;
+
+        switch (this.currentFaction.id) {
+            case 'siege_foundry':
+                if (enemy.type === 'heavy' || enemy.type === 'shield' || enemy.isBoss) {
+                    enemy.armor += 2;
+                    enemy.baseArmor += 2;
+                    enemy.reward = Math.floor(enemy.reward * 1.08);
+                }
+                break;
+            case 'veil_swarm':
+                if (enemy.type === 'stealth' || enemy.type === 'ghost' || enemy.type === 'fast' || enemy.type === 'swarmfast') {
+                    enemy.baseSpeed *= 1.14;
+                    enemy.speed = enemy.baseSpeed;
+                    if (enemy.type === 'stealth' || enemy.type === 'ghost') {
+                        enemy.stealthCooldown *= 0.72;
+                    }
+                }
+                break;
+            case 'blight_caravan':
+                if (enemy.type === 'healer' || enemy.type === 'shield' || enemy.type === 'toxic') {
+                    enemy.maxHp *= 1.1;
+                    enemy.hp = enemy.maxHp;
+                    enemy.reward = Math.floor(enemy.reward * 1.06);
+                }
+                if (enemy.type === 'healer') {
+                    enemy.healCooldown *= 0.75;
+                }
+                if (enemy.type === 'shield') {
+                    enemy.shieldAuraCooldown *= 0.8;
+                }
+                if (enemy.type === 'toxic') {
+                    enemy.toxicCooldown *= 0.8;
+                }
+                break;
+        }
+    },
+
+    _applyWaveArcToEntry(entry) {
+        if (!this.currentWaveArc || !entry) return;
+
+        switch (this.currentWaveArc.id) {
+            case 'opener':
+                if (entry.type === 'basic' || entry.type === 'fast' || entry.type === 'swarm') {
+                    entry.delay = Math.max(0.08, entry.delay * 0.9);
+                    entry.hpMult *= 0.97;
+                }
+                break;
+            case 'stress':
+                if (entry.type === 'heavy' || entry.type === 'berserker' || entry.type === 'disruptor' || entry.type === 'toxic') {
+                    entry.hpMult *= 1.12;
+                    entry.delay = Math.max(0.08, entry.delay * 0.95);
+                }
+                break;
+            case 'support':
+                if (entry.type === 'healer' || entry.type === 'shield' || entry.type === 'toxic') {
+                    entry.delay = Math.max(0.08, entry.delay * 0.84);
+                    entry.hpMult *= 1.08;
+                }
+                break;
+            case 'mix':
+                if (entry.type === 'fast' || entry.type === 'stealth' || entry.type === 'ghost') {
+                    entry.delay = Math.max(0.08, entry.delay * 0.92);
+                }
+                if (entry.type === 'heavy' || entry.type === 'shield') {
+                    entry.hpMult *= 1.05;
+                }
+                break;
+            case 'climax':
+                if (entry.type === 'heavy' || entry.type === 'berserker' || entry.type === 'boss') {
+                    entry.hpMult *= 1.16;
+                    entry.delay = Math.max(0.08, entry.delay * 0.9);
+                }
+                if (!entry.isElite && entry.type !== 'boss' && (entry.type === 'heavy' || entry.type === 'berserker' || entry.type === 'disruptor')) {
+                    entry.isElite = true;
+                    if (!entry.eliteVariant) entry.eliteVariant = this._pickEliteVariant();
+                }
+                break;
+        }
+    },
+
+    _applyWaveArcToEnemy(enemy) {
+        if (!this.currentWaveArc || !enemy) return;
+
+        switch (this.currentWaveArc.id) {
+            case 'opener':
+                if (enemy.type === 'basic' || enemy.type === 'fast' || enemy.type === 'swarm') {
+                    enemy.baseSpeed *= 1.04;
+                    enemy.speed = enemy.baseSpeed;
+                }
+                break;
+            case 'stress':
+                if (enemy.type === 'heavy' || enemy.type === 'berserker' || enemy.type === 'disruptor' || enemy.type === 'toxic') {
+                    enemy.armor += 1;
+                    enemy.baseArmor = enemy.armor;
+                }
+                break;
+            case 'support':
+                if (enemy.type === 'healer') enemy.healCooldown *= 0.82;
+                if (enemy.type === 'shield') enemy.shieldAuraCooldown *= 0.82;
+                if (enemy.type === 'toxic') enemy.toxicCooldown *= 0.82;
+                break;
+            case 'mix':
+                if (enemy.type === 'fast' || enemy.type === 'stealth' || enemy.type === 'ghost') {
+                    enemy.baseSpeed *= 1.08;
+                    enemy.speed = enemy.baseSpeed;
+                }
+                if (enemy.type === 'heavy' || enemy.type === 'shield') {
+                    enemy.maxHp *= 1.05;
+                    enemy.hp = enemy.maxHp;
+                }
+                break;
+            case 'climax':
+                enemy.reward = Math.floor(enemy.reward * 1.1);
+                if (enemy.type === 'heavy' || enemy.type === 'berserker' || enemy.isBoss) {
+                    enemy.maxHp *= 1.12;
+                    enemy.hp = enemy.maxHp;
+                }
+                break;
+        }
+    },
+
+    _applyCaptainProfile(enemy, captainProfileId) {
+        if (!enemy) return;
+        const profile = this._getCaptainProfileById(captainProfileId);
+        if (!profile) return;
+
+        enemy.isCaptain = true;
+        enemy.captainProfileId = profile.id;
+        enemy.captainAuraProfileId = profile.id;
+        enemy.captainAuraRadius = profile.auraRadius;
+        enemy.captainAuraColor = profile.color;
+        enemy.captainAuraName = profile.name;
+
+        enemy.name = `${profile.prefix} ${enemy.name}`;
+        enemy.maxHp *= profile.hpMult;
+        enemy.hp = enemy.maxHp;
+        enemy.baseSpeed *= profile.speedMultSelf;
+        enemy.speed = enemy.baseSpeed;
+        enemy.armor += profile.armorBonusSelf;
+        enemy.baseArmor = enemy.armor;
+        enemy.reward = Math.max(1, Math.floor(enemy.reward * profile.rewardMult));
+
+        enemy.fortified = true;
+        enemy.fortifiedReduction = Math.max(enemy.fortifiedReduction || 0, profile.fortifiedReduction || 0);
+
+        // Ensure captain appears elite if not already flagged.
+        enemy.isElite = true;
+    },
+
+    _applyCaptainAuras() {
+        if (GameState.gamePhase !== 'playing') return;
+        if (!Array.isArray(GameState.enemies) || GameState.enemies.length === 0) return;
+
+        for (const enemy of GameState.enemies) {
+            enemy.captainAuraActive = false;
+            enemy.captainSpeedMult = 1;
+            enemy.captainDamageReduction = 0;
+            enemy.captainArmorBonus = 0;
+            enemy.captainStealthCooldownMult = 1;
+            enemy.captainRegenRate = 0;
+            enemy.captainSupportCastRate = 1;
+            enemy.captainAuraProfileId = null;
+            enemy.captainAuraColor = enemy.captainAuraColor || '#ffbe70';
+            enemy.captainAuraName = enemy.captainAuraName || '';
+        }
+
+        const captains = GameState.enemies.filter(enemy => enemy.alive && enemy.isCaptain);
+        if (captains.length === 0) return;
+
+        for (const captain of captains) {
+            const profile = this._getCaptainProfileById(captain.captainProfileId);
+            if (!profile) continue;
+
+            const radius = profile.auraRadius || 160;
+            for (const ally of GameState.enemies) {
+                if (!ally.alive || ally === captain) continue;
+                if (dist(captain, ally) > radius) continue;
+
+                ally.captainAuraActive = true;
+                ally.captainAuraProfileId = profile.id;
+                ally.captainAuraColor = profile.color || '#ffbe70';
+                ally.captainAuraName = profile.name || 'Command Aura';
+                ally.captainSpeedMult = Math.max(ally.captainSpeedMult || 1, profile.auraSpeedMult || 1);
+                ally.captainDamageReduction = Math.max(ally.captainDamageReduction || 0, profile.auraDamageReduction || 0);
+                ally.captainArmorBonus = Math.max(ally.captainArmorBonus || 0, profile.auraArmorBonus || 0);
+                if (Number.isFinite(profile.auraStealthCooldownMult) && profile.auraStealthCooldownMult > 0) {
+                    ally.captainStealthCooldownMult = Math.min(ally.captainStealthCooldownMult || 1, profile.auraStealthCooldownMult);
+                }
+                if (Number.isFinite(profile.auraRegenPct) && profile.auraRegenPct > 0) {
+                    ally.captainRegenRate = Math.max(ally.captainRegenRate || 0, ally.maxHp * profile.auraRegenPct);
+                }
+                if (Number.isFinite(profile.auraSupportCastRate) && profile.auraSupportCastRate > 0) {
+                    ally.captainSupportCastRate = Math.max(ally.captainSupportCastRate || 1, profile.auraSupportCastRate);
+                }
+            }
+        }
+    },
+
+    _getDefaultTacticalModifiers() {
+        return {
+            enemyHpMult: 1,
+            enemySpeedMult: 1,
+            towerDamageMult: 1,
+            abilityCooldownMult: 1,
+            killGoldMult: 1,
+            interestRateDelta: 0,
+            interestCapDelta: 0,
+            waveBonusFlat: 0,
+        };
+    },
+
+    _mergeTacticalModifiers(base, next) {
+        if (!next || typeof next !== 'object') return base;
+
+        const out = { ...base };
+        const applyMult = (key) => {
+            if (Number.isFinite(next[key])) {
+                out[key] *= next[key];
+            }
+        };
+        const applyAdd = (key) => {
+            if (Number.isFinite(next[key])) {
+                out[key] += next[key];
+            }
+        };
+
+        applyMult('enemyHpMult');
+        applyMult('enemySpeedMult');
+        applyMult('towerDamageMult');
+        applyMult('abilityCooldownMult');
+        applyMult('killGoldMult');
+
+        applyAdd('interestRateDelta');
+        applyAdd('interestCapDelta');
+        applyAdd('waveBonusFlat');
+
+        return out;
+    },
+
+    _getTacticalTemplateById(id) {
+        if (!id) return null;
+        return this.tacticalEventTemplates.find(t => t.id === id) || null;
+    },
+
+    getCurrentTacticalModifiers() {
+        return this.currentTacticalWaveModifiers || this._getDefaultTacticalModifiers();
+    },
+
+    getProjectedTacticalModifiers() {
+        let mods = this._getDefaultTacticalModifiers();
+        for (const effect of this.activeTacticalEffects) {
+            if (!effect || !Number.isFinite(effect.remainingWaves) || effect.remainingWaves <= 0) continue;
+            mods = this._mergeTacticalModifiers(mods, effect.modifiers);
+        }
+        return mods;
+    },
+
+    _consumeTacticalEffectsForWave() {
+        let mods = this._getDefaultTacticalModifiers();
+        const names = [];
+        const remaining = [];
+
+        for (const effect of this.activeTacticalEffects) {
+            if (!effect || !Number.isFinite(effect.remainingWaves) || effect.remainingWaves <= 0) continue;
+            mods = this._mergeTacticalModifiers(mods, effect.modifiers);
+            if (effect.name) names.push(effect.name);
+
+            const left = effect.remainingWaves - 1;
+            if (left > 0) {
+                remaining.push({ ...effect, remainingWaves: left });
+            }
+        }
+
+        this.activeTacticalEffects = remaining;
+        this.currentTacticalWaveModifiers = mods;
+        this.currentTacticalWaveEffectNames = names;
+    },
+
+    _shouldTriggerTacticalChoice() {
+        if (this.tacticalEventModalOpen) return false;
+        if (this.endlessDraftModalOpen) return false;
+        if (GameState.weeklyChallengeRun && GameState.weeklyChallengeRun.active) return false;
+        if (GameState.wave < 3) return false;
+        if (this.isBonusWave) return false;
+
+        const nextWave = GameState.wave + 1;
+        if (!this.endlessMode && nextWave > GameState.maxWave) return false;
+        if (nextWave % 10 === 0) return false;
+
+        return (GameState.wave % 3) === 0;
+    },
+
+    _rollTacticalChoices() {
+        const pool = [...this.tacticalEventTemplates];
+        const choices = [];
+        const count = Math.min(3, pool.length);
+        while (choices.length < count && pool.length > 0) {
+            const idx = Math.floor(Math.random() * pool.length);
+            choices.push(pool.splice(idx, 1)[0]);
+        }
+        return choices;
+    },
+
+    _ensureTacticalEventBindings() {
+        if (this._tacticalBindingsReady) return;
+
+        const modal = document.getElementById('tactical-event-modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    // Explicitly keep modal locked until a choice is made.
+                    Audio.play('click');
+                }
+            });
+        }
+
+        this._tacticalBindingsReady = true;
+    },
+
+    _renderTacticalEventModal() {
+        const modal = document.getElementById('tactical-event-modal');
+        const subtitle = document.getElementById('tactical-event-subtitle');
+        const activeEl = document.getElementById('tactical-event-active');
+        const choicesEl = document.getElementById('tactical-event-choices');
+        if (!modal || !subtitle || !activeEl || !choicesEl) return;
+
+        const nextWave = GameState.wave + 1;
+        subtitle.textContent = `Wave ${GameState.wave} cleared. Choose one tactical directive for wave ${nextWave}.`;
+
+        if (this.activeTacticalEffects.length > 0) {
+            const text = this.activeTacticalEffects
+                .map(e => `${e.name} (${e.remainingWaves}w)`)
+                .join(' | ');
+            activeEl.textContent = `Active tactical effects: ${text}`;
+        } else {
+            activeEl.textContent = 'Active tactical effects: none';
+        }
+
+        choicesEl.innerHTML = '';
+        this.tacticalEventChoices.forEach((choice, idx) => {
+            const card = document.createElement('div');
+            card.className = 'tactical-choice-card';
+            card.innerHTML = `
+                <div class="tactical-choice-slot">Option ${idx + 1}</div>
+                <div class="tactical-choice-name">${choice.icon || ''} ${choice.name}</div>
+                <div class="tactical-choice-desc">${choice.desc || ''}</div>
+                <div class="tactical-choice-effect positive">BENEFIT: ${choice.rewardText || 'None'}</div>
+                <div class="tactical-choice-effect negative">TRADEOFF: ${choice.riskText || 'None'}</div>
+            `;
+
+            const pickBtn = document.createElement('button');
+            pickBtn.type = 'button';
+            pickBtn.className = 'tactical-choice-pick';
+            pickBtn.textContent = `PICK (${idx + 1})`;
+            pickBtn.addEventListener('click', () => this.pickTacticalChoice(idx));
+
+            card.appendChild(pickBtn);
+            choicesEl.appendChild(card);
+        });
+    },
+
+    _openTacticalChoiceEvent() {
+        const modal = document.getElementById('tactical-event-modal');
+        if (!modal) return false;
+
+        this.cancelCountdown();
+        this.tacticalEventChoices = this._rollTacticalChoices();
+        if (this.tacticalEventChoices.length === 0) return false;
+
+        this.tacticalEventModalOpen = true;
+
+        const startBtn = document.getElementById('btn-start-wave');
+        if (startBtn) startBtn.classList.add('hidden');
+        const skipBtn = document.getElementById('btn-skip-wave');
+        if (skipBtn) skipBtn.style.display = 'none';
+
+        this._renderTacticalEventModal();
+        modal.style.display = 'flex';
+        showWaveBanner('TACTICAL DIRECTIVE AVAILABLE');
+        return true;
+    },
+
+    _hideTacticalEventModal() {
+        const modal = document.getElementById('tactical-event-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    _restorePendingTacticalEventModal() {
+        if (!this.tacticalEventModalOpen) return;
+        if (!Array.isArray(this.tacticalEventChoices) || this.tacticalEventChoices.length === 0) {
+            this.tacticalEventModalOpen = false;
+            this._hideTacticalEventModal();
+            return;
+        }
+
+        this.cancelCountdown();
+
+        const startBtn = document.getElementById('btn-start-wave');
+        if (startBtn) startBtn.classList.add('hidden');
+        const skipBtn = document.getElementById('btn-skip-wave');
+        if (skipBtn) skipBtn.style.display = 'none';
+
+        this._renderTacticalEventModal();
+        const modal = document.getElementById('tactical-event-modal');
+        if (modal) modal.style.display = 'flex';
+    },
+
+    pickTacticalChoice(index) {
+        if (!this.tacticalEventModalOpen) return;
+
+        const choice = this.tacticalEventChoices[index];
+        if (!choice) return;
+
+        const immediate = choice.immediate || {};
+        if (Number.isFinite(immediate.gold) && immediate.gold !== 0) {
+            GameState.gold = Math.max(0, Math.floor(GameState.gold + immediate.gold));
+            Effects.addFloatingText(logicalWidth / 2, 82, `${immediate.gold >= 0 ? '+' : ''}${Math.floor(immediate.gold)} gold`, '#ffd27a', 12);
+        }
+        if (Number.isFinite(immediate.lives) && immediate.lives !== 0) {
+            GameState.lives = clamp(Math.floor(GameState.lives + immediate.lives), 1, GameState.maxLives);
+            Effects.addFloatingText(logicalWidth / 2, 98, `${immediate.lives >= 0 ? '+' : ''}${Math.floor(immediate.lives)} lives`, '#8fffa8', 12);
+        }
+
+        if (choice.duration > 0 && choice.timed && Object.keys(choice.timed).length > 0) {
+            this.activeTacticalEffects.push({
+                id: choice.id,
+                name: choice.name,
+                remainingWaves: Math.max(1, Math.floor(choice.duration)),
+                modifiers: { ...choice.timed },
+            });
+        }
+
+        this.tacticalEventsTaken++;
+        this.tacticalEventModalOpen = false;
+        this.tacticalEventChoices = [];
+        this._hideTacticalEventModal();
+
+        const startBtn = document.getElementById('btn-start-wave');
+        if (startBtn) startBtn.classList.remove('hidden');
+
+        showWaveBanner(`TACTICAL PICK: ${choice.name.toUpperCase()}`);
+        if (choice.rewardText) {
+            Effects.addFloatingText(logicalWidth / 2, 114, choice.rewardText, '#8fe3ff', 11);
+        }
+        if (choice.riskText) {
+            Effects.addFloatingText(logicalWidth / 2, 128, choice.riskText, '#ffb3b3', 11);
+        }
+        Audio.play('powerup');
+
+        if (GameState.settings.autoStart && GameState.gamePhase === 'idle') {
+            this.startCountdown(this.countdownDuration, () => {
+                if (GameState.gamePhase === 'idle') this.startWave();
+            });
+        }
+
+        if (typeof SaveSystem !== 'undefined' && SaveSystem.autoSave) {
+            SaveSystem.autoSave();
+        }
+    },
+
+    _createBonusObjectiveState(template, queuedEntries) {
+        if (!template || !template.objective || typeof template.objective !== 'object') return null;
+
+        const objective = template.objective;
+        const state = {
+            type: objective.type || 'survival_timer',
+            title: objective.title || 'Bonus Objective',
+            goalText: objective.goalText || '',
+            successText: objective.successText || 'Objective complete',
+            failText: objective.failText || 'Objective failed',
+            started: true,
+            resolved: false,
+            success: false,
+            failed: false,
+            requiredTargets: 0,
+            eliminatedTargets: 0,
+            leakedTargets: 0,
+            survivedSeconds: 0,
+            rewardScale: 0,
+        };
+
+        if (state.type === 'priority_target') {
+            const list = Array.isArray(queuedEntries) ? queuedEntries : [];
+            state.requiredTargets = list.reduce((sum, entry) => {
+                return sum + (entry && entry.isObjectiveTarget ? 1 : 0);
+            }, 0);
+            if (state.requiredTargets <= 0) {
+                state.requiredTargets = 1;
+            }
+        }
+
+        return state;
+    },
+
+    _clearActiveEnemiesForBonusObjective() {
+        for (const enemy of GameState.enemies) {
+            enemy.alive = false;
+            enemy.reached = false;
+        }
+        GameState.enemies = [];
+        GameState.waveEnemies = [];
+        GameState.enemiesAlive = 0;
+    },
+
+    _resolveBonusObjective(success, reasonText) {
+        if (!this.isBonusWave || !this.currentBonusWave || !this.bonusObjectiveState) return;
+        if (this.bonusObjectiveState.resolved) return;
+
+        const state = this.bonusObjectiveState;
+        state.resolved = true;
+        state.success = !!success;
+        state.failed = !success;
+        state.reasonText = reasonText || (success ? state.successText : state.failText);
+        state.survivedSeconds = Math.max(0, this.currentBonusWave.timeLimit - Math.max(0, this.bonusWaveTimer));
+
+        if (state.type === 'priority_target') {
+            const req = Math.max(1, state.requiredTargets || 0);
+            const ratio = clamp(state.eliminatedTargets / req, 0, 1);
+            state.rewardScale = success ? 1 : ratio;
+        } else {
+            state.rewardScale = success ? 1 : 0;
+        }
+
+        this.bonusWaveTimer = 0;
+        this._clearActiveEnemiesForBonusObjective();
+
+        const color = success ? '#40ff9a' : '#ff8080';
+        const label = success ? 'OBJECTIVE COMPLETE' : 'OBJECTIVE FAILED';
+        showWaveBanner(`BONUS ${label}`);
+        Effects.addFloatingText(logicalWidth / 2, logicalHeight / 2 - 12, state.reasonText || label, color, 16);
+        Audio.play(success ? 'achievement' : 'leak');
+    },
+
+    _onBonusObjectiveTargetKilled() {
+        if (!this.isBonusWave || !this.bonusObjectiveState) return;
+        const state = this.bonusObjectiveState;
+        if (state.resolved) return;
+        if (state.type !== 'priority_target') return;
+
+        state.eliminatedTargets++;
+        const remaining = Math.max(0, (state.requiredTargets || 0) - state.eliminatedTargets);
+        Effects.addFloatingText(logicalWidth / 2, 72, `Priority targets left: ${remaining}`, '#ffd890', 11);
+        if (remaining <= 0) {
+            this._resolveBonusObjective(true, state.successText);
+        }
+    },
+
+    _onBonusObjectiveTargetLeaked() {
+        if (!this.isBonusWave || !this.bonusObjectiveState) return;
+        const state = this.bonusObjectiveState;
+        if (state.resolved) return;
+        if (state.type !== 'priority_target') return;
+
+        state.leakedTargets++;
+        this._resolveBonusObjective(false, state.failText);
+    },
+
+    getBonusObjectiveDisplay() {
+        if (!this.isBonusWave || !this.currentBonusWave || !this.bonusObjectiveState) return null;
+        const state = this.bonusObjectiveState;
+        const timerTotal = Math.max(1, this.currentBonusWave.timeLimit || 1);
+        const timerRemaining = Math.max(0, this.bonusWaveTimer);
+        const base = {
+            type: state.type,
+            title: state.title,
+            goalText: state.goalText,
+            resolved: !!state.resolved,
+            success: !!state.success,
+            failed: !!state.failed,
+            rewardScale: Number.isFinite(state.rewardScale) ? state.rewardScale : 0,
+            timeRemaining: Math.ceil(timerRemaining),
+            timeTotal: timerTotal,
+            timeFraction: timerRemaining / timerTotal,
+        };
+
+        if (state.type === 'priority_target') {
+            base.requiredTargets = state.requiredTargets;
+            base.eliminatedTargets = state.eliminatedTargets;
+            base.remainingTargets = Math.max(0, state.requiredTargets - state.eliminatedTargets);
+        }
+
+        return base;
     },
 
     _getModifierById(id) {
@@ -569,6 +1587,7 @@ const WaveSystem = {
         if (GameState.gamePhase !== 'idle') return;
         if (GameState.wave >= GameState.maxWave && !this.endlessMode) return;
         if (this.endlessDraftModalOpen) return;
+        if (this.tacticalEventModalOpen) return;
 
         // Cancel any active countdown
         this.cancelCountdown();
@@ -583,6 +1602,8 @@ const WaveSystem = {
         // Determine wave modifiers (every 5 waves, or more frequently in endless)
         this.activeModifiers = [];
         this.currentScenario = this._getScenarioForWave(GameState.wave);
+        this.currentFaction = this._getFactionForWave(GameState.wave);
+        this.currentWaveArc = this._getWaveArcForWave(GameState.wave);
         this.currentMapPressure = this._getMapPressureForCurrentMap();
         if (this.endlessMode) {
             const drafted = this._getEndlessDraftModifiers();
@@ -613,7 +1634,11 @@ const WaveSystem = {
         } else {
             this.currentBonusWave = null;
             this.bonusWaveTimer = 0;
+            this.bonusObjectiveState = null;
         }
+
+        // Consume timed tactical effects for this specific wave.
+        this._consumeTacticalEffectsForWave();
 
         // Build spawn queue
         GameState.waveEnemies = [];
@@ -640,6 +1665,8 @@ const WaveSystem = {
                         eliteVariant: isElite ? this._pickEliteVariant() : null,
                     };
                     this._applyScenarioToEntry(entry);
+                    this._applyFactionToEntry(entry);
+                    this._applyWaveArcToEntry(entry);
                     GameState.waveEnemies.push(entry);
                 }
             }
@@ -655,8 +1682,11 @@ const WaveSystem = {
                         delay: group.delay || 0.5,
                         isElite: group.forceElite || false,
                         eliteVariant: null,
+                        isObjectiveTarget: !!group.objectiveTarget,
                     };
                     this._applyScenarioToEntry(entry);
+                    this._applyFactionToEntry(entry);
+                    this._applyWaveArcToEntry(entry);
                     if (entry.isElite) {
                         entry.eliteVariant = this._pickEliteVariant();
                     }
@@ -688,9 +1718,17 @@ const WaveSystem = {
                         eliteVariant: isElite ? this._pickEliteVariant() : null,
                     };
                     this._applyScenarioToEntry(entry);
+                    this._applyFactionToEntry(entry);
+                    this._applyWaveArcToEntry(entry);
                     GameState.waveEnemies.push(entry);
                 }
             }
+        }
+
+        this._injectFactionCaptainEntry(GameState.waveEnemies);
+
+        if (this.isBonusWave && this.currentBonusWave) {
+            this.bonusObjectiveState = this._createBonusObjectiveState(this.currentBonusWave, GameState.waveEnemies);
         }
 
         // Reset wave statistics
@@ -720,6 +1758,12 @@ const WaveSystem = {
         } else if (this.isBonusWave && this.currentBonusWave) {
             showWaveBanner(`BONUS WAVE: ${this.currentBonusWave.name.toUpperCase()}`);
             Effects.addFloatingText(logicalWidth / 2, 100, this.currentBonusWave.desc, '#ffd700', 14);
+            if (this.bonusObjectiveState) {
+                Effects.addFloatingText(logicalWidth / 2, 116, `Objective: ${this.bonusObjectiveState.title}`, '#ffe39a', 12);
+                if (this.bonusObjectiveState.goalText) {
+                    Effects.addFloatingText(logicalWidth / 2, 132, this.bonusObjectiveState.goalText, '#b8c8ee', 10);
+                }
+            }
         } else if (this.activeModifiers.length === 0) {
             showWaveBanner(`WAVE ${GameState.wave}`);
         }
@@ -727,8 +1771,26 @@ const WaveSystem = {
             Effects.addFloatingText(logicalWidth / 2, 100, `Scenario: ${this.currentScenario.name}`, '#90b0ff', 12);
             Effects.addFloatingText(logicalWidth / 2, 116, this.currentScenario.desc, '#7f96c8', 10);
         }
+        if (this.currentFaction && !this.isBonusWave) {
+            Effects.addFloatingText(logicalWidth / 2, 132, `Faction: ${this.currentFaction.name}`, '#ffc990', 11);
+        }
+        const arcY = (this.currentFaction && !this.isBonusWave) ? 148 : 132;
+        if (this.currentWaveArc && !this.isBonusWave) {
+            Effects.addFloatingText(logicalWidth / 2, arcY, `Arc: ${this.currentWaveArc.name}`, '#9ed0ff', 10);
+            Effects.addFloatingText(logicalWidth / 2, arcY + 14, this.currentWaveArc.desc, '#7ea6d2', 9);
+        }
         if (this.currentMapPressure && !this.isBonusWave) {
-            Effects.addFloatingText(logicalWidth / 2, 132, `Map Pressure: ${this.currentMapPressure.name}`, '#b090ff', 10);
+            const mapPressureY = (this.currentFaction && !this.isBonusWave)
+                ? (this.currentWaveArc ? 170 : 148)
+                : (this.currentWaveArc ? 156 : 132);
+            Effects.addFloatingText(logicalWidth / 2, mapPressureY, `Map Pressure: ${this.currentMapPressure.name}`, '#b090ff', 10);
+        }
+        if (this.currentTacticalWaveEffectNames.length > 0) {
+            const tacticalText = this.currentTacticalWaveEffectNames.slice(0, 2).join(' + ');
+            const tacticalY = this.currentMapPressure
+                ? ((this.currentFaction && !this.isBonusWave) ? (this.currentWaveArc ? 186 : 164) : (this.currentWaveArc ? 172 : 148))
+                : ((this.currentFaction && !this.isBonusWave) ? (this.currentWaveArc ? 170 : 148) : (this.currentWaveArc ? 156 : 132));
+            Effects.addFloatingText(logicalWidth / 2, tacticalY, `Tactical: ${tacticalText}`, '#8fd8ff', 10);
         }
         // (modifier banner already shown above)
 
@@ -760,9 +1822,13 @@ const WaveSystem = {
 
         // Interest + wave bonus
         if (GameState.wave > 1) {
+            const de = GameState.doctrineEffects || {};
+            const tm = this.getCurrentTacticalModifiers();
+            const interestRate = Math.max(0, CONFIG.INTEREST_RATE + (GameState.researchBonuses.interestRate || 0) + (de.interestRateDelta || 0) + (tm.interestRateDelta || 0));
+            const interestCap = Math.max(0, CONFIG.INTEREST_CAP + (GameState.researchBonuses.interestCap || 0) + (de.interestCapDelta || 0) + (tm.interestCapDelta || 0));
             const interest = Math.min(
-                Math.floor(GameState.gold * (CONFIG.INTEREST_RATE + (GameState.researchBonuses.interestRate || 0))),
-                CONFIG.INTEREST_CAP + (GameState.researchBonuses.interestCap || 0)
+                Math.floor(GameState.gold * interestRate),
+                interestCap
             );
             GameState.gold += interest;
             if (interest > 0) {
@@ -779,6 +1845,8 @@ const WaveSystem = {
         // Wave bonus
         let waveBonus = CONFIG.WAVE_BONUS_BASE;
         if (GameState.researchBonuses.waveBonusMult) waveBonus *= GameState.researchBonuses.waveBonusMult;
+        waveBonus += this.getCurrentTacticalModifiers().waveBonusFlat || 0;
+        waveBonus = Math.max(0, Math.floor(waveBonus));
         GameState.gold += waveBonus;
 
         // Gold rush
@@ -823,8 +1891,14 @@ const WaveSystem = {
         // Update bonus wave timer
         if (this.isBonusWave && this.currentBonusWave) {
             this.bonusWaveTimer -= dt;
-            if (this.bonusWaveTimer <= 0 && GameState.waveEnemies.length > 0) {
-                // Time's up for bonus wave, clear remaining spawns
+            if (this.bonusObjectiveState && !this.bonusObjectiveState.resolved) {
+                if (this.bonusObjectiveState.type === 'survival_timer' && this.bonusWaveTimer <= 0) {
+                    this._resolveBonusObjective(true, this.bonusObjectiveState.successText || 'Survived the objective window');
+                } else if (this.bonusObjectiveState.type === 'priority_target' && this.bonusWaveTimer <= 0) {
+                    this._resolveBonusObjective(false, this.bonusObjectiveState.failText || 'Priority targets not eliminated in time');
+                }
+            } else if (this.bonusWaveTimer <= 0 && GameState.waveEnemies.length > 0) {
+                // Legacy fallback: if no objective state exists, clear remaining spawns.
                 GameState.waveEnemies = [];
                 Effects.addFloatingText(logicalWidth / 2, logicalHeight / 2, 'TIME UP!', '#ff4040', 18);
             }
@@ -836,12 +1910,16 @@ const WaveSystem = {
             if (GameState.spawnTimer <= 0) {
                 const next = GameState.waveEnemies.shift();
                 const enemy = new Enemy(next.type, next.hpMult);
+                const tacticalMods = this.getCurrentTacticalModifiers();
+                enemy.isObjectiveTarget = !!next.isObjectiveTarget;
 
                 // Apply difficulty scaling (wave progression + difficulty preset)
                 const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
                 enemy.baseSpeed *= this.difficultyScale.speedMult * diffPreset.enemySpeedMult;
                 enemy.speed = enemy.baseSpeed;
                 enemy.maxHp *= diffPreset.enemyHpMult;
+                enemy.hp = enemy.maxHp;
+                enemy.maxHp *= tacticalMods.enemyHpMult;
                 enemy.hp = enemy.maxHp;
                 enemy.armor *= this.difficultyScale.armorMult * diffPreset.enemyArmorMult;
                 enemy.baseArmor = enemy.armor;
@@ -852,6 +1930,8 @@ const WaveSystem = {
                     enemy.hp = enemy.maxHp;
                 }
                 enemy.reward = Math.floor(enemy.reward * diffPreset.goldIncomeMult);
+                enemy.baseSpeed *= tacticalMods.enemySpeedMult;
+                enemy.speed = enemy.baseSpeed;
 
                 // Apply elite variant if applicable
                 if (next.isElite && next.eliteVariant) {
@@ -864,7 +1944,13 @@ const WaveSystem = {
                 }
 
                 this._applyScenarioToEnemy(enemy);
+                this._applyFactionToEnemy(enemy);
+                this._applyWaveArcToEnemy(enemy);
                 this._applyMapPressure(enemy);
+                if (next.isCaptain && next.captainProfileId) {
+                    this._applyCaptainProfile(enemy, next.captainProfileId);
+                }
+                enemy.reward = Math.max(1, Math.floor(enemy.reward * tacticalMods.killGoldMult));
 
                 GameState.enemies.push(enemy);
                 GameState.enemiesSpawned++;
@@ -881,9 +1967,14 @@ const WaveSystem = {
         }
 
         // Check wave complete
-        if (GameState.waveEnemies.length === 0 && GameState.enemiesAlive <= 0) {
+        const survivalObjectivePending = this.isBonusWave && this.bonusObjectiveState &&
+            this.bonusObjectiveState.type === 'survival_timer' &&
+            !this.bonusObjectiveState.resolved;
+        if (!survivalObjectivePending && GameState.waveEnemies.length === 0 && GameState.enemiesAlive <= 0) {
             this.waveComplete();
         }
+
+        this._applyCaptainAuras();
     },
 
     // Apply elite variant properties to an enemy
@@ -1023,6 +2114,9 @@ const WaveSystem = {
             this.waveStats.elitesKilledThisWave++;
             this.waveStats.totalElitesKilled++;
         }
+        if (enemy && enemy.isObjectiveTarget) {
+            this._onBonusObjectiveTargetKilled();
+        }
     },
 
     // Track damage dealt this wave
@@ -1031,8 +2125,11 @@ const WaveSystem = {
     },
 
     // Track an enemy leak
-    recordLeak() {
+    recordLeak(enemy) {
         this.waveStats.enemiesLeakedThisWave++;
+        if (enemy && enemy.isObjectiveTarget) {
+            this._onBonusObjectiveTargetLeaked();
+        }
     },
 
     _getEndlessDepth() {
@@ -1125,6 +2222,12 @@ const WaveSystem = {
             modifiers: this.activeModifiers.map(m => m.name),
             isBonus: this.isBonusWave,
             isPerfect: isPerfect,
+            bonusObjective: this.bonusObjectiveState ? {
+                type: this.bonusObjectiveState.type,
+                title: this.bonusObjectiveState.title,
+                success: !!this.bonusObjectiveState.success,
+                rewardScale: this.bonusObjectiveState.rewardScale || 0,
+            } : null,
         };
         this.waveStats.history.push(waveRecord);
 
@@ -1140,14 +2243,41 @@ const WaveSystem = {
 
         // Award bonus wave gold
         if (this.isBonusWave && this.currentBonusWave) {
-            // Award proportional to kills achieved
-            const killRatio = this.waveStats.currentWaveKills / Math.max(GameState.totalEnemiesInWave, 1);
-            const bonusGold = Math.floor(this.currentBonusWave.bonusGold * killRatio);
+            let rewardScale = 0;
+            if (this.bonusObjectiveState) {
+                if (!this.bonusObjectiveState.resolved) {
+                    if (this.bonusObjectiveState.type === 'survival_timer') {
+                        this.bonusObjectiveState.success = true;
+                        this.bonusObjectiveState.resolved = true;
+                        this.bonusObjectiveState.rewardScale = 1;
+                    } else if (this.bonusObjectiveState.type === 'priority_target') {
+                        const req = Math.max(1, this.bonusObjectiveState.requiredTargets || 0);
+                        const ratio = clamp((this.bonusObjectiveState.eliminatedTargets || 0) / req, 0, 1);
+                        this.bonusObjectiveState.success = ratio >= 1;
+                        this.bonusObjectiveState.resolved = true;
+                        this.bonusObjectiveState.rewardScale = ratio;
+                    }
+                }
+                rewardScale = clamp(this.bonusObjectiveState.rewardScale || 0, 0, 1);
+            } else {
+                // Legacy fallback: proportional to kills achieved.
+                const killRatio = this.waveStats.currentWaveKills / Math.max(GameState.totalEnemiesInWave, 1);
+                rewardScale = clamp(killRatio, 0, 1);
+            }
+
+            const bonusGold = Math.floor(this.currentBonusWave.bonusGold * rewardScale);
             if (bonusGold > 0) {
                 GameState.gold += bonusGold;
                 this.waveStats.totalBonusGoldEarned += bonusGold;
-                Effects.addFloatingText(logicalWidth / 2, 60, `Bonus: +${bonusGold} gold!`, '#ffd700', 16);
+                const pct = Math.round(rewardScale * 100);
+                Effects.addFloatingText(logicalWidth / 2, 60, `Bonus Objective Reward: +${bonusGold}g (${pct}%)`, '#ffd700', 16);
+            } else if (this.bonusObjectiveState) {
+                Effects.addFloatingText(logicalWidth / 2, 60, 'Bonus Objective Reward: +0g', '#ffb090', 14);
             }
+        }
+
+        if (this.isBonusWave) {
+            this.bonusObjectiveState = null;
         }
 
         // Perfect wave gold bonus
@@ -1217,6 +2347,13 @@ const WaveSystem = {
             return;
         }
 
+        if (this._shouldTriggerTacticalChoice()) {
+            if (this._openTacticalChoiceEvent()) {
+                SaveSystem.autoSave();
+                return;
+            }
+        }
+
         // Auto start
         if (GameState.settings.autoStart) {
             this.startCountdown(this.countdownDuration, () => {
@@ -1239,6 +2376,21 @@ const WaveSystem = {
             const mutatorNames = activeMutators.map(m => m.name);
             const draftDepth = Math.max(1, endlessNum - 1);
             const draftPending = this._isEndlessDraftDepth(draftDepth) && !this.endlessDraftedDepths.includes(draftDepth);
+            const faction = this._getFactionForWave(wave);
+            const arc = this._getWaveArcForWave(wave);
+            const endlessThreatTags = draftPending
+                ? ['MUTATOR DRAFT', 'ELITE RISK']
+                : ['UNPREDICTABLE', 'ELITE RISK'];
+            if (arc && Array.isArray(arc.threatTags)) {
+                for (const tag of arc.threatTags) {
+                    if (!endlessThreatTags.includes(tag)) endlessThreatTags.push(tag);
+                }
+            }
+            if (faction && Array.isArray(faction.threatTags)) {
+                for (const tag of faction.threatTags) {
+                    if (!endlessThreatTags.includes(tag)) endlessThreatTags.push(tag);
+                }
+            }
             return {
                 enemies: [{ type: 'basic', count: '??', name: 'Endless', color: '#ff80ff', hpMult: 1 }],
                 difficultyScale: scale,
@@ -1250,9 +2402,9 @@ const WaveSystem = {
                     : 'Endless mode — draft mutators to shape the run.',
                 bonusInfo: null,
                 isEndless: true,
-                threatTags: draftPending
-                    ? ['MUTATOR DRAFT', 'ELITE RISK']
-                    : ['UNPREDICTABLE', 'ELITE RISK'],
+                faction,
+                arc,
+                threatTags: endlessThreatTags,
             };
         }
 
@@ -1266,6 +2418,8 @@ const WaveSystem = {
         const hasModifier = (wave % 5 === 0 && wave % 10 !== 0);
         const isBonus = (wave % 10 === 0);
         const scenario = this._getScenarioForWave(wave);
+        const faction = this._getFactionForWave(wave);
+        const arc = this._getWaveArcForWave(wave);
         const mapPressure = this._getMapPressureForCurrentMap();
 
         // Estimate elite chance
@@ -1286,6 +2440,8 @@ const WaveSystem = {
             modifierHint: hasModifier ? 'Random modifier will be applied!' : null,
             bonusInfo: null,
             scenario: scenario,
+            faction: faction,
+            arc: arc,
             mapPressure: mapPressure,
         };
 
@@ -1297,11 +2453,23 @@ const WaveSystem = {
         if (isBonus) {
             const templateIdx = Math.floor((wave / 10 - 1) % this.bonusWaveTemplates.length);
             const template = this.bonusWaveTemplates[templateIdx];
+            const bonusGroups = template.composition(wave, scale.hpMult);
+            preview.enemies = bonusGroups.map(group => ({
+                type: group.type,
+                count: group.count,
+                name: ENEMIES[group.type].name,
+                color: ENEMIES[group.type].color,
+                hpMult: group.hpMult || 1,
+                isObjectiveTarget: !!group.objectiveTarget,
+            }));
             preview.bonusInfo = {
                 name: template.name,
                 desc: template.desc,
                 bonusGold: template.bonusGold,
                 timeLimit: template.timeLimit,
+                objectiveType: template.objective && template.objective.type ? template.objective.type : null,
+                objectiveTitle: template.objective && template.objective.title ? template.objective.title : '',
+                objectiveGoal: template.objective && template.objective.goalText ? template.objective.goalText : '',
             };
         }
 
@@ -1331,6 +2499,17 @@ const WaveSystem = {
         if (types.has('fast') || types.has('swarmfast') || types.has('swarm')) add('RUSH');
         if ((preview.eliteChance || 0) >= 0.15) add('ELITE RISK');
         if (preview.hasModifier) add('WAVE MODIFIER');
+        if (preview.isBonus && preview.bonusInfo) {
+            add('BONUS OBJECTIVE');
+            if (preview.bonusInfo.objectiveType === 'survival_timer') add('SURVIVAL');
+            if (preview.bonusInfo.objectiveType === 'priority_target') add('PRIORITY TARGETS');
+        }
+        if (preview.faction && Array.isArray(preview.faction.threatTags)) {
+            for (const tag of preview.faction.threatTags) add(tag);
+        }
+        if (preview.arc && Array.isArray(preview.arc.threatTags)) {
+            for (const tag of preview.arc.threatTags) add(tag);
+        }
         if (preview.scenario && Array.isArray(preview.scenario.threatTags)) {
             for (const tag of preview.scenario.threatTags) add(tag);
         }
@@ -1338,7 +2517,7 @@ const WaveSystem = {
             add(preview.mapPressure.threatTag);
         }
 
-        return tags.slice(0, 3);
+        return tags.slice(0, 5);
     },
 
     _getMapPressureForCurrentMap() {
@@ -1451,11 +2630,13 @@ const WaveSystem = {
     // Get bonus wave timer display
     getBonusWaveTimerDisplay() {
         if (!this.isBonusWave || !this.currentBonusWave) return null;
+        const objective = this.getBonusObjectiveDisplay();
         return {
             remaining: Math.ceil(this.bonusWaveTimer),
             total: this.currentBonusWave.timeLimit,
             fraction: this.bonusWaveTimer / this.currentBonusWave.timeLimit,
             name: this.currentBonusWave.name,
+            objective,
         };
     },
 
