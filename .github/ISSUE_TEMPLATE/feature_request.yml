@@ -1,0 +1,49 @@
+name: Feature Request
+description: Propose a new mechanic, system, QoL improvement, or content addition.
+title: "[Feature]: "
+labels:
+  - feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Opportunity
+      description: What player pain point or gameplay opportunity does this address?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Core gameplay
+        - Endless mode
+        - Weekly challenge
+        - Research / meta progression
+        - Tower / enemy content
+        - UI / UX
+        - Accessibility / controls
+        - Tooling / workflow
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature in concrete gameplay terms.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs or Risks
+      description: What complexity, balance, or readability risks should be considered?
+
+  - type: textarea
+    id: success
+    attributes:
+      label: Success Criteria
+      description: How would we know this feature is working well?

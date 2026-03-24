@@ -1,0 +1,43 @@
+name: Balance Feedback
+description: Report overpowered, underpowered, or unfun interactions.
+title: "[Balance]: "
+labels:
+  - balance
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Tower
+        - Enemy
+        - Boss
+        - Research
+        - Endless mutator
+        - Weekly challenge
+        - Economy
+        - Difficulty curve
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What feels off?
+      description: Describe what seems too strong, too weak, too swingy, or too repetitive.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Run Context
+      description: Map, difficulty, wave/depth, modifiers, research, and tower loadout.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Adjustment
+      description: Optional tuning idea or alternative interaction.
