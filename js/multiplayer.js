@@ -13,6 +13,7 @@ const Multiplayer = {
     // Sync
     syncInterval: null,
     SYNC_RATE_MS: 500,
+    PEER_OPEN_TIMEOUT_MS: 12000,
     CONNECT_TIMEOUT_MS: 15000,
 
     // ICE servers for better NAT traversal reliability
@@ -20,8 +21,14 @@ const Multiplayer = {
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:openrelay.metered.ca:80' },
         {
             urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:80?transport=tcp',
             username: 'openrelayproject',
             credential: 'openrelayproject',
         },
@@ -32,6 +39,11 @@ const Multiplayer = {
         },
         {
             urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turns:openrelay.metered.ca:443?transport=tcp',
             username: 'openrelayproject',
             credential: 'openrelayproject',
         },
@@ -63,6 +75,12 @@ const Multiplayer = {
 
     _createPeerOptions() {
         return {
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            pingInterval: 5000,
+            debug: 1,
             config: {
                 iceServers: this.ICE_SERVERS,
                 iceCandidatePoolSize: 8,
@@ -100,10 +118,24 @@ const Multiplayer = {
         const peerId = this._prefix + code;
 
         return new Promise((resolve, reject) => {
+            let settled = false;
+            const openTimeout = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                if (this.peer) {
+                    try { this.peer.destroy(); } catch (e) {}
+                    this.peer = null;
+                }
+                reject(new Error('Timed out while creating room. Please check your network and try again.'));
+            }, this.PEER_OPEN_TIMEOUT_MS);
+
             const peer = new Peer(peerId, this._createPeerOptions());
             this.peer = peer;
 
             peer.on('open', () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(openTimeout);
                 console.log('[Multiplayer] Room created:', code);
 
                 // Listen for incoming connection
@@ -116,6 +148,9 @@ const Multiplayer = {
             });
 
             peer.on('error', (err) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(openTimeout);
                 console.error('[Multiplayer] Peer error:', err);
                 if (err.type === 'unavailable-id') {
                     // Code collision — try again
@@ -172,6 +207,10 @@ const Multiplayer = {
             const peer = new Peer(null, this._createPeerOptions());
             this.peer = peer;
 
+            timeoutId = setTimeout(() => {
+                failJoin('Connection timed out. Ask your friend to keep the room open and try again.');
+            }, this.CONNECT_TIMEOUT_MS);
+
             peer.on('open', () => {
                 console.log('[Multiplayer] Connecting to room:', code);
 
@@ -197,10 +236,6 @@ const Multiplayer = {
                 });
 
                 this._setupConnection(conn);
-
-                timeoutId = setTimeout(() => {
-                    failJoin('Connection timed out. Ask your friend to keep the room open and try again.');
-                }, this.CONNECT_TIMEOUT_MS);
             });
 
             peer.on('error', (err) => {
