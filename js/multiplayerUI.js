@@ -8,6 +8,12 @@ const MultiplayerUI = {
         const container = document.getElementById('mp-lobby-content');
         if (!container) return;
 
+        const signaling = (typeof Multiplayer !== 'undefined' && typeof Multiplayer.getSignalingConfig === 'function')
+            ? Multiplayer.getSignalingConfig()
+            : { mode: 'cloud', host: '0.peerjs.com', port: 443, path: '/', secure: true };
+        const escapedHost = this._escapeHtml(signaling.host || '');
+        const escapedPath = this._escapeHtml(signaling.path || '/');
+
         container.innerHTML = `
             <div class="mp-hero">
                 <div class="mp-hero-icon">
@@ -26,6 +32,39 @@ const MultiplayerUI = {
                 </div>
                 <h2 class="mp-hero-title">MULTIPLAYER</h2>
                 <p class="mp-hero-sub">Share a 6-digit code to play with a friend</p>
+            </div>
+            <div class="mp-network-panel">
+                <div class="mp-network-header">
+                    <span class="mp-network-title">SIGNALING</span>
+                    <span class="mp-network-status" id="mp-network-status"></span>
+                </div>
+                <div class="mp-network-grid">
+                    <div class="mp-field">
+                        <label>Mode</label>
+                        <select id="mp-signal-mode" class="mp-select">
+                            <option value="cloud" ${signaling.mode === 'cloud' ? 'selected' : ''}>Cloud (Default)</option>
+                            <option value="vpn" ${signaling.mode === 'vpn' ? 'selected' : ''}>Radmin VPN / LAN</option>
+                            <option value="custom" ${signaling.mode === 'custom' ? 'selected' : ''}>Custom Server</option>
+                        </select>
+                    </div>
+                    <div class="mp-field mp-network-wide">
+                        <label>Server Host</label>
+                        <input type="text" id="mp-signal-host" class="mp-signal-input" value="${escapedHost}" spellcheck="false" autocomplete="off">
+                    </div>
+                    <div class="mp-field">
+                        <label>Port</label>
+                        <input type="number" id="mp-signal-port" class="mp-signal-input" min="1" max="65535" value="${signaling.port}">
+                    </div>
+                    <div class="mp-field">
+                        <label>Path</label>
+                        <input type="text" id="mp-signal-path" class="mp-signal-input" value="${escapedPath}" spellcheck="false" autocomplete="off">
+                    </div>
+                    <label class="mp-signal-secure" id="mp-signal-secure-row">
+                        <input type="checkbox" id="mp-signal-secure" ${signaling.secure ? 'checked' : ''}>
+                        Use TLS (wss)
+                    </label>
+                </div>
+                <p class="mp-network-hint" id="mp-network-hint"></p>
             </div>
             <div class="mp-choice">
                 <button class="mp-choice-btn mp-choice-host" id="mp-btn-host">
@@ -51,6 +90,184 @@ const MultiplayerUI = {
             Audio.play('click');
             this._showJoinFlow();
         });
+
+        this._initNetworkConfigForm();
+    },
+
+    _escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    _formatEndpoint(config) {
+        if (!config) return '';
+        const scheme = config.secure ? 'wss' : 'ws';
+        return `${scheme}://${config.host}:${config.port}${config.path}`;
+    },
+
+    _updateNetworkHint(message, isError = false) {
+        const hint = document.getElementById('mp-network-hint');
+        if (!hint) return;
+        hint.textContent = message;
+        hint.classList.toggle('mp-network-hint-error', isError);
+    },
+
+    _collectNetworkFormConfig() {
+        const modeEl = document.getElementById('mp-signal-mode');
+        const hostEl = document.getElementById('mp-signal-host');
+        const portEl = document.getElementById('mp-signal-port');
+        const pathEl = document.getElementById('mp-signal-path');
+        const secureEl = document.getElementById('mp-signal-secure');
+        if (!modeEl || !hostEl || !portEl || !pathEl || !secureEl) {
+            return { ok: false, message: 'Missing network controls.' };
+        }
+
+        const mode = modeEl.value;
+        if (mode === 'cloud') {
+            return { ok: true, config: { mode: 'cloud' } };
+        }
+
+        const host = hostEl.value.trim();
+        if (!host) {
+            return { ok: false, message: 'Enter the signaling host (use the host PC Radmin VPN IP).' };
+        }
+
+        const port = Number.parseInt(portEl.value, 10);
+        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+            return { ok: false, message: 'Port must be between 1 and 65535.' };
+        }
+
+        const pathRaw = pathEl.value.trim();
+        const path = pathRaw ? (pathRaw.startsWith('/') ? pathRaw : `/${pathRaw}`) : '/peerjs';
+        const secure = !!secureEl.checked;
+
+        if (window.location.protocol === 'https:' && !secure) {
+            return {
+                ok: false,
+                message: 'HTTPS pages block ws:// signaling. For Radmin mode open the game via http://<host-vpn-ip>:3000.',
+            };
+        }
+
+        return {
+            ok: true,
+            config: { mode, host, port, path, secure },
+        };
+    },
+
+    _applyNetworkConfigFromForm(showErrorToast = true) {
+        if (typeof Multiplayer === 'undefined') return false;
+
+        const result = this._collectNetworkFormConfig();
+        if (!result.ok) {
+            if (showErrorToast) this._toast(result.message);
+            return false;
+        }
+
+        if (result.config.mode === 'cloud') {
+            Multiplayer.applySignalingPreset('cloud');
+        } else {
+            Multiplayer.setSignalingConfig(result.config);
+        }
+        return true;
+    },
+
+    _refreshNetworkFormState() {
+        const modeEl = document.getElementById('mp-signal-mode');
+        const hostEl = document.getElementById('mp-signal-host');
+        const portEl = document.getElementById('mp-signal-port');
+        const pathEl = document.getElementById('mp-signal-path');
+        const secureEl = document.getElementById('mp-signal-secure');
+        const secureRow = document.getElementById('mp-signal-secure-row');
+        const statusEl = document.getElementById('mp-network-status');
+        if (!modeEl || !hostEl || !portEl || !pathEl || !secureEl || !secureRow || !statusEl) return;
+
+        const mode = modeEl.value;
+        const cloudMode = mode === 'cloud';
+
+        hostEl.disabled = cloudMode;
+        portEl.disabled = cloudMode;
+        pathEl.disabled = cloudMode;
+        secureEl.disabled = cloudMode;
+        secureRow.classList.toggle('is-disabled', cloudMode);
+
+        const validation = this._collectNetworkFormConfig();
+        if (!validation.ok) {
+            statusEl.textContent = 'INVALID';
+            statusEl.className = 'mp-network-status mp-network-status-invalid';
+            this._updateNetworkHint(validation.message, true);
+            return;
+        }
+
+        const config = validation.config.mode === 'cloud'
+            ? Multiplayer.getSignalingConfig()
+            : validation.config;
+
+        if (cloudMode) {
+            statusEl.textContent = 'CLOUD';
+            statusEl.className = 'mp-network-status mp-network-status-cloud';
+            this._updateNetworkHint('Public signaling on 0.peerjs.com. Fast to start, may fail on strict networks.', false);
+            return;
+        }
+
+        statusEl.textContent = 'CUSTOM';
+        statusEl.className = 'mp-network-status mp-network-status-custom';
+        if (mode === 'vpn') {
+            this._updateNetworkHint(`Radmin mode endpoint: ${this._formatEndpoint(config)}. Host runs npm run peerserver.`, false);
+        } else {
+            this._updateNetworkHint(`Custom endpoint: ${this._formatEndpoint(config)}`, false);
+        }
+    },
+
+    _initNetworkConfigForm() {
+        const modeEl = document.getElementById('mp-signal-mode');
+        const hostEl = document.getElementById('mp-signal-host');
+        const portEl = document.getElementById('mp-signal-port');
+        const pathEl = document.getElementById('mp-signal-path');
+        const secureEl = document.getElementById('mp-signal-secure');
+        if (!modeEl || !hostEl || !portEl || !pathEl || !secureEl || typeof Multiplayer === 'undefined') return;
+
+        modeEl.addEventListener('change', () => {
+            const mode = modeEl.value;
+            if (mode === 'cloud') {
+                Multiplayer.applySignalingPreset('cloud');
+            } else if (mode === 'vpn') {
+                Multiplayer.applySignalingPreset('vpn');
+            } else {
+                const current = Multiplayer.getSignalingConfig();
+                const defaultHost = (window.location && window.location.hostname) ? window.location.hostname : '127.0.0.1';
+                Multiplayer.setSignalingConfig({
+                    mode: 'custom',
+                    host: current.mode === 'cloud' ? defaultHost : current.host,
+                    port: current.mode === 'cloud' ? 9000 : current.port,
+                    path: current.mode === 'cloud' ? '/peerjs' : current.path,
+                    secure: current.mode === 'cloud' ? (window.location.protocol === 'https:') : current.secure,
+                });
+            }
+
+            const cfg = Multiplayer.getSignalingConfig();
+            hostEl.value = cfg.host;
+            portEl.value = String(cfg.port);
+            pathEl.value = cfg.path;
+            secureEl.checked = cfg.secure;
+            this._refreshNetworkFormState();
+        });
+
+        const updateConfig = () => {
+            this._applyNetworkConfigFromForm(false);
+            this._refreshNetworkFormState();
+        };
+
+        hostEl.addEventListener('input', updateConfig);
+        portEl.addEventListener('input', updateConfig);
+        pathEl.addEventListener('input', updateConfig);
+        secureEl.addEventListener('change', updateConfig);
+
+        this._applyNetworkConfigFromForm(false);
+        this._refreshNetworkFormState();
     },
 
     // ===== HOST FLOW =====
@@ -89,6 +306,8 @@ const MultiplayerUI = {
         `;
 
         document.getElementById('mp-btn-create').addEventListener('click', async () => {
+            if (!this._applyNetworkConfigFromForm(true)) return;
+
             const btn = document.getElementById('mp-btn-create');
             btn.disabled = true;
             btn.innerHTML = '<span class="mp-spinner"></span> CREATING...';
@@ -128,6 +347,7 @@ const MultiplayerUI = {
                     <div class="mp-room-code-display" id="mp-room-code">
                         ${code.split('').map(c => `<span class="mp-code-char">${c}</span>`).join('')}
                     </div>
+                    <div class="mp-signal-summary" id="mp-host-signal"></div>
                     <button class="mp-copy-code-btn" id="mp-btn-copy-code">COPY CODE</button>
                     <div class="mp-waiting">
                         <span class="mp-waiting-dot"></span>
@@ -137,6 +357,12 @@ const MultiplayerUI = {
             </div>
         `;
         stepsEl.insertAdjacentHTML('beforeend', html);
+
+        const signalInfo = document.getElementById('mp-host-signal');
+        if (signalInfo && typeof Multiplayer !== 'undefined' && typeof Multiplayer.getSignalingConfig === 'function') {
+            const cfg = Multiplayer.getSignalingConfig();
+            signalInfo.textContent = `Signal: ${cfg.mode === 'cloud' ? 'Cloud (0.peerjs.com)' : this._formatEndpoint(cfg)}`;
+        }
 
         document.getElementById('mp-btn-copy-code').addEventListener('click', () => {
             navigator.clipboard.writeText(code).then(() => {
@@ -185,13 +411,20 @@ const MultiplayerUI = {
         document.getElementById('mp-btn-join-go').addEventListener('click', async () => {
             const code = document.getElementById('mp-join-code').value.trim();
             if (code.length !== 6) { this._toast('Enter a 6-character code'); return; }
+            if (!this._applyNetworkConfigFromForm(true)) return;
 
             const btn = document.getElementById('mp-btn-join-go');
             btn.disabled = true;
             btn.innerHTML = '<span class="mp-spinner"></span> JOINING...';
 
             const statusEl = document.getElementById('mp-join-status');
-            if (statusEl) statusEl.innerHTML = '<div class="mp-waiting"><span class="mp-waiting-dot"></span> Connecting...</div>';
+            if (statusEl) {
+                const cfg = typeof Multiplayer !== 'undefined' && typeof Multiplayer.getSignalingConfig === 'function'
+                    ? Multiplayer.getSignalingConfig()
+                    : null;
+                const endpoint = cfg && cfg.mode !== 'cloud' ? this._formatEndpoint(cfg) : 'Cloud (0.peerjs.com)';
+                statusEl.innerHTML = `<div class="mp-waiting"><span class="mp-waiting-dot"></span> Connecting via ${this._escapeHtml(endpoint)}...</div>`;
+            }
 
             try {
                 await Multiplayer.joinRoom(code);

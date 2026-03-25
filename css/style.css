@@ -5605,6 +5605,119 @@ html, body {
     margin-top: 4px;
 }
 
+.mp-network-panel {
+    background: rgba(18, 24, 54, 0.86);
+    border: 1px solid rgba(80, 176, 255, 0.28);
+    border-radius: 9px;
+    padding: 12px 12px 10px;
+    margin-bottom: 18px;
+}
+
+.mp-network-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.mp-network-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    color: #9fd6ff;
+}
+
+.mp-network-status {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 9px;
+    letter-spacing: 1.4px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(80, 176, 255, 0.34);
+    background: rgba(80, 176, 255, 0.12);
+    color: #9fd6ff;
+}
+
+.mp-network-status-cloud {
+    border-color: rgba(80, 176, 255, 0.34);
+    background: rgba(80, 176, 255, 0.12);
+    color: #9fd6ff;
+}
+
+.mp-network-status-custom {
+    border-color: rgba(80, 255, 144, 0.34);
+    background: rgba(80, 255, 144, 0.1);
+    color: #86ffb4;
+}
+
+.mp-network-status-invalid {
+    border-color: rgba(255, 92, 92, 0.45);
+    background: rgba(255, 92, 92, 0.12);
+    color: #ff7b7b;
+}
+
+.mp-network-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}
+
+.mp-network-wide {
+    grid-column: 1 / -1;
+}
+
+.mp-signal-input {
+    width: 100%;
+    background: var(--bg-dark);
+    color: #e8e8f0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+}
+
+.mp-signal-input:focus {
+    border-color: var(--cyan);
+    outline: none;
+}
+
+.mp-signal-secure {
+    grid-column: 1 / -1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.mp-signal-secure input {
+    accent-color: #70ccff;
+}
+
+.mp-signal-secure.is-disabled {
+    opacity: 0.45;
+}
+
+.mp-network-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-dim);
+}
+
+.mp-network-hint-error {
+    color: #ff8b8b;
+}
+
+@media (max-width: 520px) {
+    .mp-network-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Host / Join choice */
 .mp-choice {
     display: flex;
@@ -5760,6 +5873,13 @@ html, body {
     transition: all 0.15s;
 }
 .mp-copy-code-btn:hover { background: rgba(80,176,255,0.25); }
+
+.mp-signal-summary {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+}
 
 /* Join code input */
 .mp-code-input-wrap {

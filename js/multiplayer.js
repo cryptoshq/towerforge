@@ -7,6 +7,8 @@ const Multiplayer = {
     peer: null,
     conn: null,
 
+    SIGNALING_STORAGE_KEY: 'towerforge_multiplayer_signaling_v1',
+
     // Opponent status (updated via data channel)
     opponentStatus: { lives: 0, score: 0, wave: 0, gold: 0, gamePhase: 'idle', towersPlaced: 0 },
 
@@ -15,6 +17,8 @@ const Multiplayer = {
     SYNC_RATE_MS: 500,
     PEER_OPEN_TIMEOUT_MS: 12000,
     CONNECT_TIMEOUT_MS: 15000,
+
+    signalingConfig: null,
 
     // ICE servers for better NAT traversal reliability
     ICE_SERVERS: [
@@ -73,12 +77,123 @@ const Multiplayer = {
         return code;
     },
 
-    _createPeerOptions(iceTransportPolicy = 'all') {
+    _normalizePath(pathValue) {
+        const raw = typeof pathValue === 'string' ? pathValue.trim() : '';
+        if (!raw) return '/';
+        return raw.startsWith('/') ? raw : `/${raw}`;
+    },
+
+    _defaultSignalingConfig() {
         return {
+            mode: 'cloud',
             host: '0.peerjs.com',
             port: 443,
             path: '/',
             secure: true,
+        };
+    },
+
+    _defaultVpnSignalingConfig() {
+        const host = (typeof window !== 'undefined' && window.location && window.location.hostname)
+            ? window.location.hostname
+            : '127.0.0.1';
+        const secure = (typeof window !== 'undefined' && window.location)
+            ? window.location.protocol === 'https:'
+            : false;
+        return {
+            mode: 'vpn',
+            host,
+            port: 9000,
+            path: '/peerjs',
+            secure,
+        };
+    },
+
+    _normalizeSignalingConfig(rawConfig) {
+        const cloud = this._defaultSignalingConfig();
+        const vpn = this._defaultVpnSignalingConfig();
+        const input = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+        const mode = input.mode === 'vpn' || input.mode === 'custom' ? input.mode : 'cloud';
+
+        if (mode === 'cloud') {
+            return { ...cloud };
+        }
+
+        const fallback = mode === 'vpn'
+            ? vpn
+            : { mode: 'custom', host: vpn.host, port: 9000, path: '/peerjs', secure: false };
+
+        const host = typeof input.host === 'string' && input.host.trim()
+            ? input.host.trim()
+            : fallback.host;
+        const parsedPort = Number.parseInt(input.port, 10);
+        const port = Number.isFinite(parsedPort) && parsedPort > 0 && parsedPort <= 65535
+            ? parsedPort
+            : fallback.port;
+        const path = this._normalizePath(typeof input.path === 'string' ? input.path : fallback.path);
+        const secure = input.secure === true;
+
+        return { mode, host, port, path, secure };
+    },
+
+    _loadSignalingConfig() {
+        if (this.signalingConfig) return;
+
+        let parsed = null;
+        try {
+            const stored = localStorage.getItem(this.SIGNALING_STORAGE_KEY);
+            if (stored) parsed = JSON.parse(stored);
+        } catch (err) {
+            console.warn('[Multiplayer] Failed to load signaling config:', err);
+        }
+
+        this.signalingConfig = this._normalizeSignalingConfig(parsed);
+    },
+
+    _saveSignalingConfig() {
+        if (!this.signalingConfig) return;
+        try {
+            localStorage.setItem(this.SIGNALING_STORAGE_KEY, JSON.stringify(this.signalingConfig));
+        } catch (err) {
+            console.warn('[Multiplayer] Failed to save signaling config:', err);
+        }
+    },
+
+    getSignalingConfig() {
+        this._loadSignalingConfig();
+        return { ...this.signalingConfig };
+    },
+
+    applySignalingPreset(mode) {
+        if (mode === 'vpn') {
+            this.signalingConfig = this._normalizeSignalingConfig(this._defaultVpnSignalingConfig());
+        } else {
+            this.signalingConfig = this._normalizeSignalingConfig({ mode: 'cloud' });
+        }
+        this._saveSignalingConfig();
+        return this.getSignalingConfig();
+    },
+
+    setSignalingConfig(nextConfig) {
+        const current = this.getSignalingConfig();
+        this.signalingConfig = this._normalizeSignalingConfig({ ...current, ...nextConfig });
+        this._saveSignalingConfig();
+        return this.getSignalingConfig();
+    },
+
+    _signalingEndpointLabel() {
+        const cfg = this.getSignalingConfig();
+        const scheme = cfg.secure ? 'wss' : 'ws';
+        return `${scheme}://${cfg.host}:${cfg.port}${cfg.path}`;
+    },
+
+    _createPeerOptions(iceTransportPolicy = 'all') {
+        const signaling = this.getSignalingConfig();
+        return {
+            host: signaling.host,
+            port: signaling.port,
+            path: signaling.path,
+            secure: signaling.secure,
             pingInterval: 5000,
             debug: 1,
             config: {
@@ -98,7 +213,7 @@ const Multiplayer = {
             case 'network':
             case 'socket-error':
             case 'socket-closed':
-                return 'Could not reach multiplayer service. Check your network and retry.';
+                return `Could not reach signaling server (${this._signalingEndpointLabel()}). Check host/port and retry.`;
             case 'webrtc':
                 return 'Unable to establish a direct multiplayer link. Try again in a few seconds.';
             case 'browser-incompatible':

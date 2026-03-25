@@ -4,9 +4,11 @@
   "description": "Tower Defense - Dual Path",
   "scripts": {
     "start": "npx serve -p 3000",
-    "dev": "npx serve -p 3000"
+    "dev": "npx serve -p 3000",
+    "peerserver": "node scripts/peerserver.js"
   },
   "devDependencies": {
+    "peer": "^1.0.2",
     "serve": "^14.2.0"
   }
 }

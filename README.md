@@ -35,9 +35,49 @@ Start the local server:
 npm start
 ```
 
+Start a local PeerJS signaling server (for LAN/Radmin VPN multiplayer):
+
+```bash
+npm run peerserver
+```
+
 Primary local URL:
 
 - `http://localhost:3000`
+
+## Radmin VPN Multiplayer Setup
+
+Use this when direct internet matchmaking is unstable and both players can join the same Radmin VPN network.
+
+Host machine:
+
+1. Join the same Radmin VPN network as your friend.
+2. Run the game web server:
+
+```bash
+npm start
+```
+
+3. Run the signaling server in a second terminal:
+
+```bash
+npm run peerserver
+```
+
+4. Share your Radmin VPN IP with your friend.
+
+Players:
+
+1. Open the game from the host machine URL (not GitHub Pages):
+   - `http://<HOST_RADMIN_IP>:3000`
+2. Open **Multiplayer**.
+3. In **Signaling** set mode to **Radmin VPN / LAN**.
+4. Ensure server host is the host VPN IP, port is `9000`, path is `/peerjs`, and TLS is OFF for HTTP hosting.
+5. Host creates room, friend joins by room code.
+
+Important:
+
+- If you are on `https://cryptoshq.github.io/towerforge/`, browsers block insecure `ws://` signaling. For Radmin mode, both players should use the host's `http://<HOST_RADMIN_IP>:3000` game URL.
 
 ## Test Coverage
 
