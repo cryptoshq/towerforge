@@ -13,6 +13,29 @@ const Multiplayer = {
     // Sync
     syncInterval: null,
     SYNC_RATE_MS: 500,
+    CONNECT_TIMEOUT_MS: 15000,
+
+    // ICE servers for better NAT traversal reliability
+    ICE_SERVERS: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject',
+        },
+    ],
 
     // Session config (set by host, sent to peer)
     sessionConfig: { mapIndex: 0, difficulty: 'normal', doctrineId: null, maxWave: 30 },
@@ -38,6 +61,34 @@ const Multiplayer = {
         return code;
     },
 
+    _createPeerOptions() {
+        return {
+            config: {
+                iceServers: this.ICE_SERVERS,
+                iceCandidatePoolSize: 8,
+            },
+        };
+    },
+
+    _formatPeerError(err) {
+        if (!err) return 'Connection failed.';
+
+        switch (err.type) {
+            case 'peer-unavailable':
+                return 'Room not found. Check the code and try again.';
+            case 'network':
+            case 'socket-error':
+            case 'socket-closed':
+                return 'Could not reach multiplayer service. Check your network and retry.';
+            case 'webrtc':
+                return 'Unable to establish a direct multiplayer link. Try again in a few seconds.';
+            case 'browser-incompatible':
+                return 'This browser does not fully support multiplayer.';
+            default:
+                return err.message || 'Connection failed.';
+        }
+    },
+
     // ===== CONNECTION SETUP =====
 
     async createRoom(config) {
@@ -49,14 +100,7 @@ const Multiplayer = {
         const peerId = this._prefix + code;
 
         return new Promise((resolve, reject) => {
-            const peer = new Peer(peerId, {
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                    ]
-                }
-            });
+            const peer = new Peer(peerId, this._createPeerOptions());
             this.peer = peer;
 
             peer.on('open', () => {
@@ -78,7 +122,7 @@ const Multiplayer = {
                     this.peer = null;
                     this.createRoom(config).then(resolve).catch(reject);
                 } else {
-                    reject(new Error(err.message || 'Connection failed'));
+                    reject(new Error(this._formatPeerError(err)));
                 }
             });
         });
@@ -92,14 +136,40 @@ const Multiplayer = {
         const peerId = this._prefix + code;
 
         return new Promise((resolve, reject) => {
-            const peer = new Peer(null, {
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                    ]
+            let settled = false;
+            let timeoutId = null;
+
+            const clearJoinTimeout = () => {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
                 }
-            });
+            };
+
+            const failJoin = (message) => {
+                if (settled) return;
+                settled = true;
+                clearJoinTimeout();
+                this.connected = false;
+                if (this.conn) {
+                    try { this.conn.close(); } catch (e) {}
+                    this.conn = null;
+                }
+                if (this.peer) {
+                    try { this.peer.destroy(); } catch (e) {}
+                    this.peer = null;
+                }
+                reject(new Error(message));
+            };
+
+            const completeJoin = () => {
+                if (settled) return;
+                settled = true;
+                clearJoinTimeout();
+                resolve();
+            };
+
+            const peer = new Peer(null, this._createPeerOptions());
             this.peer = peer;
 
             peer.on('open', () => {
@@ -110,17 +180,36 @@ const Multiplayer = {
                     serialization: 'json',
                 });
                 this.conn = conn;
+
+                conn.on('open', () => {
+                    completeJoin();
+                });
+
+                conn.on('close', () => {
+                    if (!this.connected) {
+                        failJoin('Connection closed before joining. Ask the host to recreate the room and try again.');
+                    }
+                });
+
+                conn.on('error', (err) => {
+                    console.error('[Multiplayer] Connection error:', err);
+                    failJoin(this._formatPeerError(err));
+                });
+
                 this._setupConnection(conn);
-                resolve();
+
+                timeoutId = setTimeout(() => {
+                    failJoin('Connection timed out. Ask your friend to keep the room open and try again.');
+                }, this.CONNECT_TIMEOUT_MS);
             });
 
             peer.on('error', (err) => {
                 console.error('[Multiplayer] Peer error:', err);
-                if (err.type === 'peer-unavailable') {
-                    reject(new Error('Room not found. Check the code and try again.'));
-                } else {
-                    reject(new Error(err.message || 'Connection failed'));
-                }
+                failJoin(this._formatPeerError(err));
+            });
+
+            peer.on('disconnected', () => {
+                failJoin('Disconnected from multiplayer service before joining. Please retry.');
             });
         });
     },
