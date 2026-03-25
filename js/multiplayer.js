@@ -73,7 +73,7 @@ const Multiplayer = {
         return code;
     },
 
-    _createPeerOptions() {
+    _createPeerOptions(iceTransportPolicy = 'all') {
         return {
             host: '0.peerjs.com',
             port: 443,
@@ -84,6 +84,7 @@ const Multiplayer = {
             config: {
                 iceServers: this.ICE_SERVERS,
                 iceCandidatePoolSize: 8,
+                iceTransportPolicy: iceTransportPolicy,
             },
         };
     },
@@ -105,6 +106,16 @@ const Multiplayer = {
             default:
                 return err.message || 'Connection failed.';
         }
+    },
+
+    _canRetryJoinError(type) {
+        return type === 'timeout'
+            || type === 'network'
+            || type === 'socket-error'
+            || type === 'socket-closed'
+            || type === 'webrtc'
+            || type === 'close-before-open'
+            || type === 'disconnected-before-join';
     },
 
     // ===== CONNECTION SETUP =====
@@ -170,6 +181,26 @@ const Multiplayer = {
         const code = roomCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
         const peerId = this._prefix + code;
 
+        try {
+            await this._joinRoomAttempt(peerId, code, 'all');
+            return;
+        } catch (firstErr) {
+            if (!this._canRetryJoinError(firstErr && firstErr.type)) {
+                throw firstErr;
+            }
+            console.warn('[Multiplayer] Retrying join with relay-only ICE policy:', firstErr.type || firstErr.message || firstErr);
+        }
+
+        try {
+            await this._joinRoomAttempt(peerId, code, 'relay');
+            return;
+        } catch (secondErr) {
+            const err = secondErr instanceof Error ? secondErr : new Error('Connection failed.');
+            throw new Error(`${err.message} If this keeps happening, one player network is likely blocking P2P relay traffic.`);
+        }
+    },
+
+    _joinRoomAttempt(peerId, code, iceTransportPolicy) {
         return new Promise((resolve, reject) => {
             let settled = false;
             let timeoutId = null;
@@ -181,7 +212,7 @@ const Multiplayer = {
                 }
             };
 
-            const failJoin = (message) => {
+            const failJoin = (message, type = 'unknown') => {
                 if (settled) return;
                 settled = true;
                 clearJoinTimeout();
@@ -194,7 +225,9 @@ const Multiplayer = {
                     try { this.peer.destroy(); } catch (e) {}
                     this.peer = null;
                 }
-                reject(new Error(message));
+                const err = new Error(message);
+                err.type = type;
+                reject(err);
             };
 
             const completeJoin = () => {
@@ -204,11 +237,11 @@ const Multiplayer = {
                 resolve();
             };
 
-            const peer = new Peer(null, this._createPeerOptions());
+            const peer = new Peer(null, this._createPeerOptions(iceTransportPolicy));
             this.peer = peer;
 
             timeoutId = setTimeout(() => {
-                failJoin('Connection timed out. Ask your friend to keep the room open and try again.');
+                failJoin('Connection timed out. Ask your friend to keep the room open and try again.', 'timeout');
             }, this.CONNECT_TIMEOUT_MS);
 
             peer.on('open', () => {
@@ -226,13 +259,13 @@ const Multiplayer = {
 
                 conn.on('close', () => {
                     if (!this.connected) {
-                        failJoin('Connection closed before joining. Ask the host to recreate the room and try again.');
+                        failJoin('Connection closed before joining. Ask the host to recreate the room and try again.', 'close-before-open');
                     }
                 });
 
                 conn.on('error', (err) => {
                     console.error('[Multiplayer] Connection error:', err);
-                    failJoin(this._formatPeerError(err));
+                    failJoin(this._formatPeerError(err), (err && err.type) || 'conn-error');
                 });
 
                 this._setupConnection(conn);
@@ -240,11 +273,11 @@ const Multiplayer = {
 
             peer.on('error', (err) => {
                 console.error('[Multiplayer] Peer error:', err);
-                failJoin(this._formatPeerError(err));
+                failJoin(this._formatPeerError(err), (err && err.type) || 'peer-error');
             });
 
             peer.on('disconnected', () => {
-                failJoin('Disconnected from multiplayer service before joining. Please retry.');
+                failJoin('Disconnected from multiplayer service before joining. Please retry.', 'disconnected-before-join');
             });
         });
     },
