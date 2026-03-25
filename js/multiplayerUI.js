@@ -1,0 +1,413 @@
+// ===== MULTIPLAYER UI — LOBBY, HUD, READY BUTTON & RESULT OVERLAY =====
+
+const MultiplayerUI = {
+
+    // ===== LOBBY SCREEN =====
+
+    renderLobby() {
+        const container = document.getElementById('mp-lobby-content');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="mp-hero">
+                <div class="mp-hero-icon">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <circle cx="16" cy="20" r="8" stroke="#70ccff" stroke-width="2" fill="none"/>
+                        <circle cx="32" cy="20" r="8" stroke="#50ff90" stroke-width="2" fill="none"/>
+                        <path d="M16 30c-6 0-12 4-12 10h24c0-6-6-10-12-10z" stroke="#70ccff" stroke-width="1.5" fill="none" opacity="0.6"/>
+                        <path d="M32 30c-6 0-12 4-12 10h24c0-6-6-10-12-10z" stroke="#50ff90" stroke-width="1.5" fill="none" opacity="0.6"/>
+                        <line x1="22" y1="18" x2="26" y2="18" stroke="#ffd700" stroke-width="2" stroke-dasharray="2 2">
+                            <animate attributeName="stroke-dashoffset" values="0;-4" dur="0.6s" repeatCount="indefinite"/>
+                        </line>
+                        <line x1="22" y1="22" x2="26" y2="22" stroke="#ffd700" stroke-width="2" stroke-dasharray="2 2">
+                            <animate attributeName="stroke-dashoffset" values="0;4" dur="0.6s" repeatCount="indefinite"/>
+                        </line>
+                    </svg>
+                </div>
+                <h2 class="mp-hero-title">MULTIPLAYER</h2>
+                <p class="mp-hero-sub">Share a 6-digit code to play with a friend</p>
+            </div>
+            <div class="mp-choice">
+                <button class="mp-choice-btn mp-choice-host" id="mp-btn-host">
+                    <span class="mp-choice-icon">+</span>
+                    <span class="mp-choice-label">HOST</span>
+                    <span class="mp-choice-desc">Create a room</span>
+                </button>
+                <div class="mp-choice-divider"><span>or</span></div>
+                <button class="mp-choice-btn mp-choice-join" id="mp-btn-join">
+                    <span class="mp-choice-icon">&rarr;</span>
+                    <span class="mp-choice-label">JOIN</span>
+                    <span class="mp-choice-desc">Enter a code</span>
+                </button>
+            </div>
+            <div id="mp-flow"></div>
+        `;
+
+        document.getElementById('mp-btn-host').addEventListener('click', () => {
+            Audio.play('click');
+            this._showHostFlow();
+        });
+        document.getElementById('mp-btn-join').addEventListener('click', () => {
+            Audio.play('click');
+            this._showJoinFlow();
+        });
+    },
+
+    // ===== HOST FLOW =====
+
+    _showHostFlow() {
+        const flow = document.getElementById('mp-flow');
+        if (!flow) return;
+
+        flow.innerHTML = `
+            <div class="mp-steps">
+                <div class="mp-step mp-step-active" id="mp-step-1">
+                    <div class="mp-step-num">1</div>
+                    <div class="mp-step-body">
+                        <h3>Configure Match</h3>
+                        <div class="mp-fields">
+                            <div class="mp-field">
+                                <label>Map</label>
+                                <select id="mp-host-map" class="mp-select">
+                                    ${MAPS.map((m, i) => `<option value="${i}">${m.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="mp-field">
+                                <label>Difficulty</label>
+                                <select id="mp-host-diff" class="mp-select">
+                                    <option value="easy">Easy</option>
+                                    <option value="normal" selected>Normal</option>
+                                    <option value="hard">Hard</option>
+                                    <option value="nightmare">Nightmare</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="mp-action-btn" id="mp-btn-create">CREATE ROOM</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('mp-btn-create').addEventListener('click', async () => {
+            const btn = document.getElementById('mp-btn-create');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="mp-spinner"></span> CREATING...';
+
+            const mapIndex = parseInt(document.getElementById('mp-host-map').value);
+            const difficulty = document.getElementById('mp-host-diff').value;
+            const config = {
+                mapIndex, difficulty,
+                doctrineId: null,
+                maxWave: MAPS[mapIndex].waves || 30,
+            };
+
+            try {
+                const code = await Multiplayer.createRoom(config);
+                this._showHostWaiting(code);
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = 'CREATE ROOM';
+                this._toast('Error: ' + e.message);
+            }
+        });
+    },
+
+    _showHostWaiting(code) {
+        const flow = document.getElementById('mp-flow');
+        const stepsEl = flow.querySelector('.mp-steps');
+
+        // Dim step 1
+        const step1 = document.getElementById('mp-step-1');
+        if (step1) step1.classList.add('mp-step-done');
+
+        const html = `
+            <div class="mp-step mp-step-active" id="mp-step-2">
+                <div class="mp-step-num">2</div>
+                <div class="mp-step-body">
+                    <h3>Share Code</h3>
+                    <div class="mp-room-code-display" id="mp-room-code">
+                        ${code.split('').map(c => `<span class="mp-code-char">${c}</span>`).join('')}
+                    </div>
+                    <button class="mp-copy-code-btn" id="mp-btn-copy-code">COPY CODE</button>
+                    <div class="mp-waiting">
+                        <span class="mp-waiting-dot"></span>
+                        Waiting for friend to join...
+                    </div>
+                </div>
+            </div>
+        `;
+        stepsEl.insertAdjacentHTML('beforeend', html);
+
+        document.getElementById('mp-btn-copy-code').addEventListener('click', () => {
+            navigator.clipboard.writeText(code).then(() => {
+                this._toast('Copied!');
+                const btn = document.getElementById('mp-btn-copy-code');
+                if (btn) { btn.textContent = 'COPIED!'; setTimeout(() => { if (btn) btn.textContent = 'COPY CODE'; }, 2000); }
+            }).catch(() => this._toast(code));
+        });
+    },
+
+    // ===== JOIN FLOW =====
+
+    _showJoinFlow() {
+        const flow = document.getElementById('mp-flow');
+        if (!flow) return;
+
+        flow.innerHTML = `
+            <div class="mp-steps">
+                <div class="mp-step mp-step-active" id="mp-step-j1">
+                    <div class="mp-step-num">1</div>
+                    <div class="mp-step-body">
+                        <h3>Enter Room Code</h3>
+                        <div class="mp-code-input-wrap">
+                            <input type="text" class="mp-code-input-field" id="mp-join-code"
+                                   maxlength="6" placeholder="------" autocomplete="off" spellcheck="false">
+                        </div>
+                        <button class="mp-action-btn" id="mp-btn-join-go">JOIN</button>
+                        <div id="mp-join-status"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const input = document.getElementById('mp-join-code');
+        input.addEventListener('input', () => {
+            input.value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+            // Visual feedback when code is complete
+            if (input.value.length === 6) {
+                input.classList.add('code-complete');
+                document.getElementById('mp-btn-join-go').focus();
+            } else {
+                input.classList.remove('code-complete');
+            }
+        });
+
+        document.getElementById('mp-btn-join-go').addEventListener('click', async () => {
+            const code = document.getElementById('mp-join-code').value.trim();
+            if (code.length !== 6) { this._toast('Enter a 6-character code'); return; }
+
+            const btn = document.getElementById('mp-btn-join-go');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="mp-spinner"></span> JOINING...';
+
+            const statusEl = document.getElementById('mp-join-status');
+            if (statusEl) statusEl.innerHTML = '<div class="mp-waiting"><span class="mp-waiting-dot"></span> Connecting...</div>';
+
+            try {
+                await Multiplayer.joinRoom(code);
+                // Connection will trigger onConnected callback
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = 'JOIN';
+                if (statusEl) statusEl.innerHTML = '';
+                this._toast(e.message);
+            }
+        });
+    },
+
+    // ===== TOAST =====
+
+    _toast(msg) {
+        let toast = document.getElementById('mp-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'mp-toast';
+            toast.className = 'mp-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.classList.remove('mp-toast-show');
+        void toast.offsetWidth;
+        toast.classList.add('mp-toast-show');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => toast.classList.remove('mp-toast-show'), 2500);
+    },
+    _toastTimer: null,
+
+    // ===== CONNECTION EVENTS =====
+
+    onConnected() {
+        Audio.play('wave_complete');
+
+        const flow = document.getElementById('mp-flow');
+        if (!flow) return;
+
+        if (Multiplayer.isHost) {
+            flow.innerHTML = `
+                <div class="mp-connected-card">
+                    <div class="mp-connected-badge">
+                        <span class="mp-dot mp-dot-green"></span>
+                        CONNECTED
+                    </div>
+                    <p class="mp-connected-info">Both players play the same waves independently.<br>Highest score wins!</p>
+                    <button class="mp-launch-btn" id="mp-btn-launch">LAUNCH GAME</button>
+                </div>
+            `;
+            document.getElementById('mp-btn-launch').addEventListener('click', () => {
+                Audio.play('click');
+                Multiplayer.hostLaunchGame();
+            });
+        } else {
+            flow.innerHTML = `
+                <div class="mp-connected-card">
+                    <div class="mp-connected-badge">
+                        <span class="mp-dot mp-dot-green"></span>
+                        CONNECTED
+                    </div>
+                    <div class="mp-waiting">
+                        <span class="mp-waiting-dot"></span>
+                        Waiting for host to launch...
+                    </div>
+                </div>
+            `;
+        }
+    },
+
+    onConfigReceived(config) {
+        const mapName = MAPS[config.mapIndex] ? MAPS[config.mapIndex].name : `Map ${config.mapIndex}`;
+        this._toast(`${mapName} | ${config.difficulty}`);
+    },
+
+    // ===== OPPONENT HUD =====
+
+    showOpponentHUD() {
+        const hud = document.getElementById('opponent-hud');
+        if (hud) hud.style.display = 'flex';
+    },
+
+    hideOpponentHUD() {
+        const hud = document.getElementById('opponent-hud');
+        if (hud) hud.style.display = 'none';
+    },
+
+    updateOpponentHUD() {
+        const s = Multiplayer.opponentStatus;
+        const el = (id) => document.getElementById(id);
+
+        const livesEl = el('opp-lives');
+        const scoreEl = el('opp-score');
+        const waveEl = el('opp-wave');
+        const goldEl = el('opp-gold');
+        const phaseEl = el('opp-phase');
+        const towersEl = el('opp-towers');
+
+        if (livesEl) livesEl.textContent = s.lives;
+        if (scoreEl) scoreEl.textContent = s.score;
+        if (waveEl) waveEl.textContent = s.wave;
+        if (goldEl) goldEl.textContent = s.gold;
+        if (towersEl) towersEl.textContent = s.towersPlaced;
+        if (phaseEl) {
+            const phaseText = s.gamePhase === 'playing' ? 'IN WAVE' : s.gamePhase === 'idle' ? 'BUILDING' : s.gamePhase.toUpperCase();
+            phaseEl.textContent = phaseText;
+            phaseEl.className = 'opp-phase opp-phase-' + s.gamePhase;
+        }
+    },
+
+    // ===== READY BUTTON =====
+
+    showReadyButton() {
+        const readyBtn = document.getElementById('mp-ready-btn');
+        if (readyBtn) readyBtn.style.display = 'block';
+    },
+
+    hideReadyButton() {
+        const readyBtn = document.getElementById('mp-ready-btn');
+        if (readyBtn) readyBtn.style.display = 'none';
+    },
+
+    updateReadyState() {
+        const readyBtn = document.getElementById('mp-ready-btn');
+        if (!readyBtn) return;
+
+        if (Multiplayer.localReady && Multiplayer.remoteReady) {
+            readyBtn.textContent = 'BOTH READY — STARTING...';
+            readyBtn.classList.add('mp-ready-both');
+            readyBtn.disabled = true;
+        } else if (Multiplayer.localReady) {
+            readyBtn.textContent = 'WAITING FOR OPPONENT...';
+            readyBtn.classList.add('mp-ready-local');
+            readyBtn.disabled = true;
+        } else {
+            readyBtn.textContent = 'READY [SPACE]';
+            readyBtn.classList.remove('mp-ready-local', 'mp-ready-both');
+            readyBtn.disabled = false;
+        }
+    },
+
+    resetReadyButton() {
+        const readyBtn = document.getElementById('mp-ready-btn');
+        if (!readyBtn) return;
+        readyBtn.textContent = 'READY [SPACE]';
+        readyBtn.classList.remove('mp-ready-local', 'mp-ready-both');
+        readyBtn.disabled = false;
+        readyBtn.style.display = 'block';
+    },
+
+    // ===== MATCH RESULT =====
+
+    showMatchResult(result, message) {
+        Multiplayer.stopStatusSync();
+
+        const overlay = document.getElementById('mp-result-overlay');
+        if (!overlay) return;
+
+        const titleEl = document.getElementById('mp-result-title');
+        const msgEl = document.getElementById('mp-result-message');
+        const statsEl = document.getElementById('mp-result-stats');
+
+        if (titleEl) {
+            if (result === 'win') {
+                titleEl.textContent = 'VICTORY!';
+                titleEl.className = 'mp-result-title mp-result-win';
+            } else if (result === 'lose') {
+                titleEl.textContent = 'DEFEATED';
+                titleEl.className = 'mp-result-title mp-result-lose';
+            } else {
+                titleEl.textContent = 'DRAW';
+                titleEl.className = 'mp-result-title mp-result-draw';
+            }
+        }
+
+        if (msgEl) msgEl.textContent = message;
+
+        if (statsEl) {
+            const opp = Multiplayer.opponentStatus;
+            statsEl.innerHTML = `
+                <div class="mp-result-compare">
+                    <div class="mp-result-col">
+                        <h4>YOU</h4>
+                        <div class="stat-row"><span class="sr-label">Score</span><span class="sr-value">${GameState.score}</span></div>
+                        <div class="stat-row"><span class="sr-label">Wave</span><span class="sr-value">${GameState.wave}</span></div>
+                        <div class="stat-row"><span class="sr-label">Lives</span><span class="sr-value">${GameState.lives}</span></div>
+                        <div class="stat-row"><span class="sr-label">Kills</span><span class="sr-value">${GameState.stats.totalKills}</span></div>
+                        <div class="stat-row"><span class="sr-label">Towers</span><span class="sr-value">${GameState.towers.length}</span></div>
+                    </div>
+                    <div class="mp-result-vs">VS</div>
+                    <div class="mp-result-col">
+                        <h4>OPPONENT</h4>
+                        <div class="stat-row"><span class="sr-label">Score</span><span class="sr-value">${opp.score}</span></div>
+                        <div class="stat-row"><span class="sr-label">Wave</span><span class="sr-value">${opp.wave}</span></div>
+                        <div class="stat-row"><span class="sr-label">Lives</span><span class="sr-value">${opp.lives}</span></div>
+                        <div class="stat-row"><span class="sr-label">Towers</span><span class="sr-value">${opp.towersPlaced}</span></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        overlay.style.display = 'flex';
+        Audio.play(result === 'win' ? 'victory' : 'gameover');
+    },
+
+    hideMatchResult() {
+        const overlay = document.getElementById('mp-result-overlay');
+        if (overlay) overlay.style.display = 'none';
+    },
+
+    // ===== CLEANUP =====
+
+    cleanup() {
+        this.hideOpponentHUD();
+        this.hideReadyButton();
+        this.hideMatchResult();
+    },
+};

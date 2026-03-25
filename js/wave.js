@@ -2293,8 +2293,16 @@ const WaveSystem = {
             this._processEndlessMilestones();
         }
 
+        // Multiplayer mode: use ready system instead of normal flow
+        const isMultiplayer = typeof Multiplayer !== 'undefined' && Multiplayer.active;
+
         // Check if all waves done
         if (GameState.wave >= GameState.maxWave && !this.endlessMode) {
+            if (isMultiplayer) {
+                // In multiplayer, "survived" means we completed all waves
+                victory();
+                return;
+            }
             // Show endless mode prompt instead of immediate victory
             document.getElementById('endless-modal').style.display = 'flex';
             return;
@@ -2336,9 +2344,20 @@ const WaveSystem = {
         // Track when wave completed so preview can delay appearance
         this.waveCompleteTimestamp = performance.now();
 
-        // Hide skip button and show start button
+        // Hide skip button
         const skipBtn = document.getElementById('btn-skip-wave');
         if (skipBtn) skipBtn.style.display = 'none';
+
+        // Multiplayer: show READY button, hide normal start wave
+        if (isMultiplayer) {
+            document.getElementById('btn-start-wave').classList.add('hidden');
+            if (typeof MultiplayerUI !== 'undefined') {
+                MultiplayerUI.resetReadyButton();
+            }
+            return;
+        }
+
+        // Normal mode: show start wave button
         document.getElementById('btn-start-wave').classList.remove('hidden');
 
         if (this._shouldTriggerEndlessDraft()) {
@@ -2662,7 +2681,7 @@ const WaveSystem = {
         // Hide skip button and immediately force-start the next wave.
         const skipBtn = document.getElementById('btn-skip-wave');
         if (skipBtn) skipBtn.style.display = 'none';
-        showWaveBanner('SKIP USED - NEXT WAVE');
+        showWaveBanner('NEXT WAVE');
 
         GameState.gamePhase = 'idle';
         this.startWave();
@@ -2677,8 +2696,13 @@ const WaveSystem = {
         }
 
         const skipBtn = document.getElementById('btn-skip-wave');
-        if (skipBtn) skipBtn.style.display = 'flex';
-        showWaveBanner('SKIP READY - FORCE NEXT WAVE');
+        if (skipBtn) {
+            skipBtn.style.display = 'flex';
+            // Animate in
+            skipBtn.classList.remove('skip-entering');
+            void skipBtn.offsetWidth;
+            skipBtn.classList.add('skip-entering');
+        }
         this.skipReadyShown = true;
     },
 };

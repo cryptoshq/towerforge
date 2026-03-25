@@ -89,6 +89,10 @@ const TowerRenderer = {
             case 'laser': this._drawLaser(ctx, tower, x, y, half, t); break;
             case 'missile': this._drawMissile(ctx, tower, x, y, half, t); break;
             case 'boost': this._drawBoost(ctx, tower, x, y, half, t); break;
+            case 'flame': this._drawFlame(ctx, tower, x, y, half, t); break;
+            case 'venom': this._drawVenom(ctx, tower, x, y, half, t); break;
+            case 'mortar': this._drawMortar(ctx, tower, x, y, half, t); break;
+            case 'necro': this._drawNecro(ctx, tower, x, y, half, t); break;
         }
     },
 
@@ -3824,6 +3828,543 @@ const TowerRenderer = {
         ctx.beginPath();
         ctx.arc(x, y, tower.getEffectiveRange() * pulsePhase, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
+    },
+
+    // =========================================================================
+    // FLAME TOWER (Pyro) — Fire brazier / Inferno / Wildfire
+    // =========================================================================
+    _drawFlame(ctx, tower, x, y, half, t) {
+        const tier = tower.tier;
+        const isInferno = tower.path === 'A';
+        const isWildfire = tower.path === 'B';
+
+        const baseColor = tier >= 4 ? (isInferno ? '#3a1a0a' : isWildfire ? '#2a1a08' : '#3a2010')
+            : tier >= 3 ? '#3a2010' : '#4a3020';
+        const accent = tier >= 4 ? (isInferno ? '#ff4010' : '#ff8020') : '#ff6020';
+        this._drawBase(ctx, x, y, half, tier, baseColor, accent, t);
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (tier <= 2) {
+            // T1-2: Stone brazier with fire
+            ctx.fillStyle = '#5a4a3a';
+            ctx.fillRect(-5, 1, 10, 6);
+            ctx.fillStyle = '#6a5a4a';
+            ctx.fillRect(-6, 5, 12, 3);
+            // Fire
+            ctx.save();
+            for (let i = 0; i < 3 + tier; i++) {
+                const fx = (i - (2 + tier) / 2) * 3;
+                const fh = 6 + Math.sin(t * 6 + i * 1.5) * 3;
+                const grad = ctx.createLinearGradient(fx, 0, fx, -fh);
+                grad.addColorStop(0, '#ff6020');
+                grad.addColorStop(0.4, '#ff4010');
+                grad.addColorStop(1, 'rgba(255,100,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(fx - 2, 1);
+                ctx.quadraticCurveTo(fx + Math.sin(t * 8 + i) * 1.5, -fh, fx + 2, 1);
+                ctx.fill();
+            }
+            ctx.restore();
+
+        } else if (isInferno) {
+            // Path A: Inferno — intense concentrated flame pillar
+            const intensity = tier === 5 ? 1.5 : tier === 4 ? 1.2 : 1;
+            ctx.fillStyle = '#3a2010';
+            ctx.fillRect(-4, 2, 8, 5);
+            // Focused flame column
+            ctx.save();
+            const flameH = 12 * intensity;
+            const colGrad = ctx.createLinearGradient(0, 2, 0, -flameH);
+            colGrad.addColorStop(0, '#fff');
+            colGrad.addColorStop(0.15, '#ffe060');
+            colGrad.addColorStop(0.4, '#ff4010');
+            colGrad.addColorStop(0.8, '#cc2000');
+            colGrad.addColorStop(1, 'rgba(180,20,0,0)');
+            ctx.fillStyle = colGrad;
+            ctx.shadowColor = '#ff4010';
+            ctx.shadowBlur = 10 + Math.sin(t * 5) * 5;
+            ctx.beginPath();
+            ctx.moveTo(-3, 2);
+            ctx.quadraticCurveTo(-1 + Math.sin(t * 7) * 1, -flameH, 0, -flameH - 2);
+            ctx.quadraticCurveTo(1 + Math.sin(t * 7 + 1) * 1, -flameH, 3, 2);
+            ctx.fill();
+            ctx.restore();
+            // Heat shimmer rings for T4+
+            if (tier >= 4) {
+                ctx.save();
+                ctx.strokeStyle = colorAlpha('#ff6020', 0.15 + Math.sin(t * 4) * 0.08);
+                ctx.lineWidth = 1;
+                for (let i = 0; i < tier - 2; i++) {
+                    ctx.beginPath();
+                    ctx.arc(0, -4, 6 + i * 4 + Math.sin(t * 3 + i) * 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            // T5 ember particles
+            if (tier >= 5 && Math.random() < 0.1) {
+                GameState.particles.push(new Particle(
+                    x + rand(-4, 4), y - 8,
+                    { vx: rand(-0.5, 0.5), vy: rand(-2, -0.8), life: rand(0.3, 0.6), size: rand(1, 2.5), color: '#ff6020', glow: true }
+                ));
+            }
+
+        } else if (isWildfire) {
+            // Path B: Wildfire — spreading, scattered flames
+            ctx.fillStyle = '#4a3020';
+            ctx.fillRect(-3, 3, 6, 4);
+            // Multiple scattered fire sources
+            ctx.save();
+            const fireCount = tier === 5 ? 7 : tier === 4 ? 5 : 4;
+            for (let i = 0; i < fireCount; i++) {
+                const angle = (Math.PI * 2 / fireCount) * i + t * 0.3;
+                const dist = 4 + (tier - 2) * 2;
+                const fx = Math.cos(angle) * dist;
+                const fy = Math.sin(angle) * dist * 0.6;
+                const fh = 5 + Math.sin(t * 5 + i * 2) * 2;
+                const grad = ctx.createLinearGradient(fx, fy, fx, fy - fh);
+                grad.addColorStop(0, '#ff8020');
+                grad.addColorStop(0.5, '#ff4010');
+                grad.addColorStop(1, 'rgba(255,60,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(fx - 1.5, fy);
+                ctx.quadraticCurveTo(fx + Math.sin(t * 6 + i) * 0.8, fy - fh, fx + 1.5, fy);
+                ctx.fill();
+            }
+            ctx.restore();
+            // Connecting fire trails for T4+
+            if (tier >= 4) {
+                ctx.save();
+                ctx.strokeStyle = colorAlpha('#ff6020', 0.15);
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, 4 + (tier - 2) * 2, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        ctx.restore();
+    },
+
+    // =========================================================================
+    // VENOM TOWER (Toxin) — Poison vial / Plague Doctor / Corrosive
+    // =========================================================================
+    _drawVenom(ctx, tower, x, y, half, t) {
+        const tier = tower.tier;
+        const isPlague = tower.path === 'A';
+        const isCorrosive = tower.path === 'B';
+
+        const baseColor = tier >= 4 ? (isPlague ? '#1a2a1a' : isCorrosive ? '#1a2a20' : '#2a3a2a')
+            : tier >= 3 ? '#2a3a2a' : '#3a4a3a';
+        const accent = tier >= 4 ? (isPlague ? '#80ff40' : '#40ffa0') : '#40e040';
+        this._drawBase(ctx, x, y, half, tier, baseColor, accent, t);
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (tier <= 2) {
+            // T1-2: Bubbling cauldron
+            ctx.fillStyle = '#4a4a4a';
+            ctx.beginPath();
+            ctx.arc(0, 2, 6, 0, Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#3a3a3a';
+            ctx.fillRect(-6, -1, 12, 3);
+            // Poison liquid
+            ctx.save();
+            const liqGrad = ctx.createRadialGradient(0, 2, 0, 0, 2, 5);
+            liqGrad.addColorStop(0, '#80ff40');
+            liqGrad.addColorStop(0.7, '#40a020');
+            liqGrad.addColorStop(1, '#206010');
+            ctx.fillStyle = liqGrad;
+            ctx.shadowColor = '#40e040';
+            ctx.shadowBlur = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, 5, 0, Math.PI);
+            ctx.fill();
+            ctx.restore();
+            // Bubbles
+            ctx.save();
+            ctx.fillStyle = '#80ff60';
+            for (let i = 0; i < 2 + tier; i++) {
+                const bx = Math.sin(t * 3 + i * 2) * 3;
+                const by = -1 - Math.abs(Math.sin(t * 4 + i)) * 4;
+                ctx.globalAlpha = 0.4 + Math.sin(t * 5 + i) * 0.2;
+                ctx.beginPath();
+                ctx.arc(bx, by, 1 + Math.sin(t * 3 + i) * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+        } else if (isPlague) {
+            // Path A: Plague Doctor — skull with miasma
+            // Skull shape
+            ctx.save();
+            ctx.fillStyle = '#d0d0b0';
+            ctx.beginPath();
+            ctx.arc(0, -2, 6, 0, Math.PI * 2);
+            ctx.fill();
+            // Jaw
+            ctx.fillStyle = '#b0b090';
+            ctx.fillRect(-4, 2, 8, 3);
+            // Eye sockets
+            ctx.fillStyle = '#40e040';
+            ctx.shadowColor = '#40e040';
+            ctx.shadowBlur = 4 + Math.sin(t * 3) * 2;
+            ctx.beginPath();
+            ctx.arc(-2.5, -3, 1.5, 0, Math.PI * 2);
+            ctx.arc(2.5, -3, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            // Miasma cloud
+            ctx.save();
+            for (let i = 0; i < (tier >= 5 ? 5 : tier >= 4 ? 4 : 3); i++) {
+                const angle = (Math.PI * 2 / 5) * i + t * 0.5;
+                const cr = 8 + Math.sin(t * 2 + i) * 2;
+                const cx = Math.cos(angle) * cr;
+                const cy = Math.sin(angle) * cr * 0.5 - 2;
+                ctx.fillStyle = colorAlpha('#40e040', 0.08 + Math.sin(t * 3 + i) * 0.03);
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4 + Math.sin(t * 2 + i * 0.7) * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            // T5 particle drip
+            if (tier >= 5 && Math.random() < 0.08) {
+                GameState.particles.push(new Particle(
+                    x + rand(-6, 6), y + rand(-6, 6),
+                    { vx: rand(-0.3, 0.3), vy: rand(-0.8, -0.2), life: rand(0.4, 0.7), size: rand(1, 2), color: '#80ff40', glow: true }
+                ));
+            }
+
+        } else if (isCorrosive) {
+            // Path B: Corrosive — acid sprayer
+            // Nozzle
+            ctx.fillStyle = '#5a6a5a';
+            ctx.fillRect(-2, -8, 4, 10);
+            // Tank
+            ctx.save();
+            const tankGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+            tankGrad.addColorStop(0, '#4a5a4a');
+            tankGrad.addColorStop(0.5, '#5a6a5a');
+            tankGrad.addColorStop(1, '#4a5a4a');
+            ctx.fillStyle = tankGrad;
+            ctx.fillRect(-5, 0, 10, 7);
+            ctx.restore();
+            // Acid glow inside tank
+            ctx.save();
+            ctx.fillStyle = colorAlpha('#40ffa0', 0.3 + Math.sin(t * 4) * 0.15);
+            ctx.shadowColor = '#40ffa0';
+            ctx.shadowBlur = 6;
+            ctx.fillRect(-4, 1, 8, 5);
+            ctx.restore();
+            // Dripping acid from nozzle
+            ctx.save();
+            for (let i = 0; i < (tier >= 4 ? 3 : 2); i++) {
+                const dripY = -8 + ((t * 2 + i * 0.5) % 1) * 5;
+                ctx.fillStyle = '#40ffa0';
+                ctx.globalAlpha = 1 - ((t * 2 + i * 0.5) % 1);
+                ctx.beginPath();
+                ctx.arc(rand(-1, 1), dripY, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            // T4+ acid puddle indicator
+            if (tier >= 4) {
+                ctx.save();
+                ctx.fillStyle = colorAlpha('#40ffa0', 0.1 + Math.sin(t * 3) * 0.05);
+                ctx.beginPath();
+                ctx.ellipse(0, 6, 7 + tier, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        ctx.restore();
+    },
+
+    // =========================================================================
+    // MORTAR TOWER (Bombardier) — Heavy artillery / Earthquake / Shrapnel
+    // =========================================================================
+    _drawMortar(ctx, tower, x, y, half, t) {
+        const tier = tower.tier;
+        const isEarthquake = tower.path === 'A';
+        const isShrapnel = tower.path === 'B';
+
+        const baseColor = tier >= 4 ? (isEarthquake ? '#3a3020' : isShrapnel ? '#3a3530' : '#4a3a2a')
+            : tier >= 3 ? '#4a3a2a' : '#5a4a3a';
+        const accent = tier >= 4 ? (isEarthquake ? '#c09040' : '#a0a0a0') : '#a08060';
+        this._drawBase(ctx, x, y, half, tier, baseColor, accent, t);
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (tier <= 2) {
+            // T1-2: Heavy mortar tube on tripod
+            // Tripod legs
+            ctx.strokeStyle = '#6a6a5a';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, 2); ctx.lineTo(-6, 7);
+            ctx.moveTo(0, 2); ctx.lineTo(6, 7);
+            ctx.moveTo(0, 2); ctx.lineTo(0, 8);
+            ctx.stroke();
+            // Mortar tube (angled)
+            ctx.save();
+            ctx.rotate(-0.4);
+            const tubeGrad = ctx.createLinearGradient(-3, 4, -3, -8);
+            tubeGrad.addColorStop(0, '#6a5a4a');
+            tubeGrad.addColorStop(0.5, '#8a7a6a');
+            tubeGrad.addColorStop(1, '#5a4a3a');
+            ctx.fillStyle = tubeGrad;
+            ctx.fillRect(-3, -8, 6, 12);
+            // Muzzle ring
+            ctx.fillStyle = '#8a8a7a';
+            ctx.fillRect(-4, -9, 8, 2);
+            ctx.restore();
+
+        } else if (isEarthquake) {
+            // Path A: Earthquake — massive cannon with seismic glow
+            const scale = tier === 5 ? 1.3 : tier === 4 ? 1.15 : 1;
+            ctx.save();
+            ctx.scale(scale, scale);
+            // Heavy barrel
+            ctx.save();
+            ctx.rotate(-0.35);
+            const barrelGrad = ctx.createLinearGradient(-4, 4, -4, -10);
+            barrelGrad.addColorStop(0, '#5a4a30');
+            barrelGrad.addColorStop(0.5, '#7a6a50');
+            barrelGrad.addColorStop(1, '#4a3a20');
+            ctx.fillStyle = barrelGrad;
+            ctx.fillRect(-4, -10, 8, 14);
+            ctx.fillStyle = '#8a7a60';
+            ctx.fillRect(-5, -11, 10, 2);
+            ctx.restore();
+            // Seismic glow at base
+            ctx.save();
+            ctx.fillStyle = colorAlpha('#c09040', 0.15 + Math.sin(t * 3) * 0.08);
+            ctx.shadowColor = '#c09040';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.ellipse(0, 5, 8, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            ctx.restore();
+            // T5 seismic rings
+            if (tier >= 5) {
+                ctx.save();
+                const quakePulse = (t % 3) / 3;
+                ctx.strokeStyle = colorAlpha('#c09040', (1 - quakePulse) * 0.2);
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, 10 + quakePulse * 30, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+        } else if (isShrapnel) {
+            // Path B: Shrapnel — multi-barrel launcher
+            const barrels = tier === 5 ? 4 : tier === 4 ? 3 : 2;
+            // Mount
+            ctx.fillStyle = '#5a5a5a';
+            ctx.fillRect(-3, 0, 6, 6);
+            // Multiple barrels
+            ctx.save();
+            for (let i = 0; i < barrels; i++) {
+                const angle = -0.6 + (1.2 / (barrels - 1)) * i;
+                ctx.save();
+                ctx.rotate(angle);
+                ctx.fillStyle = '#7a7a7a';
+                ctx.fillRect(-2, -10, 4, 10);
+                ctx.fillStyle = '#8a8a8a';
+                ctx.fillRect(-2.5, -11, 5, 2);
+                ctx.restore();
+            }
+            ctx.restore();
+            // Shell indicators
+            if (tier >= 4) {
+                ctx.save();
+                ctx.fillStyle = '#a0a0a0';
+                for (let i = 0; i < tier - 2; i++) {
+                    ctx.beginPath();
+                    ctx.arc(-6 + i * 4, 4, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        ctx.restore();
+    },
+
+    // =========================================================================
+    // NECRO TOWER (Reaper) — Dark spire / Soul Harvester / Wither
+    // =========================================================================
+    _drawNecro(ctx, tower, x, y, half, t) {
+        const tier = tower.tier;
+        const isSoulHarvester = tower.path === 'A';
+        const isWither = tower.path === 'B';
+
+        const baseColor = tier >= 4 ? (isSoulHarvester ? '#2a1a3a' : isWither ? '#1a2a2a' : '#2a1a2a')
+            : tier >= 3 ? '#2a1a2a' : '#3a2a3a';
+        const accent = tier >= 4 ? (isSoulHarvester ? '#c040ff' : '#40ffc0') : '#a040ff';
+        this._drawBase(ctx, x, y, half, tier, baseColor, accent, t);
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Soul count indicator (small orbs around tower)
+        const souls = tower.souls || 0;
+        const maxSouls = (tower.special && tower.special.maxSouls) || 10;
+        if (souls > 0) {
+            ctx.save();
+            const soulCount = Math.min(Math.floor(souls / (maxSouls / 6)), 6);
+            for (let i = 0; i < soulCount; i++) {
+                const sa = (Math.PI * 2 / 6) * i + t * 1.5;
+                const sr = half + 3;
+                ctx.fillStyle = colorAlpha('#c080ff', 0.3 + Math.sin(t * 4 + i) * 0.15);
+                ctx.beginPath();
+                ctx.arc(Math.cos(sa) * sr, Math.sin(sa) * sr, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        if (tier <= 2) {
+            // T1-2: Dark spire/obelisk
+            ctx.save();
+            const spireGrad = ctx.createLinearGradient(0, 8, 0, -10);
+            spireGrad.addColorStop(0, '#3a2a3a');
+            spireGrad.addColorStop(0.5, '#4a3a4a');
+            spireGrad.addColorStop(1, '#2a1a2a');
+            ctx.fillStyle = spireGrad;
+            ctx.beginPath();
+            ctx.moveTo(-4, 7);
+            ctx.lineTo(-2, -8);
+            ctx.lineTo(0, -10);
+            ctx.lineTo(2, -8);
+            ctx.lineTo(4, 7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            // Eye
+            ctx.save();
+            ctx.fillStyle = '#a040ff';
+            ctx.shadowColor = '#a040ff';
+            ctx.shadowBlur = 4 + Math.sin(t * 3) * 2;
+            ctx.beginPath();
+            ctx.arc(0, -3, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+        } else if (isSoulHarvester) {
+            // Path A: Soul Harvester — tall spire with soul orbs
+            const spireH = tier === 5 ? 14 : tier === 4 ? 12 : 10;
+            ctx.save();
+            const grad = ctx.createLinearGradient(0, 7, 0, -spireH);
+            grad.addColorStop(0, '#2a1a3a');
+            grad.addColorStop(0.5, '#3a2a4a');
+            grad.addColorStop(1, '#1a0a2a');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(-4, 7);
+            ctx.lineTo(-2, -spireH + 2);
+            ctx.lineTo(0, -spireH);
+            ctx.lineTo(2, -spireH + 2);
+            ctx.lineTo(4, 7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            // Glowing skull eye
+            ctx.save();
+            ctx.fillStyle = '#c040ff';
+            ctx.shadowColor = '#c040ff';
+            ctx.shadowBlur = 6 + Math.sin(t * 4) * 3;
+            ctx.beginPath();
+            ctx.arc(0, -4, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            // Flying soul orbs
+            if (tier >= 4) {
+                ctx.save();
+                for (let i = 0; i < tier - 2; i++) {
+                    const orbA = t * 2 + (Math.PI * 2 / (tier - 2)) * i;
+                    const orbR = 6 + tier;
+                    ctx.fillStyle = colorAlpha('#d080ff', 0.4 + Math.sin(t * 3 + i) * 0.2);
+                    ctx.shadowColor = '#d080ff';
+                    ctx.shadowBlur = 4;
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(orbA) * orbR, Math.sin(orbA) * orbR * 0.5 - 2, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+            // T5 reaper particles
+            if (tier >= 5 && Math.random() < 0.08) {
+                const pa = Math.random() * Math.PI * 2;
+                GameState.particles.push(new Particle(
+                    x + Math.cos(pa) * rand(4, 10), y + Math.sin(pa) * rand(4, 10),
+                    { vx: Math.cos(pa) * 0.3, vy: -0.8 + Math.sin(pa) * 0.3,
+                      life: rand(0.3, 0.6), size: rand(1, 2.5), color: '#c040ff', glow: true }
+                ));
+            }
+
+        } else if (isWither) {
+            // Path B: Wither — dark aura fountain, life drain
+            // Dark pillar
+            ctx.save();
+            const pillarGrad = ctx.createLinearGradient(0, 7, 0, -8);
+            pillarGrad.addColorStop(0, '#1a2a2a');
+            pillarGrad.addColorStop(0.5, '#2a3a3a');
+            pillarGrad.addColorStop(1, '#0a1a1a');
+            ctx.fillStyle = pillarGrad;
+            ctx.fillRect(-3, -8, 6, 15);
+            ctx.restore();
+            // Aura crystal
+            ctx.save();
+            ctx.fillStyle = '#40ffc0';
+            ctx.shadowColor = '#40ffc0';
+            ctx.shadowBlur = 6 + Math.sin(t * 3) * 3;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(3, -6);
+            ctx.lineTo(0, -2);
+            ctx.lineTo(-3, -6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+            // Wither aura rings
+            if (tier >= 3) {
+                ctx.save();
+                const ringCount = tier >= 5 ? 3 : tier >= 4 ? 2 : 1;
+                for (let i = 0; i < ringCount; i++) {
+                    const pulse = ((t + i * 0.5) % 2) / 2;
+                    ctx.strokeStyle = colorAlpha('#40ffc0', (1 - pulse) * 0.15);
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 8 + pulse * 20, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            // T5 life drain particles
+            if (tier >= 5 && Math.random() < 0.06) {
+                const pa = Math.random() * Math.PI * 2;
+                const pr = rand(15, 25);
+                GameState.particles.push(new Particle(
+                    x + Math.cos(pa) * pr, y + Math.sin(pa) * pr,
+                    { vx: -Math.cos(pa) * 1.5, vy: -Math.sin(pa) * 1.5,
+                      life: rand(0.3, 0.5), size: rand(1, 2), color: '#40ffc0', glow: true }
+                ));
+            }
+        }
+
         ctx.restore();
     },
 

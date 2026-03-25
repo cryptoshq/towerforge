@@ -441,11 +441,25 @@ const Input = {
                 }
             }
 
-            // Start wave
+            // Start wave / Ready (multiplayer)
             if (this._matchesHotkey(e, 'startWave')) {
                 e.preventDefault();
-                if (GameState.gamePhase === 'idle') {
+                if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
+                    // Multiplayer: SPACE = ready up
+                    if (GameState.gamePhase === 'idle' && !Multiplayer.localReady) {
+                        Multiplayer.setReady();
+                    }
+                } else if (GameState.gamePhase === 'idle') {
                     WaveSystem.startWave();
+                }
+            }
+
+            // Skip wave (send next wave early)
+            if (e.key.toLowerCase() === 'n' && GameState.gamePhase === 'playing') {
+                const skipBtn = document.getElementById('btn-skip-wave');
+                if (skipBtn && skipBtn.style.display !== 'none') {
+                    e.preventDefault();
+                    WaveSystem.skipWave();
                 }
             }
 
@@ -454,12 +468,13 @@ const Input = {
                 this._handlePauseHotkeyAction();
             }
 
-            // Tower hotkeys 1-8
-            const keyNum = parseInt(e.key);
-            if (keyNum >= 1 && keyNum <= 8) {
+            // Tower hotkeys — 1-9, 0, -, = map to tower indices 0-11
+            const towerKeyMap = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6, '8': 7, '9': 8, '0': 9, '-': 10, '=': 11 };
+            if (towerKeyMap.hasOwnProperty(e.key)) {
+                const idx = towerKeyMap[e.key];
                 const types = Object.keys(TOWERS);
-                if (keyNum <= types.length) {
-                    const type = types[keyNum - 1];
+                if (idx < types.length) {
+                    const type = types[idx];
                     if (GameState.selectedTowerType === type) {
                         GameState.selectedTowerType = null;
                     } else {
@@ -654,7 +669,7 @@ const Input = {
     },
 
     _isDisallowedMouseHotkeyCode(code) {
-        return code === 'MouseLeft' || code === 'MouseRight';
+        return code === 'MouseLeft';
     },
 
     _isHotkeyCodeBindable(code) {
@@ -753,7 +768,11 @@ const Input = {
         }
 
         if (actionId === 'startWave') {
-            if (GameState.gamePhase === 'idle') {
+            if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
+                if (GameState.gamePhase === 'idle' && !Multiplayer.localReady) {
+                    Multiplayer.setReady();
+                }
+            } else if (GameState.gamePhase === 'idle') {
                 WaveSystem.startWave();
             }
             return true;
@@ -857,6 +876,7 @@ const Input = {
         if (code === 'Enter') return 'Enter';
         if (code === 'Delete') return 'Del';
         if (code === 'Backspace') return 'Backspace';
+        if (code === 'MouseRight') return 'Mouse RMB';
         if (code === 'MouseMiddle') return 'Mouse MMB';
         if (code === 'MouseBack') return 'Mouse 4';
         if (code === 'MouseForward') return 'Mouse 5';
@@ -1442,6 +1462,9 @@ const Input = {
 };
 
 function cycleSpeed() {
+    // Disable speed changes in multiplayer
+    if (typeof Multiplayer !== 'undefined' && Multiplayer.active) return;
+
     const speeds = CONFIG.GAME_SPEEDS;
     const idx = speeds.indexOf(GameState.gameSpeed);
     GameState.gameSpeed = speeds[(idx + 1) % speeds.length];
@@ -1456,6 +1479,9 @@ function cycleSpeed() {
 }
 
 function togglePause() {
+    // Disable pause in multiplayer
+    if (typeof Multiplayer !== 'undefined' && Multiplayer.active) return;
+
     if (GameState.gamePhase === 'playing' || GameState.gamePhase === 'idle') {
         GameState.gamePhase = 'paused';
         document.getElementById('pause-menu').style.display = 'flex';

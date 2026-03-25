@@ -52,9 +52,45 @@ const MapSystem = {
             }
         }
 
-        // Mark decoration tiles as unbuildable
+        // Mark decoration tiles as unbuildable and filter out decorations that overlap path
         if (mapDef.decorations) {
-            for (const deco of mapDef.decorations) {
+            // Large decorations that visually bleed into adjacent tiles
+            const bigTypes = new Set(['tree', 'pond', 'oasis', 'frozenpool', 'darkpool', 'lava',
+                'volcano', 'iceberg', 'portal', 'shadowrift', 'voidrift']);
+
+            mapDef._filteredDecorations = mapDef.decorations.filter(deco => {
+                const w = deco.w || 1;
+                const h = deco.h || 1;
+
+                // Check if any tile of this decoration IS a path tile
+                for (let dr = 0; dr < h; dr++) {
+                    for (let dc = 0; dc < w; dc++) {
+                        const r = deco.y + dr;
+                        const c = deco.x + dc;
+                        if (r >= 0 && r < rows && c >= 0 && c < cols) {
+                            if (grid[r][c] === 1) return false; // on path — remove
+                        }
+                    }
+                }
+
+                // For large-visual decorations, also check adjacent tiles for path
+                if (bigTypes.has(deco.type)) {
+                    for (let dr = -1; dr <= h; dr++) {
+                        for (let dc = -1; dc <= w; dc++) {
+                            const r = deco.y + dr;
+                            const c = deco.x + dc;
+                            if (r >= 0 && r < rows && c >= 0 && c < cols) {
+                                if (grid[r][c] === 1) return false; // adjacent to path — remove
+                            }
+                        }
+                    }
+                }
+
+                return true;
+            });
+
+            // Mark remaining decorations as unbuildable
+            for (const deco of mapDef._filteredDecorations) {
                 const w = deco.w || 1;
                 const h = deco.h || 1;
                 for (let dr = 0; dr < h; dr++) {
@@ -62,7 +98,7 @@ const MapSystem = {
                         const r = deco.y + dr;
                         const c = deco.x + dc;
                         if (r >= 0 && r < rows && c >= 0 && c < cols) {
-                            if (grid[r][c] === 0) grid[r][c] = 2; // decoration/blocked
+                            if (grid[r][c] === 0) grid[r][c] = 2;
                         }
                     }
                 }
@@ -270,12 +306,13 @@ const MapSystem = {
     },
 
     _drawTerrainTexture(ctx, mapDef, cols, rows, ts) {
-        // Subtle terrain variation
-        ctx.globalAlpha = 0.03;
         const seed = GameState.mapIndex * 1000;
+        const theme = mapDef.theme;
+
+        // Subtle brightness noise
+        ctx.globalAlpha = 0.03;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                // Simple hash for pseudo-random brightness
                 const hash = ((c * 374761393 + r * 668265263 + seed) & 0x7FFFFFFF) % 256;
                 if (hash > 200) {
                     ctx.fillStyle = '#fff';
@@ -287,6 +324,87 @@ const MapSystem = {
             }
         }
         ctx.globalAlpha = 1;
+
+        // Theme-specific ground details on buildable tiles
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (GameState.grid[r] && GameState.grid[r][c] !== 0) continue; // skip path/decoration tiles
+                const hash = ((c * 97 + r * 83 + seed) & 0x7FFFFFFF) % 200;
+                const x = c * ts;
+                const y = r * ts;
+
+                if (theme === 'forest') {
+                    // Grass tufts
+                    if (hash < 25) {
+                        ctx.globalAlpha = 0.18 + (hash % 8) * 0.01;
+                        ctx.fillStyle = hash < 12 ? '#3a6a30' : '#4a7a3a';
+                        const gx = x + (hash % 7) * 5 + 3;
+                        const gy = y + ts - 4 - (hash % 4);
+                        ctx.beginPath();
+                        ctx.moveTo(gx, gy + 4);
+                        ctx.lineTo(gx - 2, gy);
+                        ctx.lineTo(gx + 1, gy + 1);
+                        ctx.lineTo(gx + 3, gy - 1);
+                        ctx.lineTo(gx + 5, gy + 4);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                    // Small pebbles
+                    if (hash > 170 && hash < 185) {
+                        ctx.globalAlpha = 0.08;
+                        ctx.fillStyle = '#888';
+                        ctx.beginPath();
+                        ctx.arc(x + (hash % 30) + 5, y + ((hash * 3) % 30) + 5, 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                } else if (theme === 'desert') {
+                    // Sand ripples
+                    if (hash < 18) {
+                        ctx.globalAlpha = 0.06;
+                        ctx.strokeStyle = '#d4a050';
+                        ctx.lineWidth = 0.8;
+                        ctx.beginPath();
+                        const sx = x + 4;
+                        const sy = y + (hash % 3) * 12 + 8;
+                        ctx.moveTo(sx, sy);
+                        ctx.quadraticCurveTo(sx + ts * 0.5, sy - 3, sx + ts - 8, sy + 1);
+                        ctx.stroke();
+                        ctx.globalAlpha = 1;
+                    }
+                } else if (theme === 'ice') {
+                    // Frost sparkles
+                    if (hash < 14) {
+                        ctx.globalAlpha = 0.12;
+                        ctx.fillStyle = '#cceeff';
+                        const fx = x + (hash % 30) + 5;
+                        const fy = y + ((hash * 7) % 30) + 5;
+                        ctx.fillRect(fx, fy, 1.5, 1.5);
+                        ctx.globalAlpha = 1;
+                    }
+                } else if (theme === 'volcano') {
+                    // Ember specks
+                    if (hash < 10) {
+                        ctx.globalAlpha = 0.15;
+                        ctx.fillStyle = hash < 5 ? '#ff6030' : '#ff9040';
+                        ctx.beginPath();
+                        ctx.arc(x + (hash % 30) + 5, y + ((hash * 3) % 30) + 5, 1, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                } else if (theme === 'shadow') {
+                    // Void wisps on ground
+                    if (hash < 8) {
+                        ctx.globalAlpha = 0.06;
+                        ctx.fillStyle = '#6030a0';
+                        ctx.beginPath();
+                        ctx.arc(x + ts / 2 + (hash % 10) - 5, y + ts / 2 + ((hash * 3) % 10) - 5, 4 + (hash % 3), 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                }
+            }
+        }
     },
 
     _drawPathTile(ctx, mapDef, x, y, ts, col, row) {
@@ -572,9 +690,10 @@ const MapSystem = {
     },
 
     _drawDecorations(ctx, mapDef, ts) {
-        if (!mapDef.decorations) return;
+        const decos = mapDef._filteredDecorations || mapDef.decorations;
+        if (!decos) return;
 
-        for (const deco of mapDef.decorations) {
+        for (const deco of decos) {
             const x = deco.x * ts + ts / 2;
             const y = deco.y * ts + ts / 2;
             const w = (deco.w || 1) * ts;

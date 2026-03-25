@@ -71,6 +71,15 @@ const MenuSystem = {
             Audio.play('click');
         });
 
+        // Multiplayer button
+        const mpBtn = document.getElementById('btn-multiplayer');
+        if (mpBtn) {
+            mpBtn.addEventListener('click', () => {
+                this.showScreen('multiplayer');
+                Audio.play('click');
+            });
+        }
+
         // Back buttons
         document.getElementById('btn-back-difficulty').addEventListener('click', () => {
             this.showScreen('menu');
@@ -101,6 +110,19 @@ const MenuSystem = {
             this.showScreen('menu');
             Audio.play('click');
         });
+
+        // Multiplayer back button
+        const mpBackBtn = document.getElementById('btn-back-multiplayer');
+        if (mpBackBtn) {
+            mpBackBtn.addEventListener('click', () => {
+                // Clean up any pending connection
+                if (typeof Multiplayer !== 'undefined' && !Multiplayer.active) {
+                    Multiplayer.destroy();
+                }
+                this.showScreen('menu');
+                Audio.play('click');
+            });
+        }
 
         // Game HUD buttons
         document.getElementById('btn-speed').addEventListener('click', () => {
@@ -197,6 +219,39 @@ const MenuSystem = {
             this.showScreen('menu');
             Audio.play('click');
         });
+
+        // Multiplayer result buttons
+        const mpRematchBtn = document.getElementById('mp-btn-rematch');
+        if (mpRematchBtn) {
+            mpRematchBtn.addEventListener('click', () => {
+                Audio.play('click');
+                if (typeof MultiplayerUI !== 'undefined') MultiplayerUI.hideMatchResult();
+                // Restart the multiplayer game with same config
+                if (typeof Multiplayer !== 'undefined' && Multiplayer.connected) {
+                    Multiplayer.startMultiplayerGame();
+                } else {
+                    returnToMenu();
+                }
+            });
+        }
+        const mpQuitBtn = document.getElementById('mp-btn-quit-mp');
+        if (mpQuitBtn) {
+            mpQuitBtn.addEventListener('click', () => {
+                Audio.play('click');
+                returnToMenu();
+            });
+        }
+
+        // Multiplayer ready button
+        const mpReadyBtn = document.getElementById('mp-ready-btn');
+        if (mpReadyBtn) {
+            mpReadyBtn.addEventListener('click', () => {
+                if (typeof Multiplayer !== 'undefined' && Multiplayer.active && !Multiplayer.localReady) {
+                    Multiplayer.setReady();
+                    Audio.play('click');
+                }
+            });
+        }
 
         // Endless mode buttons
         document.getElementById('btn-endless-yes').addEventListener('click', () => {
@@ -1028,6 +1083,12 @@ const MenuSystem = {
                 break;
             case 'settings':
                 document.getElementById('settings-screen').classList.add('active');
+                break;
+            case 'multiplayer':
+                document.getElementById('multiplayer-screen').classList.add('active');
+                if (typeof MultiplayerUI !== 'undefined') {
+                    MultiplayerUI.renderLobby();
+                }
                 break;
             case 'game':
                 document.getElementById('game-screen').classList.add('active');

@@ -24,6 +24,7 @@
                 <button class="menu-btn" id="btn-research">RESEARCH LAB</button>
                 <button class="menu-btn" id="btn-achievements">ACHIEVEMENTS</button>
                 <button class="menu-btn" id="btn-howtoplay">HOW TO PLAY</button>
+                <button class="menu-btn multiplayer" id="btn-multiplayer">MULTIPLAYER</button>
                 <button class="menu-btn" id="btn-settings">SETTINGS</button>
             </div>
             <div class="menu-meta-progress" id="menu-meta-progress"></div>
@@ -124,6 +125,15 @@
             <h2>HOW TO PLAY</h2>
         </div>
         <div class="howtoplay-content" id="howtoplay-content"></div>
+    </div>
+
+    <!-- Multiplayer Lobby Screen -->
+    <div id="multiplayer-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-multiplayer">&larr; BACK</button>
+            <h2>MULTIPLAYER</h2>
+        </div>
+        <div class="mp-lobby-wrapper" id="mp-lobby-content"></div>
     </div>
 
     <!-- Settings Screen -->
@@ -255,6 +265,24 @@
             </div>
         </div>
 
+        <!-- Opponent HUD (Multiplayer) -->
+        <div class="opponent-hud" id="opponent-hud" style="display:none">
+            <div class="opp-hud-title">
+                <span class="mp-dot mp-dot-green"></span> OPPONENT
+            </div>
+            <div class="opp-hud-stats">
+                <div class="opp-stat"><span class="opp-label">LIVES</span><span class="opp-value lives-text" id="opp-lives">0</span></div>
+                <div class="opp-stat"><span class="opp-label">SCORE</span><span class="opp-value" id="opp-score">0</span></div>
+                <div class="opp-stat"><span class="opp-label">WAVE</span><span class="opp-value" id="opp-wave">0</span></div>
+                <div class="opp-stat"><span class="opp-label">GOLD</span><span class="opp-value gold-text" id="opp-gold">0</span></div>
+                <div class="opp-stat"><span class="opp-label">TOWERS</span><span class="opp-value" id="opp-towers">0</span></div>
+            </div>
+            <div class="opp-phase" id="opp-phase">BUILDING</div>
+        </div>
+
+        <!-- Multiplayer Ready Button -->
+        <button class="mp-ready-btn" id="mp-ready-btn" style="display:none">READY [SPACE]</button>
+
         <!-- Wave Start Button -->
         <button class="wave-start-btn" id="btn-start-wave">
             <span class="wave-btn-text">START WAVE</span>
@@ -263,7 +291,9 @@
 
         <!-- Skip Wave Button -->
         <button class="wave-skip-btn" id="btn-skip-wave" style="display:none">
-            <span class="wave-btn-text">SKIP WAVE</span>
+            <span class="skip-icon">⏩</span>
+            <span class="wave-btn-text">NEXT WAVE</span>
+            <span class="wave-btn-key">[N]</span>
         </button>
 
         <!-- Wave Info Banner -->
@@ -301,6 +331,19 @@
                     <label><input type="checkbox" id="set-show-fps"> Show FPS Counter</label>
                 </div>
                 <button class="settings-close-btn" id="btn-close-settings">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multiplayer Match Result -->
+    <div class="modal-overlay" id="mp-result-overlay" style="display:none">
+        <div class="modal mp-result-modal">
+            <h2 class="mp-result-title" id="mp-result-title">VICTORY!</h2>
+            <p class="mp-result-message" id="mp-result-message"></p>
+            <div class="mp-result-stats" id="mp-result-stats"></div>
+            <div class="mp-result-buttons">
+                <button class="menu-btn primary" id="mp-btn-rematch">PLAY AGAIN</button>
+                <button class="menu-btn" id="mp-btn-quit-mp">MAIN MENU</button>
             </div>
         </div>
     </div>
@@ -394,6 +437,7 @@
     <div id="floating-text-container"></div>
 
     <!-- Scripts -->
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/gameState.js"></script>
@@ -417,6 +461,8 @@
     <script src="js/vfxRendering.js"></script>
     <script src="js/uiRendering.js"></script>
     <script src="js/input.js"></script>
+    <script src="js/multiplayer.js"></script>
+    <script src="js/multiplayerUI.js"></script>
     <script src="js/menu.js"></script>
     <script src="js/tutorial.js"></script>
     <script src="js/debug.js"></script>

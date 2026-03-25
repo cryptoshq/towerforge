@@ -81,20 +81,29 @@ const UIRenderer = {
         // Only update DOM when values change (performance optimization)
         if (GameState.gold !== this.lastGold) {
             const el = document.getElementById('hud-gold-val');
+            const oldGold = this.lastGold;
             el.textContent = formatGold(GameState.gold);
             this.lastGold = GameState.gold;
 
-            // Flash gold on change
-            el.style.transition = 'none';
-            el.style.textShadow = '0 0 10px #ffd700';
-            requestAnimationFrame(() => {
-                el.style.transition = 'text-shadow 0.5s';
-                el.style.textShadow = 'none';
-            });
+            // Animated pop + color flash on gold change
+            if (oldGold >= 0) {
+                el.classList.remove('hud-val-pop', 'hud-val-flash-gold');
+                void el.offsetWidth; // force reflow to restart animation
+                el.classList.add('hud-val-pop', 'hud-val-flash-gold');
+            }
         }
         if (GameState.lives !== this.lastLives) {
             const el = document.getElementById('hud-lives-val');
+            const oldLives = this.lastLives;
             el.textContent = GameState.lives;
+
+            // Animated pop + color flash on lives change
+            if (oldLives >= 0) {
+                el.classList.remove('hud-val-pop', 'hud-val-flash-red');
+                void el.offsetWidth;
+                el.classList.add('hud-val-pop', 'hud-val-flash-red');
+            }
+
             if (GameState.lives <= 5) {
                 el.style.color = '#ff4040';
                 el.style.animation = 'pulse-glow 0.5s infinite';
@@ -108,11 +117,23 @@ const UIRenderer = {
             this.lastLives = GameState.lives;
         }
         if (GameState.wave !== this.lastWave) {
-            document.getElementById('hud-wave-val').textContent = `${GameState.wave} / ${GameState.maxWave}`;
+            const el = document.getElementById('hud-wave-val');
+            el.textContent = `${GameState.wave} / ${GameState.maxWave}`;
+            if (this.lastWave >= 0) {
+                el.classList.remove('hud-val-pop');
+                void el.offsetWidth;
+                el.classList.add('hud-val-pop');
+            }
             this.lastWave = GameState.wave;
         }
         if (GameState.score !== this.lastScore) {
-            document.getElementById('hud-score-val').textContent = GameState.score;
+            const el = document.getElementById('hud-score-val');
+            el.textContent = GameState.score;
+            if (this.lastScore >= 0) {
+                el.classList.remove('hud-val-pop', 'hud-val-flash-gold');
+                void el.offsetWidth;
+                el.classList.add('hud-val-pop', 'hud-val-flash-gold');
+            }
             this.lastScore = GameState.score;
         }
 

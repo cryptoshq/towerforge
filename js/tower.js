@@ -52,6 +52,55 @@ const TOWER_SYNERGIES = {
         desc: '+20% beam ramp rate',
         bonuses: { dmg: 0, rate: 0, range: 0, rampBonus: 0.20 },
     },
+    flame_cannon: {
+        types: ['flame', 'cannon'],
+        range: 120,
+        name: 'Scorched Earth',
+        desc: '+15% burn damage to both',
+        bonuses: { dmg: 0.15, rate: 0, range: 0 },
+    },
+    venom_ice: {
+        types: ['venom', 'ice'],
+        range: 130,
+        name: 'Toxic Frost',
+        desc: '+10% poison DPS, +10% slow duration',
+        bonuses: { dmg: 0.10, rate: 0, range: 0 },
+    },
+    mortar_sniper: {
+        types: ['mortar', 'sniper'],
+        range: 150,
+        name: 'Artillery Spotter',
+        desc: '+12% range and +8% damage to mortar',
+        bonuses: { dmg: 0.08, rate: 0, range: 0.12 },
+    },
+    necro_venom: {
+        types: ['necro', 'venom'],
+        range: 120,
+        name: 'Death Blight',
+        desc: '+15% damage to both, enemies decay faster',
+        bonuses: { dmg: 0.15, rate: 0, range: 0 },
+    },
+    flame_ice: {
+        types: ['flame', 'ice'],
+        range: 110,
+        name: 'Steam Burst',
+        desc: '+10% fire rate to both',
+        bonuses: { dmg: 0, rate: 0.10, range: 0 },
+    },
+    necro_laser: {
+        types: ['necro', 'laser'],
+        range: 120,
+        name: 'Soul Beam',
+        desc: '+12% damage to laser, +2 soul gain',
+        bonuses: { dmg: 0.12, rate: 0, range: 0 },
+    },
+    mortar_cannon: {
+        types: ['mortar', 'cannon'],
+        range: 130,
+        name: 'Heavy Barrage',
+        desc: '+20% splash radius to both',
+        bonuses: { dmg: 0, rate: 0, range: 0, splashBonus: 0.20 },
+    },
 };
 
 class Tower {
@@ -146,6 +195,9 @@ class Tower {
         // Sell confirmation state
         this.sellConfirmActive = false;
         this.sellConfirmTimer = 0;
+
+        // Necro tower soul tracking
+        this.souls = 0;
 
         // ID
         this.id = Tower._nextId++;
@@ -313,6 +365,11 @@ class Tower {
 
         // Debuffs from enemy specialists (e.g. Toxic Carrier)
         dmg *= this.damageDebuffMult || 1;
+
+        // Necro tower: soul damage bonus
+        if (this.type === 'necro' && this.special && this.special.soulDmgBonus && this.souls > 0) {
+            dmg *= (1 + this.souls * this.special.soulDmgBonus);
+        }
 
         // Challenge: glass_cannon — towers deal 2x damage
         if (GameState.activeChallenges.includes('glass_cannon')) dmg *= 2;
@@ -926,6 +983,10 @@ class Tower {
             this.stats.longestKillStreak = Math.max(this.stats.longestKillStreak, this.stats.currentKillStreak);
             this.stats.totalGoldEarned += this.beamTarget.reward || 0;
             this.addXP(this._getKillXP(this.beamTarget));
+            // Necro tower: gain souls on kill
+            if (this.type === 'necro' && this.special && this.special.soulGain) {
+                this.souls = Math.min((this.souls || 0) + this.special.soulGain, this.special.maxSouls || 60);
+            }
             this.beamTarget = null;
         }
     }
@@ -1080,6 +1141,11 @@ class Tower {
         this.stats.longestKillStreak = Math.max(this.stats.longestKillStreak, this.stats.currentKillStreak);
         this.stats.totalGoldEarned += enemy.reward || 0;
         this.addXP(this._getKillXP(enemy));
+
+        // Necro tower: gain souls on kill
+        if (this.type === 'necro' && this.special && this.special.soulGain) {
+            this.souls = Math.min((this.souls || 0) + this.special.soulGain, this.special.maxSouls || 60);
+        }
 
         // Reset streak if we miss (handled externally)
     }
@@ -1484,6 +1550,23 @@ Tower._nextId = 1;
 
 function placeTower(type, worldX, worldY) {
     if (!MapSystem.canBuildAt(worldX, worldY)) return null;
+
+    // Tower cap: maximum 50 towers
+    if (GameState.towers.length >= CONFIG.MAX_TOWERS) {
+        Effects.addFloatingText(worldX, worldY - 20, `MAX TOWERS (${CONFIG.MAX_TOWERS})!`, '#ff4040', 12);
+        Audio.play('error');
+        return null;
+    }
+
+    // Catalyst cap: maximum 3 boost towers
+    if (type === 'boost') {
+        const boostCount = GameState.towers.filter(t => t.type === 'boost').length;
+        if (boostCount >= CONFIG.MAX_CATALYSTS) {
+            Effects.addFloatingText(worldX, worldY - 20, `MAX CATALYSTS (${CONFIG.MAX_CATALYSTS})!`, '#ff4040', 12);
+            Audio.play('error');
+            return null;
+        }
+    }
 
     // Challenge: one_type — can only build one type of tower
     if (GameState.activeChallenges.includes('one_type') && GameState.towers.length > 0) {

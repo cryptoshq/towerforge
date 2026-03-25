@@ -73,6 +73,10 @@ const TowerIcons = {
             case 'laser': this._drawLaserIcon(ctx, size); break;
             case 'missile': this._drawMissileIcon(ctx, size); break;
             case 'boost': this._drawBoostIcon(ctx, size); break;
+            case 'flame': this._drawFlameIcon(ctx, size); break;
+            case 'venom': this._drawVenomIcon(ctx, size); break;
+            case 'mortar': this._drawMortarIcon(ctx, size); break;
+            case 'necro': this._drawNecroIcon(ctx, size); break;
         }
 
         ctx.restore();
@@ -840,6 +844,240 @@ const TowerIcons = {
         ctx.beginPath();
         ctx.arc(0, 0, 2 * u, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    // ──── FLAME TOWER ────
+    // Fire icon with layered flames
+    _drawFlameIcon(ctx, s) {
+        const u = s / 36;
+
+        // Outer heat glow
+        const heatGrad = ctx.createRadialGradient(0, 2 * u, 2 * u, 0, 0, 14 * u);
+        heatGrad.addColorStop(0, 'rgba(255,96,32,0.2)');
+        heatGrad.addColorStop(1, 'rgba(255,96,32,0)');
+        ctx.fillStyle = heatGrad;
+        ctx.beginPath();
+        ctx.arc(0, 2 * u, 14 * u, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main flame shape
+        ctx.save();
+        ctx.shadowColor = '#ff4010';
+        ctx.shadowBlur = 8 * u;
+        const flameGrad = ctx.createLinearGradient(0, 12 * u, 0, -14 * u);
+        flameGrad.addColorStop(0, '#ff8020');
+        flameGrad.addColorStop(0.3, '#ff4010');
+        flameGrad.addColorStop(0.7, '#ff6020');
+        flameGrad.addColorStop(1, '#ffe060');
+        ctx.fillStyle = flameGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, -13 * u);
+        ctx.quadraticCurveTo(8 * u, -6 * u, 7 * u, 2 * u);
+        ctx.quadraticCurveTo(6 * u, 10 * u, 0, 12 * u);
+        ctx.quadraticCurveTo(-6 * u, 10 * u, -7 * u, 2 * u);
+        ctx.quadraticCurveTo(-8 * u, -6 * u, 0, -13 * u);
+        ctx.fill();
+        ctx.restore();
+
+        // Inner bright core
+        ctx.save();
+        const coreGrad = ctx.createRadialGradient(0, 2 * u, 0, 0, 2 * u, 6 * u);
+        coreGrad.addColorStop(0, '#fff');
+        coreGrad.addColorStop(0.3, '#ffe080');
+        coreGrad.addColorStop(1, 'rgba(255,128,32,0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(0, 2 * u, 6 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    },
+
+    // ──── VENOM TOWER ────
+    // Poison droplet with bubbles
+    _drawVenomIcon(ctx, s) {
+        const u = s / 36;
+
+        // Toxic glow
+        const toxGrad = ctx.createRadialGradient(0, 0, 2 * u, 0, 0, 14 * u);
+        toxGrad.addColorStop(0, 'rgba(64,224,64,0.2)');
+        toxGrad.addColorStop(1, 'rgba(64,224,64,0)');
+        ctx.fillStyle = toxGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14 * u, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Poison droplet
+        ctx.save();
+        ctx.shadowColor = '#40e040';
+        ctx.shadowBlur = 8 * u;
+        const dropGrad = ctx.createLinearGradient(0, -12 * u, 0, 10 * u);
+        dropGrad.addColorStop(0, '#80ff40');
+        dropGrad.addColorStop(0.5, '#40e040');
+        dropGrad.addColorStop(1, '#208020');
+        ctx.fillStyle = dropGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, -12 * u);
+        ctx.quadraticCurveTo(9 * u, 0, 7 * u, 6 * u);
+        ctx.quadraticCurveTo(4 * u, 12 * u, 0, 12 * u);
+        ctx.quadraticCurveTo(-4 * u, 12 * u, -7 * u, 6 * u);
+        ctx.quadraticCurveTo(-9 * u, 0, 0, -12 * u);
+        ctx.fill();
+        ctx.restore();
+
+        // Skull crossbones inside
+        ctx.save();
+        ctx.fillStyle = '#1a3a1a';
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.arc(-2 * u, 0, 2 * u, 0, Math.PI * 2);
+        ctx.arc(2 * u, 0, 2 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Bubbles
+        ctx.fillStyle = '#80ff60';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(-4 * u, -4 * u, 1.5 * u, 0, Math.PI * 2);
+        ctx.arc(3 * u, -6 * u, 1 * u, 0, Math.PI * 2);
+        ctx.arc(5 * u, 2 * u, 1.2 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    // ──── MORTAR TOWER ────
+    // Heavy mortar shell/bomb icon
+    _drawMortarIcon(ctx, s) {
+        const u = s / 36;
+
+        // Impact glow
+        const impactGrad = ctx.createRadialGradient(0, 4 * u, 2 * u, 0, 4 * u, 14 * u);
+        impactGrad.addColorStop(0, 'rgba(160,128,96,0.15)');
+        impactGrad.addColorStop(1, 'rgba(160,128,96,0)');
+        ctx.fillStyle = impactGrad;
+        ctx.beginPath();
+        ctx.arc(0, 4 * u, 14 * u, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shell body
+        ctx.save();
+        ctx.shadowColor = '#a08060';
+        ctx.shadowBlur = 6 * u;
+        const shellGrad = ctx.createLinearGradient(-5 * u, 0, 5 * u, 0);
+        shellGrad.addColorStop(0, '#6a5a4a');
+        shellGrad.addColorStop(0.5, '#8a7a6a');
+        shellGrad.addColorStop(1, '#6a5a4a');
+        ctx.fillStyle = shellGrad;
+        // Bomb shape
+        ctx.beginPath();
+        ctx.arc(0, 2 * u, 8 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Nose cone
+        ctx.save();
+        ctx.fillStyle = '#a0a0a0';
+        ctx.beginPath();
+        ctx.moveTo(0, -10 * u);
+        ctx.lineTo(3 * u, -4 * u);
+        ctx.lineTo(-3 * u, -4 * u);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Metal band
+        ctx.strokeStyle = '#b0a090';
+        ctx.lineWidth = 1.5 * u;
+        ctx.beginPath();
+        ctx.arc(0, 2 * u, 8 * u, -0.3, Math.PI + 0.3);
+        ctx.stroke();
+
+        // Fuse
+        ctx.strokeStyle = '#c0a060';
+        ctx.lineWidth = 1 * u;
+        ctx.beginPath();
+        ctx.moveTo(0, -10 * u);
+        ctx.quadraticCurveTo(4 * u, -14 * u, 2 * u, -13 * u);
+        ctx.stroke();
+
+        // Spark
+        ctx.fillStyle = '#ffd700';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(2 * u, -13 * u, 1.5 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    },
+
+    // ──── NECRO TOWER ────
+    // Dark skull with soul energy
+    _drawNecroIcon(ctx, s) {
+        const u = s / 36;
+
+        // Soul energy field
+        const soulGrad = ctx.createRadialGradient(0, 0, 2 * u, 0, 0, 14 * u);
+        soulGrad.addColorStop(0, 'rgba(160,64,255,0.2)');
+        soulGrad.addColorStop(1, 'rgba(160,64,255,0)');
+        ctx.fillStyle = soulGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14 * u, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Skull
+        ctx.save();
+        ctx.shadowColor = '#a040ff';
+        ctx.shadowBlur = 8 * u;
+        const skullGrad = ctx.createRadialGradient(0, -1 * u, 0, 0, -1 * u, 9 * u);
+        skullGrad.addColorStop(0, '#d0d0c0');
+        skullGrad.addColorStop(0.7, '#a0a090');
+        skullGrad.addColorStop(1, '#606050');
+        ctx.fillStyle = skullGrad;
+        ctx.beginPath();
+        ctx.arc(0, -2 * u, 8 * u, 0, Math.PI * 2);
+        ctx.fill();
+        // Jaw
+        ctx.fillStyle = '#909080';
+        ctx.fillRect(-5 * u, 4 * u, 10 * u, 5 * u);
+        ctx.restore();
+
+        // Eye sockets (glowing purple)
+        ctx.save();
+        ctx.fillStyle = '#c040ff';
+        ctx.shadowColor = '#c040ff';
+        ctx.shadowBlur = 6 * u;
+        ctx.beginPath();
+        ctx.arc(-3 * u, -3 * u, 2.5 * u, 0, Math.PI * 2);
+        ctx.arc(3 * u, -3 * u, 2.5 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Nose
+        ctx.fillStyle = '#505040';
+        ctx.beginPath();
+        ctx.moveTo(0, -1 * u);
+        ctx.lineTo(1.5 * u, 2 * u);
+        ctx.lineTo(-1.5 * u, 2 * u);
+        ctx.closePath();
+        ctx.fill();
+
+        // Teeth
+        ctx.fillStyle = '#d0d0c0';
+        for (let i = -3; i <= 3; i++) {
+            ctx.fillRect(i * 1.5 * u - 0.5 * u, 4 * u, 1 * u, 2 * u);
+        }
+
+        // Soul wisps
+        ctx.strokeStyle = '#c080ff';
+        ctx.lineWidth = 0.8 * u;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(-8 * u, -4 * u, 3 * u, 0, Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(8 * u, -2 * u, 2.5 * u, Math.PI, 0);
+        ctx.stroke();
         ctx.globalAlpha = 1;
     },
 

@@ -124,9 +124,9 @@ function initGame() {
     document.addEventListener('keydown', resumeAudio, { once: true, capture: true });
     document.addEventListener('touchstart', resumeAudio, { once: true, capture: true });
 
-    // Prevent context menu on game elements
+    // Prevent context menu everywhere
     document.addEventListener('contextmenu', (e) => {
-        if (e.target.closest('#game-screen')) e.preventDefault();
+        e.preventDefault();
     });
 
     // Auto-pause on visibility change / blur is disabled so the game
@@ -385,10 +385,19 @@ function restartGame() {
 // ===== RETURN TO MENU =====
 function returnToMenu() {
     // Hide all game-related overlays
-    const overlays = ['gameover-screen', 'victory-screen', 'pause-screen', 'tower-info', 'endless-modal', 'endless-draft-modal', 'tactical-event-modal'];
+    const overlays = ['gameover-screen', 'victory-screen', 'pause-screen', 'tower-info', 'endless-modal', 'endless-draft-modal', 'tactical-event-modal', 'mp-result-overlay'];
     for (const id of overlays) {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
+    }
+
+    // Multiplayer cleanup
+    if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
+        Multiplayer.send({ type: 'disconnect' });
+        Multiplayer.destroy();
+    }
+    if (typeof MultiplayerUI !== 'undefined') {
+        MultiplayerUI.cleanup();
     }
 
     // Reset game state
@@ -937,6 +946,13 @@ function drawTowerRange(ctx, tower) {
 // ===== GAME OVER =====
 function gameOver() {
     GameState.gamePhase = 'gameover';
+
+    // Multiplayer: report loss instead of showing normal game over screen
+    if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
+        Multiplayer.reportGameEnd('lost');
+        return;
+    }
+
     Audio.play('gameover');
     Audio.stopMusic();
 
@@ -1029,6 +1045,13 @@ function gameOver() {
 // ===== VICTORY =====
 function victory() {
     GameState.gamePhase = 'victory';
+
+    // Multiplayer: report survived instead of showing normal victory screen
+    if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
+        Multiplayer.reportGameEnd('survived');
+        return;
+    }
+
     Audio.play('victory');
 
     console.log(`[TowerForge] Victory on ${MAPS[GameState.mapIndex].name}!`);

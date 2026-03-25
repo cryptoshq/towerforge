@@ -8,6 +8,8 @@ const CONFIG = {
     STARTING_LIVES: 20,
     INTEREST_RATE: 0.05,
     INTEREST_CAP: 50,
+    MAX_TOWERS: 50,
+    MAX_CATALYSTS: 3,
     SELL_REFUND: 0.7,
     DISMANTLE_REFUND: 0.5,
     LINK_COST: 50,
@@ -646,9 +648,169 @@ const TOWERS = {
             }
         },
     },
+    flame: {
+        name: 'Flame Tower', nickname: 'Pyro',
+        baseCost: 125, key: '8',
+        color: '#8a3a10', iconColor: '#ff6020',
+        description: 'Burns enemies over time with fire',
+        tiers: {
+            1: { damage: 12, range: 100, fireRate: 0.7, special: { burnDPS: 8, burnDuration: 2 } },
+            2: { damage: 18, range: 110, fireRate: 0.65, special: { burnDPS: 14, burnDuration: 2.5 }, cost: 150 },
+        },
+        pathA: {
+            name: 'Inferno', desc: 'Intense single-target incineration',
+            icon: '\u{1F525}',
+            tiers: {
+                3: { damage: 30, range: 120, fireRate: 0.6, cost: 200,
+                    special: { burnDPS: 25, burnDuration: 3, burnRamp: 0.1 },
+                    desc: 'Burn intensifies +10%/s on same target' },
+                4: { damage: 50, range: 130, fireRate: 0.55, cost: 300,
+                    special: { burnDPS: 45, burnDuration: 4, burnRamp: 0.15, meltArmor: 2 },
+                    desc: 'Burns melt 2 armor/s, +15% ramp' },
+                5: { damage: 90, range: 140, fireRate: 0.5, cost: 500,
+                    special: { burnDPS: 80, burnDuration: 5, burnRamp: 0.2, meltArmor: 4, immolate: true, immolateCd: 10, immolateDmg: 500, immolateRadius: 60 },
+                    desc: 'Max burn, Immolate: 500 AOE every 10s' },
+            }
+        },
+        pathB: {
+            name: 'Wildfire', desc: 'Fire spreads between enemies',
+            icon: '\u{1F32A}',
+            tiers: {
+                3: { damage: 15, range: 110, fireRate: 0.65, cost: 200,
+                    special: { burnDPS: 12, burnDuration: 2.5, fireSpread: 1, spreadRadius: 50 },
+                    desc: 'Fire spreads to 1 nearby enemy' },
+                4: { damage: 22, range: 120, fireRate: 0.6, cost: 300,
+                    special: { burnDPS: 18, burnDuration: 3, fireSpread: 2, spreadRadius: 60, spreadChance: 0.4 },
+                    desc: 'Spreads to 2, 40% on hit' },
+                5: { damage: 30, range: 130, fireRate: 0.55, cost: 500,
+                    special: { burnDPS: 25, burnDuration: 3.5, fireSpread: 4, spreadRadius: 80, spreadChance: 0.6, firestorm: true, stormCd: 12, stormDuration: 4, stormRadius: 120, stormDPS: 15 },
+                    desc: 'Spreads to 4, Firestorm every 12s' },
+            }
+        },
+    },
+    venom: {
+        name: 'Venom Tower', nickname: 'Toxin',
+        baseCost: 100, key: '9',
+        color: '#2a6a2a', iconColor: '#40e040',
+        description: 'Stacking poison and armor corrosion',
+        tiers: {
+            1: { damage: 8, range: 110, fireRate: 0.6, special: { poisonDPS: 5, poisonDuration: 3, poisonStacks: 3 } },
+            2: { damage: 12, range: 120, fireRate: 0.55, special: { poisonDPS: 8, poisonDuration: 3.5, poisonStacks: 4 }, cost: 125 },
+        },
+        pathA: {
+            name: 'Plague Doctor', desc: 'Poison spreads on kill',
+            icon: '\u{2620}',
+            tiers: {
+                3: { damage: 18, range: 130, fireRate: 0.5, cost: 175,
+                    special: { poisonDPS: 14, poisonDuration: 4, poisonStacks: 5, plagueSpread: 2, spreadRadius: 70 },
+                    desc: 'Poison spreads to 2 on victim death' },
+                4: { damage: 28, range: 140, fireRate: 0.45, cost: 260,
+                    special: { poisonDPS: 22, poisonDuration: 5, poisonStacks: 6, plagueSpread: 3, spreadRadius: 90, deathCloud: true, cloudDuration: 3, cloudRadius: 50 },
+                    desc: 'Spreads 3, death cloud poisons area' },
+                5: { damage: 45, range: 150, fireRate: 0.4, cost: 440,
+                    special: { poisonDPS: 35, poisonDuration: 6, poisonStacks: 8, plagueSpread: 5, spreadRadius: 110, deathCloud: true, cloudDuration: 4, cloudRadius: 70, pandemic: true, pandemicCd: 15, pandemicDuration: 5 },
+                    desc: 'Spreads 5, Pandemic: all enemies poisoned' },
+            }
+        },
+        pathB: {
+            name: 'Corrosive', desc: 'Strips armor over time',
+            icon: '\u{1F9EA}',
+            tiers: {
+                3: { damage: 15, range: 120, fireRate: 0.55, cost: 175,
+                    special: { poisonDPS: 10, poisonDuration: 3, corrodeDPS: 1, corrodeMax: 5 },
+                    desc: 'Corrodes 1 armor/s (max -5)' },
+                4: { damage: 25, range: 130, fireRate: 0.5, cost: 260,
+                    special: { poisonDPS: 16, poisonDuration: 3.5, corrodeDPS: 2, corrodeMax: 10, weakenVuln: 0.15 },
+                    desc: 'Corrodes 2/s, weakened +15% dmg taken' },
+                5: { damage: 40, range: 140, fireRate: 0.45, cost: 440,
+                    special: { poisonDPS: 28, poisonDuration: 4, corrodeDPS: 4, corrodeMax: 999, weakenVuln: 0.25, dissolve: true, dissolveCd: 12, dissolveRadius: 80, dissolveArmorRemove: 1.0 },
+                    desc: 'Infinite corrode, Dissolve: strip all armor' },
+            }
+        },
+    },
+    mortar: {
+        name: 'Mortar Tower', nickname: 'Bombardier',
+        baseCost: 160, key: '0',
+        color: '#5a4a3a', iconColor: '#a08060',
+        description: 'Ultra-long range, massive slow AOE',
+        tiers: {
+            1: { damage: 40, range: 220, fireRate: 2.5, splash: 55, special: null },
+            2: { damage: 65, range: 240, fireRate: 2.3, splash: 65, special: null, cost: 225 },
+        },
+        pathA: {
+            name: 'Earthquake', desc: 'Ground denial and terrain control',
+            icon: '\u{1F30D}',
+            tiers: {
+                3: { damage: 120, range: 260, fireRate: 2.5, splash: 80, cost: 350,
+                    special: { quakeZone: true, zoneDuration: 3, zoneSlow: 0.4, zoneRadius: 60 },
+                    desc: 'Shots leave tremor zones (40% slow, 3s)' },
+                4: { damage: 220, range: 280, fireRate: 2.8, splash: 100, cost: 525,
+                    special: { quakeZone: true, zoneDuration: 4, zoneSlow: 0.5, zoneRadius: 80, zoneDPS: 10, quakeStun: 0.15 },
+                    desc: 'Zones deal 10 DPS, 15% stun on impact' },
+                5: { damage: 400, range: 300, fireRate: 3.0, splash: 130, cost: 880,
+                    special: { quakeZone: true, zoneDuration: 5, zoneSlow: 0.6, zoneRadius: 100, zoneDPS: 25, quakeStun: 0.25, tectonic: true, tectonicCd: 14, tectonicRadius: 180, tectonicDmg: 600, tectonicStun: 2 },
+                    desc: 'Zones persist, Tectonic Slam every 14s' },
+            }
+        },
+        pathB: {
+            name: 'Shrapnel', desc: 'Anti-swarm fragmentation',
+            icon: '\u{1F4A2}',
+            tiers: {
+                3: { damage: 30, range: 230, fireRate: 2.0, splash: 50, cost: 350,
+                    special: { shrapnelCount: 6, shrapnelDmg: 15, shrapnelRadius: 100 },
+                    desc: 'Shells burst into 6 shrapnel pieces' },
+                4: { damage: 40, range: 250, fireRate: 1.8, splash: 55, cost: 525,
+                    special: { shrapnelCount: 10, shrapnelDmg: 20, shrapnelRadius: 120, shrapnelPierce: 1 },
+                    desc: '10 shrapnel, each pierces 1 enemy' },
+                5: { damage: 55, range: 270, fireRate: 1.6, splash: 60, cost: 880,
+                    special: { shrapnelCount: 15, shrapnelDmg: 30, shrapnelRadius: 150, shrapnelPierce: 2, clusterBomb: true, clusterCd: 10, clusterCount: 5, clusterDmg: 80, clusterRadius: 70 },
+                    desc: '15 shrapnel, Cluster Bomb every 10s' },
+            }
+        },
+    },
+    necro: {
+        name: 'Necro Tower', nickname: 'Reaper',
+        baseCost: 225, key: '-',
+        color: '#3a1a4a', iconColor: '#a040ff',
+        description: 'Dark magic that feeds on death',
+        tiers: {
+            1: { damage: 20, range: 120, fireRate: 1.0, special: { soulGain: 1, maxSouls: 10, soulDmgBonus: 0.03 } },
+            2: { damage: 30, range: 130, fireRate: 0.95, special: { soulGain: 1, maxSouls: 15, soulDmgBonus: 0.04 }, cost: 300 },
+        },
+        pathA: {
+            name: 'Soul Harvester', desc: 'Souls become destructive projectiles',
+            icon: '\u{1F480}',
+            tiers: {
+                3: { damage: 45, range: 140, fireRate: 0.9, cost: 425,
+                    special: { soulGain: 2, maxSouls: 25, soulDmgBonus: 0.05, soulBolt: true, soulBoltDmg: 30, soulBoltInterval: 2 },
+                    desc: '+5%/soul, fires soul bolts at enemies' },
+                4: { damage: 70, range: 150, fireRate: 0.85, cost: 640,
+                    special: { soulGain: 2, maxSouls: 40, soulDmgBonus: 0.06, soulBolt: true, soulBoltDmg: 50, soulBoltInterval: 1.5, soulExplosion: true, soulExpRadius: 40 },
+                    desc: '+6%/soul, soul bolts explode on impact' },
+                5: { damage: 110, range: 160, fireRate: 0.8, cost: 1060,
+                    special: { soulGain: 3, maxSouls: 60, soulDmgBonus: 0.08, soulBolt: true, soulBoltDmg: 80, soulBoltInterval: 1, soulExplosion: true, soulExpRadius: 60, reaper: true, reaperCd: 12, reaperDmg: 0.25 },
+                    desc: '+8%/soul, Reap: 25% max HP to all in range' },
+            }
+        },
+        pathB: {
+            name: 'Wither', desc: 'Life drain aura and regeneration',
+            icon: '\u{1F47B}',
+            tiers: {
+                3: { damage: 25, range: 130, fireRate: 0.95, cost: 425,
+                    special: { soulGain: 1, maxSouls: 20, soulDmgBonus: 0.04, witherAura: true, witherRadius: 80, witherDPS: 8 },
+                    desc: 'Aura drains 8 DPS from nearby enemies' },
+                4: { damage: 40, range: 140, fireRate: 0.9, cost: 640,
+                    special: { soulGain: 1, maxSouls: 30, soulDmgBonus: 0.05, witherAura: true, witherRadius: 100, witherDPS: 15, witherHeal: true, healPerKill: 1 },
+                    desc: 'Wither 15 DPS, kills restore 1 life' },
+                5: { damage: 65, range: 150, fireRate: 0.85, cost: 1060,
+                    special: { soulGain: 2, maxSouls: 50, soulDmgBonus: 0.06, witherAura: true, witherRadius: 130, witherDPS: 25, witherHeal: true, healPerKill: 1, witherSlow: 0.2, deathPact: true, pactCd: 18, pactDuration: 5, pactDmgMult: 2 },
+                    desc: 'Wither 25 DPS + slow, Death Pact: 2x dmg' },
+            }
+        },
+    },
     boost: {
         name: 'Boost Tower', nickname: 'Catalyst',
-        baseCost: 250, key: '8',
+        baseCost: 250, key: '=',
         color: '#8a7a20', iconColor: '#e0c030',
         description: 'Buffs nearby towers (no attack)',
         tiers: {
