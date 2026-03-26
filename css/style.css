@@ -8442,6 +8442,35 @@ html, body {
     }
 }
 
+/* ===== MAIN MENU STABILITY HOTFIX V13 ===== */
+#main-menu {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable;
+}
+
+#main-menu::before {
+    inset: -10px !important;
+    transform: none !important;
+}
+
+#menu-motion-layer {
+    transform: none !important;
+}
+
+#main-menu::-webkit-scrollbar {
+    width: 8px;
+}
+
+#main-menu::-webkit-scrollbar-track {
+    background: rgba(8, 16, 30, 0.56);
+}
+
+#main-menu::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(132, 188, 232, 0.92), rgba(88, 146, 194, 0.92));
+    border-radius: 999px;
+}
+
 /* ===== TOWER LIMIT UI ===== */
 #hud-towers .hud-value {
     font-size: 16px;
