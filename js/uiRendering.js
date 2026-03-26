@@ -4,6 +4,8 @@ const UIRenderer = {
     lastLives: -1,
     lastWave: -1,
     lastScore: -1,
+    lastTowerCount: -1,
+    lastTowerCap: -1,
     lastThreatHint: null,
     interestPreviewEl: null,
     _lastNextWavePreviewBounds: null,
@@ -137,6 +139,37 @@ const UIRenderer = {
                 el.classList.add('hud-val-pop', 'hud-val-flash-gold');
             }
             this.lastScore = GameState.score;
+        }
+
+        const towerCount = Array.isArray(GameState.towers) ? GameState.towers.length : 0;
+        const towerCap = Number.isFinite(CONFIG.MAX_TOWERS) ? Math.max(0, Math.floor(CONFIG.MAX_TOWERS)) : 0;
+        if (towerCount !== this.lastTowerCount || towerCap !== this.lastTowerCap) {
+            const limitText = `${towerCount} / ${towerCap}`;
+            const warningThreshold = towerCap > 0 ? Math.max(1, Math.floor(towerCap * 0.8)) : 0;
+            const warning = towerCap > 0 && towerCount >= warningThreshold;
+            const maxed = towerCap > 0 && towerCount >= towerCap;
+
+            const hudTowerEl = document.getElementById('hud-towers-val');
+            if (hudTowerEl) {
+                hudTowerEl.textContent = limitText;
+                hudTowerEl.classList.toggle('limit-warning', warning && !maxed);
+                hudTowerEl.classList.toggle('limit-maxed', maxed);
+                if (this.lastTowerCount >= 0) {
+                    hudTowerEl.classList.remove('hud-val-pop');
+                    void hudTowerEl.offsetWidth;
+                    hudTowerEl.classList.add('hud-val-pop');
+                }
+            }
+
+            const sideTowerEl = document.getElementById('tower-limit-val');
+            if (sideTowerEl) {
+                sideTowerEl.textContent = limitText;
+                sideTowerEl.classList.toggle('limit-warning', warning && !maxed);
+                sideTowerEl.classList.toggle('limit-maxed', maxed);
+            }
+
+            this.lastTowerCount = towerCount;
+            this.lastTowerCap = towerCap;
         }
 
         const threatHint = this._getWaveThreatHint();

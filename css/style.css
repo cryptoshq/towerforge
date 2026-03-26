@@ -8442,6 +8442,59 @@ html, body {
     }
 }
 
+/* ===== TOWER LIMIT UI ===== */
+#hud-towers .hud-value {
+    font-size: 16px;
+}
+
+.hud-value.towers-text {
+    color: #9bc3e8;
+}
+
+.hud-value.towers-text.limit-warning {
+    color: #ffcd7a;
+}
+
+.hud-value.towers-text.limit-maxed {
+    color: #ff8d8d;
+    animation: pulse-glow 0.75s infinite;
+}
+
+.tower-limit-chip {
+    margin-bottom: 8px;
+    border: 1px solid rgba(108, 136, 182, 0.42);
+    border-radius: 8px;
+    background: rgba(12, 18, 34, 0.58);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 9px;
+}
+
+.tower-limit-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #88a4c6;
+}
+
+.tower-limit-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.8px;
+    color: #b8d6f0;
+}
+
+.tower-limit-value.limit-warning {
+    color: #ffd18a;
+}
+
+.tower-limit-value.limit-maxed {
+    color: #ff9a9a;
+}
+
 /* ===== SESSION FINAL OVERRIDES V12 ===== */
 #main-menu .mm-brand {
     padding-right: clamp(14px, 2.8vw, 34px) !important;
