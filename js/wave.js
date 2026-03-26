@@ -3002,3 +3002,18 @@ function showWaveBanner(text) {
         banner.style.display = 'none';
     }, 2440);
 }
+
+function installLegacyWaveGlobals(globalScope = globalThis) {
+    if (!globalScope || typeof globalScope !== 'object') return;
+
+    globalScope.WaveSystem = WaveSystem;
+    globalScope.showWaveBanner = showWaveBanner;
+}
+
+installLegacyWaveGlobals(globalThis);
+
+export {
+    WaveSystem,
+    showWaveBanner,
+    installLegacyWaveGlobals,
+};

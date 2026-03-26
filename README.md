@@ -17,6 +17,11 @@ Once GitHub Pages finishes deploying, the live build is available at:
 
 - `https://cryptoshq.github.io/towerforge/`
 
+Deployment notes:
+
+- GitHub Pages is deployed from the `dist` artifact via `.github/workflows/deploy-pages.yml` on pushes to `main`.
+- In repository settings, Pages source should be set to **GitHub Actions** (not branch root).
+
 ## Run Locally
 
 Requirements:
@@ -44,6 +49,10 @@ npm run peerserver
 Primary local URL:
 
 - `http://localhost:3000`
+
+Important:
+
+- Do not open `index.html` directly with `file://`; module scripts are blocked by browser CORS rules. Always run via `npm start` (or another local HTTP server).
 
 ## Radmin VPN Multiplayer Setup
 

@@ -88,7 +88,7 @@ function processWeeklyChallengeResult(isVictory) {
 }
 
 // ===== GAME INIT =====
-function initGame() {
+async function initGame() {
     console.log('%c[TowerForge] Initializing...', 'color: #ffd700; font-weight: bold');
     const initStart = performance.now();
 
@@ -99,7 +99,7 @@ function initGame() {
     Audio.init();
 
     // Init canvas and rendering pipeline
-    initCanvas();
+    await initCanvas();
 
     // Init menu system (DOM setup, button bindings)
     MenuSystem.init();
@@ -771,60 +771,148 @@ function handleEnemyLeak(enemy) {
 function renderGame() {
     if (!ctx) return;
 
-    // Clear entire canvas
+    const pixiBridgeActive = typeof isPixiBridgeActive === 'function' && isPixiBridgeActive();
+    if (pixiBridgeActive) {
+        if (typeof syncPixiWorldTransform === 'function') {
+            syncPixiWorldTransform();
+        }
+
+        const pixiMapLayerActive = (typeof syncPixiMapLayer === 'function')
+            ? syncPixiMapLayer()
+            : false;
+        const pixiParticlesActive = (typeof syncPixiParticleLayer === 'function')
+            ? syncPixiParticleLayer()
+            : false;
+
+        const lowerBridge = (typeof getCanvasBridgeLower === 'function' && getCanvasBridgeLower())
+            || (typeof getCanvasBridge === 'function' ? getCanvasBridge() : null);
+        const upperBridge = (typeof getCanvasBridgeUpper === 'function' && getCanvasBridgeUpper())
+            || lowerBridge;
+        if (!lowerBridge || typeof lowerBridge.getContext !== 'function') return;
+
+        const lowerCtx = lowerBridge.getContext();
+        const upperCtx = upperBridge && typeof upperBridge.getContext === 'function'
+            ? upperBridge.getContext()
+            : lowerCtx;
+
+        const lowerRes = (typeof lowerBridge.getResolution === 'function')
+            ? lowerBridge.getResolution()
+            : 1;
+        if (typeof lowerCtx.setTransform === 'function') {
+            lowerCtx.setTransform(lowerRes, 0, 0, lowerRes, 0, 0);
+        }
+
+        const upperRes = (upperBridge && typeof upperBridge.getResolution === 'function')
+            ? upperBridge.getResolution()
+            : lowerRes;
+        if (upperCtx !== lowerCtx && typeof upperCtx.setTransform === 'function') {
+            upperCtx.setTransform(upperRes, 0, 0, upperRes, 0, 0);
+        }
+
+        lowerCtx.clearRect(0, 0, logicalWidth, logicalHeight);
+        if (upperCtx !== lowerCtx) {
+            upperCtx.clearRect(0, 0, logicalWidth, logicalHeight);
+        }
+
+        if (pixiMapLayerActive && typeof hasPixiMapLayer === 'function' && hasPixiMapLayer()) {
+            if (typeof MapSystem.drawDynamic === 'function') {
+                MapSystem.drawDynamic(lowerCtx);
+            } else {
+                MapSystem.draw(lowerCtx);
+            }
+        } else {
+            MapSystem.draw(lowerCtx);
+        }
+
+        SynergySystem.drawZones(lowerCtx);
+        if (typeof TowerPolish !== 'undefined') TowerPolish.draw(lowerCtx);
+
+        if (GameState.selectedTower) {
+            drawTowerRange(lowerCtx, GameState.selectedTower);
+        }
+
+        for (const tower of GameState.towers) {
+            TowerRenderer.draw(lowerCtx, tower);
+        }
+        if (typeof TowerPolish !== 'undefined') TowerPolish.drawOverlay(lowerCtx);
+
+        for (const enemy of GameState.enemies) {
+            EnemyRenderer.draw(lowerCtx, enemy);
+        }
+
+        if (typeof VFXRenderer.drawLower === 'function') {
+            VFXRenderer.drawLower(lowerCtx, { skipParticles: pixiParticlesActive });
+        } else {
+            VFXRenderer.draw(lowerCtx);
+        }
+
+        if (typeof VFXRenderer.drawUpper === 'function') {
+            VFXRenderer.drawUpper(upperCtx);
+        }
+
+        if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.draw(upperCtx);
+        UIRenderer.drawCanvasUI(upperCtx);
+
+        if (GameState.screenFlash && GameState.screenFlash.timer > 0) {
+            const flash = GameState.screenFlash;
+            const alpha = flash.alpha * clamp(flash.timer / 0.5, 0, 1);
+            upperCtx.fillStyle = colorAlpha(flash.color, Math.min(alpha, 0.4));
+            upperCtx.fillRect(-50, -50, logicalWidth + 100, logicalHeight + 100);
+        }
+
+        drawBossIntroOverlay(upperCtx);
+
+        if (typeof lowerBridge.updateTexture === 'function') {
+            lowerBridge.updateTexture();
+        }
+        if (upperBridge && upperBridge !== lowerBridge && typeof upperBridge.updateTexture === 'function') {
+            upperBridge.updateTexture();
+        }
+
+        const backend = typeof getRenderBackend === 'function' ? getRenderBackend() : null;
+        if (backend && typeof backend.render === 'function') {
+            backend.render();
+        }
+        return;
+    }
+
+    // Legacy Canvas2D path
     ctx.fillStyle = '#101020';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     ctx.save();
-
-    // Apply rendering transform: offset + scale to fill screen
     applyRenderTransform(ctx);
 
-    // Apply screen effects transform (zoom, shake)
     if (typeof ScreenEffects !== 'undefined' && ScreenEffects.cameraZoom !== 1.0) {
         ScreenEffects.applyTransform(ctx, logicalWidth, logicalHeight);
     }
 
-    // Apply screen shake offset
     ctx.translate(shakeX, shakeY);
 
-    // === LAYER 1: Map (terrain, grid, path, decorations) ===
     MapSystem.draw(ctx);
-
-    // === LAYER 2: Synergy zones (glowing areas under towers) ===
     SynergySystem.drawZones(ctx);
-
-    // === LAYER 2.5: Environmental reactivity (path wear, scorch, frost under towers) ===
     if (typeof TowerPolish !== 'undefined') TowerPolish.draw(ctx);
 
-    // === LAYER 3: Tower range indicators (for selected tower) ===
     if (GameState.selectedTower) {
         drawTowerRange(ctx, GameState.selectedTower);
     }
 
-    // === LAYER 4: Towers ===
     for (const tower of GameState.towers) {
         TowerRenderer.draw(ctx, tower);
     }
 
-    // === LAYER 4.5: Tower polish overlays (sell anim, anticipation glow) ===
     if (typeof TowerPolish !== 'undefined') TowerPolish.drawOverlay(ctx);
 
-    // === LAYER 5: Enemies ===
     for (const enemy of GameState.enemies) {
         EnemyRenderer.draw(ctx, enemy);
     }
 
-    // === LAYER 6: VFX (projectiles, particles, weather, overlays) ===
     VFXRenderer.draw(ctx);
 
-    // === LAYER 6.5: Juice features (placement preview, spotlights, combo meter) ===
     if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.draw(ctx);
 
-    // === LAYER 7: Canvas-based UI (wave progress, tooltips, previews) ===
     UIRenderer.drawCanvasUI(ctx);
 
-    // === LAYER 8: Screen flash effect ===
     if (GameState.screenFlash && GameState.screenFlash.timer > 0) {
         const flash = GameState.screenFlash;
         const alpha = flash.alpha * clamp(flash.timer / 0.5, 0, 1);
@@ -832,132 +920,135 @@ function renderGame() {
         ctx.fillRect(-50, -50, logicalWidth + 100, logicalHeight + 100);
     }
 
-    // === LAYER 9: Boss intro overlay ===
-    if (GameState.bossIntro.active) {
-        const bi = GameState.bossIntro;
-        const t = bi.timer;
-        const dur = bi.duration;
-        const cx = logicalWidth / 2;
-        const cy = logicalHeight / 2;
-
-        // Phase timing: fade in 0.3s, hold 1.5s, fade out 0.7s
-        let overlayAlpha;
-        if (t < 0.3) {
-            overlayAlpha = t / 0.3;
-        } else if (t < 1.8) {
-            overlayAlpha = 1.0;
-        } else {
-            overlayAlpha = clamp(1.0 - (t - 1.8) / 0.7, 0, 1);
-        }
-
-        // Dark vignette overlay
-        ctx.fillStyle = `rgba(0,0,0,${0.6 * overlayAlpha})`;
-        ctx.fillRect(-50, -50, logicalWidth + 100, logicalHeight + 100);
-
-        // Circular energy burst animation
-        const burstProgress = clamp(t / 1.0, 0, 1);
-        const burstRadius = burstProgress * 200;
-        const burstAlpha = overlayAlpha * (1.0 - burstProgress) * 0.4;
-        if (burstAlpha > 0.01) {
-            const burstGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, burstRadius);
-            burstGrad.addColorStop(0, `rgba(255,40,40,${burstAlpha})`);
-            burstGrad.addColorStop(0.5, `rgba(200,20,20,${burstAlpha * 0.5})`);
-            burstGrad.addColorStop(1, 'rgba(255,0,0,0)');
-            ctx.fillStyle = burstGrad;
-            ctx.beginPath();
-            ctx.arc(cx, cy, burstRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Secondary pulsing ring
-        if (t > 0.2 && overlayAlpha > 0.01) {
-            const ringT = (t - 0.2) * 2.5;
-            const ringRadius = 60 + Math.sin(ringT) * 20;
-            ctx.strokeStyle = `rgba(255,80,40,${0.4 * overlayAlpha})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Outer expanding ring
-            const outerRing = 100 + ringT * 15;
-            if (outerRing < 300) {
-                ctx.strokeStyle = `rgba(255,60,30,${0.2 * overlayAlpha * (1 - outerRing / 300)})`;
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                ctx.arc(cx, cy, outerRing, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-        }
-
-        // Boss name in huge dramatic text with glow
-        if (overlayAlpha > 0.01) {
-            ctx.save();
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            // Name glow
-            ctx.shadowColor = '#ff2000';
-            ctx.shadowBlur = 30 * overlayAlpha;
-            ctx.fillStyle = `rgba(255,220,200,${overlayAlpha})`;
-            ctx.font = 'bold 42px monospace';
-            ctx.fillText(bi.name.toUpperCase(), cx, cy - 30);
-
-            // Second pass for brighter center
-            ctx.shadowBlur = 15 * overlayAlpha;
-            ctx.shadowColor = '#ff6040';
-            ctx.fillText(bi.name.toUpperCase(), cx, cy - 30);
-            ctx.shadowBlur = 0;
-
-            // "WARNING" subtitle
-            const warningAlpha = overlayAlpha * (0.5 + Math.sin(t * 8) * 0.3);
-            ctx.fillStyle = `rgba(255,60,40,${warningAlpha})`;
-            ctx.font = 'bold 14px monospace';
-            ctx.fillText('!! BOSS INCOMING !!', cx, cy - 65);
-
-            // Abilities listed below the name
-            ctx.font = '14px monospace';
-            ctx.shadowColor = '#ff4020';
-            ctx.shadowBlur = 8 * overlayAlpha;
-            for (let i = 0; i < bi.abilities.length; i++) {
-                const abilAlpha = overlayAlpha * clamp((t - 0.3 - i * 0.15) / 0.2, 0, 1);
-                ctx.fillStyle = `rgba(255,180,120,${abilAlpha})`;
-                ctx.fillText(bi.abilities[i], cx, cy + 10 + i * 22);
-            }
-            ctx.shadowBlur = 0;
-
-            // Decorative lines flanking the name
-            const lineW = 100 * overlayAlpha;
-            ctx.strokeStyle = `rgba(255,80,40,${0.5 * overlayAlpha})`;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(cx - lineW - 120, cy - 30);
-            ctx.lineTo(cx - 120, cy - 30);
-            ctx.moveTo(cx + 120, cy - 30);
-            ctx.lineTo(cx + lineW + 120, cy - 30);
-            ctx.stroke();
-
-            ctx.restore();
-        }
-    }
+    drawBossIntroOverlay(ctx);
 
     ctx.restore();
 
-    // === SCREEN-SPACE UI (not affected by game transform) ===
+    drawFpsOverlay(ctx);
+}
 
-    // FPS counter
-    if (GameState.settings && GameState.settings.showFPS) {
-        ctx.save();
-        ctx.fillStyle = '#0f0';
-        ctx.font = '12px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(`FPS: ${currentFPS}`, 5, 15);
-        if (typeof DebugPanel !== 'undefined' && DebugPanel.visible) {
-            ctx.fillText(`Update: ${updateTimeAvg.toFixed(1)}ms`, 5, 30);
-            ctx.fillText(`Render: ${renderTimeAvg.toFixed(1)}ms`, 5, 45);
+function drawBossIntroOverlay(ctx) {
+    if (!GameState.bossIntro.active) return;
+
+    const bi = GameState.bossIntro;
+    const t = bi.timer;
+    const cx = logicalWidth / 2;
+    const cy = logicalHeight / 2;
+
+    // Phase timing: fade in 0.3s, hold 1.5s, fade out 0.7s
+    let overlayAlpha;
+    if (t < 0.3) {
+        overlayAlpha = t / 0.3;
+    } else if (t < 1.8) {
+        overlayAlpha = 1.0;
+    } else {
+        overlayAlpha = clamp(1.0 - (t - 1.8) / 0.7, 0, 1);
+    }
+
+    // Dark vignette overlay
+    ctx.fillStyle = `rgba(0,0,0,${0.6 * overlayAlpha})`;
+    ctx.fillRect(-50, -50, logicalWidth + 100, logicalHeight + 100);
+
+    // Circular energy burst animation
+    const burstProgress = clamp(t / 1.0, 0, 1);
+    const burstRadius = burstProgress * 200;
+    const burstAlpha = overlayAlpha * (1.0 - burstProgress) * 0.4;
+    if (burstAlpha > 0.01) {
+        const burstGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, burstRadius);
+        burstGrad.addColorStop(0, `rgba(255,40,40,${burstAlpha})`);
+        burstGrad.addColorStop(0.5, `rgba(200,20,20,${burstAlpha * 0.5})`);
+        burstGrad.addColorStop(1, 'rgba(255,0,0,0)');
+        ctx.fillStyle = burstGrad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, burstRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Secondary pulsing ring
+    if (t > 0.2 && overlayAlpha > 0.01) {
+        const ringT = (t - 0.2) * 2.5;
+        const ringRadius = 60 + Math.sin(ringT) * 20;
+        ctx.strokeStyle = `rgba(255,80,40,${0.4 * overlayAlpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Outer expanding ring
+        const outerRing = 100 + ringT * 15;
+        if (outerRing < 300) {
+            ctx.strokeStyle = `rgba(255,60,30,${0.2 * overlayAlpha * (1 - outerRing / 300)})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerRing, 0, Math.PI * 2);
+            ctx.stroke();
         }
+    }
+
+    // Boss name in huge dramatic text with glow
+    if (overlayAlpha > 0.01) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Name glow
+        ctx.shadowColor = '#ff2000';
+        ctx.shadowBlur = 30 * overlayAlpha;
+        ctx.fillStyle = `rgba(255,220,200,${overlayAlpha})`;
+        ctx.font = 'bold 42px monospace';
+        ctx.fillText(bi.name.toUpperCase(), cx, cy - 30);
+
+        // Second pass for brighter center
+        ctx.shadowBlur = 15 * overlayAlpha;
+        ctx.shadowColor = '#ff6040';
+        ctx.fillText(bi.name.toUpperCase(), cx, cy - 30);
+        ctx.shadowBlur = 0;
+
+        // "WARNING" subtitle
+        const warningAlpha = overlayAlpha * (0.5 + Math.sin(t * 8) * 0.3);
+        ctx.fillStyle = `rgba(255,60,40,${warningAlpha})`;
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('!! BOSS INCOMING !!', cx, cy - 65);
+
+        // Abilities listed below the name
+        ctx.font = '14px monospace';
+        ctx.shadowColor = '#ff4020';
+        ctx.shadowBlur = 8 * overlayAlpha;
+        for (let i = 0; i < bi.abilities.length; i++) {
+            const abilAlpha = overlayAlpha * clamp((t - 0.3 - i * 0.15) / 0.2, 0, 1);
+            ctx.fillStyle = `rgba(255,180,120,${abilAlpha})`;
+            ctx.fillText(bi.abilities[i], cx, cy + 10 + i * 22);
+        }
+        ctx.shadowBlur = 0;
+
+        // Decorative lines flanking the name
+        const lineW = 100 * overlayAlpha;
+        ctx.strokeStyle = `rgba(255,80,40,${0.5 * overlayAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - lineW - 120, cy - 30);
+        ctx.lineTo(cx - 120, cy - 30);
+        ctx.moveTo(cx + 120, cy - 30);
+        ctx.lineTo(cx + lineW + 120, cy - 30);
+        ctx.stroke();
+
         ctx.restore();
     }
+}
+
+function drawFpsOverlay(ctx) {
+    if (!(GameState.settings && GameState.settings.showFPS)) return;
+
+    ctx.save();
+    ctx.fillStyle = '#0f0';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`FPS: ${currentFPS}`, 5, 15);
+    if (typeof DebugPanel !== 'undefined' && DebugPanel.visible) {
+        ctx.fillText(`Update: ${updateTimeAvg.toFixed(1)}ms`, 5, 30);
+        ctx.fillText(`Render: ${renderTimeAvg.toFixed(1)}ms`, 5, 45);
+    }
+    ctx.restore();
 }
 
 // ===== DRAW TOWER RANGE =====
@@ -1298,4 +1389,14 @@ function getPerformanceStats() {
 }
 
 // ===== BOOT =====
-window.addEventListener('DOMContentLoaded', initGame);
+function bootTowerForgeRuntime() {
+    Promise.resolve(initGame()).catch((error) => {
+        console.error('[TowerForge] Failed to initialize game:', error);
+    });
+}
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', bootTowerForgeRuntime, { once: true });
+} else {
+    bootTowerForgeRuntime();
+}

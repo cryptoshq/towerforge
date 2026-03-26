@@ -1289,133 +1289,152 @@ const Effects = {
         ScreenEffects.update(dt);
     },
 
-    drawAll(ctx) {
+    drawAll(ctx, options = {}) {
+        const drawGround = options.ground !== false;
+        const drawRings = options.rings !== false;
+        const drawBeams = options.beams !== false;
+        const drawParticles = options.particles !== false;
+        const drawTexts = options.texts !== false;
+
         // Ground decals (drawn first, under everything)
-        GroundDecals.draw(ctx);
+        if (drawGround) {
+            GroundDecals.draw(ctx);
+        }
 
         // Ring waves
-        RingWaves.draw(ctx);
+        if (drawRings) {
+            RingWaves.draw(ctx);
+        }
 
         // Beams
-        for (const b of GameState.beams) {
-            const alpha = clamp(b.life / b.maxLife, 0, 1);
+        if (drawBeams) {
+            for (const b of GameState.beams) {
+                const alpha = clamp(b.life / b.maxLife, 0, 1);
 
-            const pulse = (b.pulseHz && b.pulseAmp)
-                ? (1 + Math.sin(GameState.time * b.pulseHz) * b.pulseAmp)
-                : 1;
-            const width = Math.max(0.35, b.width * alpha * pulse);
-            const jitter = (b.jitter || 0) * (0.25 + alpha * 0.75);
-            const jx1 = b.x1 + (jitter ? Math.sin(GameState.time * 23 + b.y1 * 0.03) * jitter : 0);
-            const jy1 = b.y1 + (jitter ? Math.cos(GameState.time * 19 + b.x1 * 0.03) * jitter : 0);
-            const jx2 = b.x2 + (jitter ? Math.sin(GameState.time * 21 + b.y2 * 0.03) * jitter : 0);
-            const jy2 = b.y2 + (jitter ? Math.cos(GameState.time * 17 + b.x2 * 0.03) * jitter : 0);
+                const pulse = (b.pulseHz && b.pulseAmp)
+                    ? (1 + Math.sin(GameState.time * b.pulseHz) * b.pulseAmp)
+                    : 1;
+                const width = Math.max(0.35, b.width * alpha * pulse);
+                const jitter = (b.jitter || 0) * (0.25 + alpha * 0.75);
+                const jx1 = b.x1 + (jitter ? Math.sin(GameState.time * 23 + b.y1 * 0.03) * jitter : 0);
+                const jy1 = b.y1 + (jitter ? Math.cos(GameState.time * 19 + b.x1 * 0.03) * jitter : 0);
+                const jx2 = b.x2 + (jitter ? Math.sin(GameState.time * 21 + b.y2 * 0.03) * jitter : 0);
+                const jy2 = b.y2 + (jitter ? Math.cos(GameState.time * 17 + b.x2 * 0.03) * jitter : 0);
 
-            const drawBeamStroke = (x1, y1, x2, y2, outerColor, coreColor) => {
-                ctx.save();
-                ctx.globalAlpha = alpha;
-                if (b.dash && b.dash.length > 0) {
-                    ctx.setLineDash(b.dash);
+                const drawBeamStroke = (x1, y1, x2, y2, outerColor, coreColor) => {
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    if (b.dash && b.dash.length > 0) {
+                        ctx.setLineDash(b.dash);
+                    }
+                    ctx.strokeStyle = outerColor;
+                    ctx.lineCap = 'round';
+                    ctx.lineWidth = width;
+                    ctx.shadowColor = b.glowColor || outerColor;
+                    ctx.shadowBlur = width * 2.4;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+
+                    const coreWidth = Math.max(0.3, width * 0.38 * (b.taper || 1));
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = coreColor;
+                    ctx.lineWidth = coreWidth;
+                    ctx.shadowBlur = coreWidth * 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    ctx.restore();
+                };
+
+                if (b.dual && b.dualOffset > 0) {
+                    const dx = jx2 - jx1;
+                    const dy = jy2 - jy1;
+                    const len = Math.hypot(dx, dy) || 1;
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    const ox = nx * b.dualOffset;
+                    const oy = ny * b.dualOffset;
+
+                    drawBeamStroke(
+                        jx1 + ox,
+                        jy1 + oy,
+                        jx2 + ox,
+                        jy2 + oy,
+                        b.outerColor || b.color,
+                        b.coreColor || '#ffffff'
+                    );
+                    drawBeamStroke(
+                        jx1 - ox,
+                        jy1 - oy,
+                        jx2 - ox,
+                        jy2 - oy,
+                        b.altColor || b.outerColor || b.color,
+                        b.coreColor || '#ffffff'
+                    );
+                } else {
+                    drawBeamStroke(
+                        jx1,
+                        jy1,
+                        jx2,
+                        jy2,
+                        b.outerColor || b.color,
+                        b.coreColor || '#ffffff'
+                    );
                 }
-                ctx.strokeStyle = outerColor;
-                ctx.lineCap = 'round';
-                ctx.lineWidth = width;
-                ctx.shadowColor = b.glowColor || outerColor;
-                ctx.shadowBlur = width * 2.4;
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.stroke();
-
-                const coreWidth = Math.max(0.3, width * 0.38 * (b.taper || 1));
-                ctx.setLineDash([]);
-                ctx.strokeStyle = coreColor;
-                ctx.lineWidth = coreWidth;
-                ctx.shadowBlur = coreWidth * 1.4;
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.stroke();
-                ctx.restore();
-            };
-
-            if (b.dual && b.dualOffset > 0) {
-                const dx = jx2 - jx1;
-                const dy = jy2 - jy1;
-                const len = Math.hypot(dx, dy) || 1;
-                const nx = -dy / len;
-                const ny = dx / len;
-                const ox = nx * b.dualOffset;
-                const oy = ny * b.dualOffset;
-
-                drawBeamStroke(
-                    jx1 + ox,
-                    jy1 + oy,
-                    jx2 + ox,
-                    jy2 + oy,
-                    b.outerColor || b.color,
-                    b.coreColor || '#ffffff'
-                );
-                drawBeamStroke(
-                    jx1 - ox,
-                    jy1 - oy,
-                    jx2 - ox,
-                    jy2 - oy,
-                    b.altColor || b.outerColor || b.color,
-                    b.coreColor || '#ffffff'
-                );
-            } else {
-                drawBeamStroke(
-                    jx1,
-                    jy1,
-                    jx2,
-                    jy2,
-                    b.outerColor || b.color,
-                    b.coreColor || '#ffffff'
-                );
             }
         }
 
         // Particles
-        for (const p of GameState.particles) {
-            p.draw(ctx);
+        if (drawParticles) {
+            const nativePixiParticles = typeof hasPixiParticleLayer === 'function' && hasPixiParticleLayer();
+            if (!nativePixiParticles) {
+                for (const p of GameState.particles) {
+                    p.draw(ctx);
+                }
+            }
         }
 
         // Floating texts
-        for (const ft of GameState.floatingTexts) {
-            const alpha = clamp(ft.life / ft.maxLife, 0, 1);
-            const fontFamily = ft.fontFamily || 'Orbitron, sans-serif';
-            const isBold = ft.bold !== false;
+        if (drawTexts) {
+            for (const ft of GameState.floatingTexts) {
+                const alpha = clamp(ft.life / ft.maxLife, 0, 1);
+                const fontFamily = ft.fontFamily || 'Orbitron, sans-serif';
+                const isBold = ft.bold !== false;
 
-            // Scale-up animation: start bigger and shrink to normal
-            let scaleFactor = 1.0;
-            if (ft.scaleAnim > 0) {
-                scaleFactor = 1.0 + ft.scaleAnim * 8; // starts scaled up, then returns to 1x
+                // Scale-up animation: start bigger and shrink to normal
+                let scaleFactor = 1.0;
+                if (ft.scaleAnim > 0) {
+                    scaleFactor = 1.0 + ft.scaleAnim * 8; // starts scaled up, then returns to 1x
+                }
+
+                // Critical hit style
+                if (ft.isCrit) {
+                    scaleFactor *= 1.3;
+                }
+
+                const fontSize = ft.size * scaleFactor;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = `${isBold ? 'bold ' : ''}${Math.round(fontSize)}px ${fontFamily}`;
+                ctx.textAlign = 'center';
+
+                // Outline effect for important text
+                if (ft.outline) {
+                    ctx.strokeStyle = ft.outlineColor || 'rgba(0,0,0,0.9)';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText(ft.text, ft.x, ft.y);
+                }
+
+                ctx.fillStyle = ft.color;
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 4;
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
             }
-
-            // Critical hit style
-            if (ft.isCrit) {
-                scaleFactor *= 1.3;
-            }
-
-            const fontSize = ft.size * scaleFactor;
-
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.font = `${isBold ? 'bold ' : ''}${Math.round(fontSize)}px ${fontFamily}`;
-            ctx.textAlign = 'center';
-
-            // Outline effect for important text
-            if (ft.outline) {
-                ctx.strokeStyle = ft.outlineColor || 'rgba(0,0,0,0.9)';
-                ctx.lineWidth = 3;
-                ctx.strokeText(ft.text, ft.x, ft.y);
-            }
-
-            ctx.fillStyle = ft.color;
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
-            ctx.fillText(ft.text, ft.x, ft.y);
-            ctx.restore();
         }
     },
 };

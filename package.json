@@ -3,12 +3,18 @@
   "version": "1.0.0",
   "description": "Tower Defense - Dual Path",
   "scripts": {
-    "start": "npx serve -p 3000",
-    "dev": "npx serve -p 3000",
+    "sync:vendor": "node scripts/sync-vendor-runtime.js",
+    "start": "npm run sync:vendor && vite --port 3000",
+    "dev": "npm run sync:vendor && vite --port 3000",
+    "build": "npm run sync:vendor && vite build && node scripts/postbuild-copy-static.js",
+    "preview": "vite preview --port 3000",
     "peerserver": "node scripts/peerserver.js"
   },
   "devDependencies": {
+    "pixi.js": "^8.12.0",
     "peer": "^1.0.2",
-    "serve": "^14.2.0"
+    "peerjs": "^1.5.5",
+    "serve": "^14.2.0",
+    "vite": "^7.0.0"
   }
 }

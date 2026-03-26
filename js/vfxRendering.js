@@ -8,14 +8,37 @@
 
 const VFXRenderer = {
     draw(ctx) {
+        this.drawLower(ctx, { skipParticles: false });
+        this.drawUpper(ctx);
+    },
+
+    drawLower(ctx, options = {}) {
+        const skipParticles = !!options.skipParticles;
+
         // Draw projectiles
         for (const p of GameState.projectiles) {
             p.draw(ctx);
         }
 
-        // Draw all effects (beams, particles, floating text, ground decals, ring waves)
-        // Effects.drawAll handles: GroundDecals, RingWaves, beams, particles, floating text
-        Effects.drawAll(ctx);
+        // Draw pre-particle effects under/around units
+        Effects.drawAll(ctx, {
+            ground: true,
+            rings: true,
+            beams: true,
+            particles: !skipParticles,
+            texts: false,
+        });
+    },
+
+    drawUpper(ctx) {
+        // Draw post-particle effects
+        Effects.drawAll(ctx, {
+            ground: false,
+            rings: false,
+            beams: false,
+            particles: false,
+            texts: true,
+        });
 
         // Draw environmental particles (dust motes, map-specific ambience)
         if (typeof EnvironmentalParticles !== 'undefined') {

@@ -256,7 +256,13 @@ const MapSystem = {
 
     // ===== MAIN DRAW =====
     draw(ctx) {
+        this.drawStatic(ctx);
+        this.drawDynamic(ctx);
+    },
+
+    drawStatic(ctx) {
         const mapDef = MAPS[GameState.mapIndex];
+        if (!mapDef) return;
         const ts = CONFIG.TILE_SIZE;
         const cols = CONFIG.CANVAS_TILES_X;
         const rows = CONFIG.CANVAS_TILES_Y;
@@ -288,6 +294,14 @@ const MapSystem = {
 
         // Draw rounded-corner orthogonal road
         this._drawSmoothPath(ctx, mapDef, ts);
+
+    },
+
+    drawDynamic(ctx) {
+        const mapDef = MAPS[GameState.mapIndex];
+        const ts = CONFIG.TILE_SIZE;
+
+        if (!mapDef) return;
 
         // Draw decorations
         this._drawDecorations(ctx, mapDef, ts);

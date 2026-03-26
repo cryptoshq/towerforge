@@ -27,6 +27,7 @@ const MenuSystem = {
     _hoverSfxBound: false,
     _hoverSfxPerTarget: null,
     _hoverSfxLastGlobal: 0,
+    _multiplayerStackLoading: false,
 
     init() {
         // Create animated menu background canvas
@@ -91,9 +92,9 @@ const MenuSystem = {
         // Multiplayer button
         const mpBtn = document.getElementById('btn-multiplayer');
         if (mpBtn) {
-            mpBtn.addEventListener('click', () => {
-                this.showScreen('multiplayer');
+            mpBtn.addEventListener('click', async () => {
                 Audio.play('click');
+                await this.openMultiplayerScreen();
             });
         }
 
@@ -182,9 +183,15 @@ const MenuSystem = {
         // Settings panel controls
         this._initSettingsPanel();
 
-        document.getElementById('btn-start-wave').addEventListener('click', () => {
-            WaveSystem.startWave();
-        });
+        const startWaveBtn = document.getElementById('btn-start-wave');
+        if (startWaveBtn) {
+            const triggerStartWave = (event) => {
+                if (event && event.type === 'pointerup' && event.button !== 0) return;
+                WaveSystem.startWave();
+            };
+            startWaveBtn.addEventListener('click', triggerStartWave);
+            startWaveBtn.addEventListener('pointerup', triggerStartWave);
+        }
 
         document.getElementById('btn-skip-wave').addEventListener('click', () => {
             WaveSystem.skipWave();
@@ -385,6 +392,90 @@ const MenuSystem = {
                 UIRenderer.hideTowerInfo();
             });
         }
+    },
+
+    async openMultiplayerScreen() {
+        if (this._multiplayerStackLoading) {
+            return;
+        }
+
+        if (typeof Multiplayer !== 'undefined' && typeof MultiplayerUI !== 'undefined') {
+            this.showScreen('multiplayer');
+            return;
+        }
+
+        const loader = typeof TowerForgeLazyLoader !== 'undefined'
+            ? TowerForgeLazyLoader
+            : null;
+
+        this._multiplayerStackLoading = true;
+        this._setMultiplayerButtonLoading(true);
+        this.showScreen('multiplayer');
+        this._renderMultiplayerLobbyPlaceholder('Loading multiplayer runtime...');
+
+        try {
+            if (!loader || typeof loader.ensureMultiplayerStack !== 'function') {
+                throw new Error('TowerForgeLazyLoader is unavailable');
+            }
+
+            await loader.ensureMultiplayerStack();
+
+            if (GameState.screen === 'multiplayer' && typeof MultiplayerUI !== 'undefined') {
+                MultiplayerUI.renderLobby();
+            }
+        } catch (error) {
+            console.error('[TowerForge] Failed to load multiplayer runtime:', error);
+            if (GameState.screen === 'multiplayer') {
+                this._renderMultiplayerLobbyPlaceholder(
+                    'Failed to load multiplayer runtime. Return to menu and retry.',
+                    true
+                );
+            }
+        } finally {
+            this._multiplayerStackLoading = false;
+            this._setMultiplayerButtonLoading(false);
+        }
+    },
+
+    _setMultiplayerButtonLoading(isLoading) {
+        const button = document.getElementById('btn-multiplayer');
+        if (!button) return;
+
+        if (isLoading) {
+            if (!button.dataset.labelHtml) {
+                button.dataset.labelHtml = button.innerHTML;
+            }
+            button.disabled = true;
+            button.innerHTML = 'MULTIPLAYER<span class="btn-subtitle">Loading network runtime...</span>';
+            return;
+        }
+
+        button.disabled = false;
+        if (button.dataset.labelHtml) {
+            button.innerHTML = button.dataset.labelHtml;
+        }
+    },
+
+    _renderMultiplayerLobbyPlaceholder(message, isError = false) {
+        const container = document.getElementById('mp-lobby-content');
+        if (!container) return;
+
+        const card = document.createElement('div');
+        card.textContent = message;
+        card.style.padding = '24px 20px';
+        card.style.borderRadius = '12px';
+        card.style.border = isError
+            ? '1px solid rgba(255, 90, 90, 0.45)'
+            : '1px solid rgba(90, 180, 255, 0.35)';
+        card.style.background = isError
+            ? 'rgba(80, 18, 18, 0.6)'
+            : 'rgba(18, 26, 46, 0.6)';
+        card.style.color = isError ? '#ffb4b4' : '#b4deff';
+        card.style.fontWeight = '600';
+        card.style.textAlign = 'center';
+        card.style.letterSpacing = '0.01em';
+
+        container.replaceChildren(card);
     },
 
     _initMenuBackground() {
@@ -1147,6 +1238,10 @@ const MenuSystem = {
                 document.getElementById('multiplayer-screen').classList.add('active');
                 if (typeof MultiplayerUI !== 'undefined') {
                     MultiplayerUI.renderLobby();
+                } else if (this._multiplayerStackLoading) {
+                    this._renderMultiplayerLobbyPlaceholder('Loading multiplayer runtime...');
+                } else {
+                    this._renderMultiplayerLobbyPlaceholder('Multiplayer runtime is not loaded. Return to menu and try again.', true);
                 }
                 break;
             case 'game':
@@ -2734,4 +2829,16 @@ const MenuSystem = {
             GameState.gamePhase = 'playing';
         }
     },
+};
+
+function installLegacyMenuGlobals(globalScope = globalThis) {
+    if (!globalScope || typeof globalScope !== 'object') return;
+    globalScope.MenuSystem = MenuSystem;
+}
+
+installLegacyMenuGlobals(globalThis);
+
+export {
+    MenuSystem,
+    installLegacyMenuGlobals,
 };

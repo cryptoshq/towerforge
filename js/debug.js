@@ -979,14 +979,13 @@ const DebugOverlayRenderer = {
     },
 };
 
-// ---- Auto-init on DOMContentLoaded (after other scripts) ----
-// We use a small delay so all game objects are available.
-window.addEventListener('DOMContentLoaded', () => {
-    // Delay init slightly so main.js initGame() runs first
-    setTimeout(() => {
-        DebugPanel.init();
-    }, 100);
-});
+if (typeof window !== 'undefined') {
+    window.DebugLog = DebugLog;
+    window.PerfMonitor = PerfMonitor;
+    window.DebugOverlays = DebugOverlays;
+    window.DebugCheats = DebugCheats;
+    window.DebugPanel = DebugPanel;
+}
 
 // ---- Monkey-patch the game loop to feed the debug panel ----
 // We wrap requestAnimationFrame's callback via a self-patching approach.
@@ -1002,31 +1001,53 @@ window.addEventListener('DOMContentLoaded', () => {
     };
 })();
 
-// ---- Monkey-patch renderGame to draw overlays ----
-// We wait until renderGame exists, then wrap it.
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        if (typeof renderGame === 'function') {
-            const _origRender = renderGame;
-            // Replace global renderGame
-            window.renderGame = function() {
-                _origRender();
-                // Draw debug overlays on the game canvas
-                if (typeof ctx !== 'undefined' && ctx) {
-                    ctx.save();
-                    if (typeof applyRenderTransform === 'function') {
-                        applyRenderTransform(ctx);
-                    }
-                    DebugOverlayRenderer.draw(ctx);
-                    ctx.restore();
-                }
-            };
-            // Also patch the global scope name used in gameLoop
-            // Since gameLoop directly calls renderGame, the above window.renderGame
-            // should be picked up IF gameLoop uses the global name. If it's
-            // captured in a closure, we need a different approach. Since main.js
-            // defines renderGame at the top level, the call in gameLoop() references
-            // the global, so this works.
+let _debugRenderPatched = false;
+
+function patchRenderGameWithDebugOverlay() {
+    if (_debugRenderPatched) return true;
+    if (typeof renderGame !== 'function') return false;
+
+    const _origRender = renderGame;
+    window.renderGame = function() {
+        _origRender();
+        // Draw debug overlays on the game canvas
+        if (typeof ctx !== 'undefined' && ctx) {
+            ctx.save();
+            if (typeof applyRenderTransform === 'function') {
+                applyRenderTransform(ctx);
+            }
+            DebugOverlayRenderer.draw(ctx);
+            ctx.restore();
         }
+    };
+
+    _debugRenderPatched = true;
+    return true;
+}
+
+function initDebugStartupHooks() {
+    // Delay init slightly so main.js initGame() runs first
+    setTimeout(() => {
+        DebugPanel.init();
+    }, 100);
+
+    // Wait for renderGame to exist, then patch overlays once.
+    setTimeout(() => {
+        if (patchRenderGameWithDebugOverlay()) return;
+
+        let attempts = 0;
+        const maxAttempts = 40;
+        const retryId = setInterval(() => {
+            attempts += 1;
+            if (patchRenderGameWithDebugOverlay() || attempts >= maxAttempts) {
+                clearInterval(retryId);
+            }
+        }, 100);
     }, 200);
-});
+}
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initDebugStartupHooks, { once: true });
+} else {
+    initDebugStartupHooks();
+}

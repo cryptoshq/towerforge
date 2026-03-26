@@ -1,3 +1,9 @@
+import { ENEMIES } from './config/enemies.js';
+import { generateWaves } from './config/waves.js';
+import { RESEARCH } from './config/research.js';
+import { PLAYER_ABILITIES } from './config/playerAbilities.js';
+import { ACHIEVEMENTS } from './config/achievements.js';
+
 // ===== TOWER DEFENSE CONFIG — ALL GAME DATA =====
 const CONFIG = {
     TILE_SIZE: 40,
@@ -1563,229 +1569,7 @@ function getScaledUpgradeCost(baseCost, tier, difficulty) {
     return Math.floor(scaledCost);
 }
 
-// ===== ENEMY TYPES =====
-const ENEMIES = {
-    basic: { name: 'Grunt', hp: 40, speed: 1.2, armor: 0, reward: 5, size: 10, color: '#e04040', desc: 'Standard enemy' },
-    fast: { name: 'Scout', hp: 25, speed: 2.2, armor: 0, reward: 6, size: 8, color: '#40e0e0', desc: 'Fast but fragile' },
-    heavy: { name: 'Brute', hp: 120, speed: 0.7, armor: 3, reward: 12, size: 14, color: '#8a6a4a', desc: 'Slow, heavy armor' },
-    healer: { name: 'Medic', hp: 50, speed: 1.0, armor: 0, reward: 15, size: 10, color: '#40e040', desc: 'Heals nearby enemies',
-        healRadius: 80, healRate: 5, healInterval: 1.0, healPulseColor: '#80ff80' },
-    shield: { name: 'Guardian', hp: 60, speed: 0.9, armor: 0, reward: 12, size: 12, color: '#4080e0', desc: 'Shields nearby enemies' },
-    swarm: { name: 'Swarmling', hp: 12, speed: 1.8, armor: 0, reward: 2, size: 6, color: '#e0e040', desc: 'Weak but numerous' },
-    stealth: { name: 'Shadow', hp: 45, speed: 1.5, armor: 0, reward: 10, size: 9, color: '#8040a0', desc: 'Periodically invisible' },
-    boss: { name: 'Overlord', hp: 800, speed: 0.5, armor: 5, reward: 100, size: 20, color: '#ff2020', desc: 'Massive boss enemy', isBoss: true },
-
-    // New enemy types
-    splitter: {
-        name: 'Splitter', hp: 80, speed: 1.0, armor: 1, reward: 10, size: 12, color: '#e0a040',
-        desc: 'Splits into 2 smaller copies on death',
-        splitCount: 2, splitHpRatio: 0.4, splitSpeedMult: 1.3, splitSizeRatio: 0.6,
-        splitReward: 3, splitColor: '#d09030',
-    },
-    ghost: {
-        name: 'Phantom', hp: 55, speed: 1.3, armor: 0, reward: 12, size: 9, color: '#a060d0',
-        desc: 'Periodically phases invisible and takes reduced damage',
-        phaseInterval: 4.0, phaseDuration: 2.0, phaseReduction: 0.8,
-        phaseColor: 'rgba(160, 96, 208, 0.3)', phaseGlowColor: '#c080e0',
-    },
-    berserker: {
-        name: 'Berserker', hp: 90, speed: 0.9, armor: 1, reward: 14, size: 13, color: '#e02020',
-        desc: 'Enrages at low health — speeds up and gains armor',
-        enrageThreshold: 0.4, enrageSpeedMult: 2.0, enrageArmorBonus: 3,
-        enrageColor: '#ff4040', enrageGlowColor: '#ff0000', enrageSizeMult: 1.15,
-    },
-    swarmfast: {
-        name: 'Buzzer', hp: 8, speed: 2.8, armor: 0, reward: 1, size: 5, color: '#c0e040',
-        desc: 'Extremely fast swarm unit — nearly impossible to hit one-by-one',
-        spawnGroupSize: 15, spawnDelay: 0.1, zigzagAmplitude: 8, zigzagFrequency: 4,
-    },
-    disruptor: {
-        name: 'Disruptor', hp: 70, speed: 1.25, armor: 1, reward: 16, size: 11, color: '#ff9a6a',
-        desc: 'Emits EMP pulses that disable nearby towers briefly',
-        disruptRadius: 150, disruptDuration: 1.5, disruptInterval: 2.8,
-    },
-    toxic: {
-        name: 'Toxic Carrier', hp: 65, speed: 1.05, armor: 0, reward: 15, size: 11, color: '#80d060',
-        desc: 'Releases corrosive fumes that reduce nearby tower damage',
-        toxicRadius: 140, toxicDuration: 2.8, toxicInterval: 3.2, toxicDamageMult: 0.8,
-    },
-};
-
-// ===== WAVE DEFINITIONS (per map, auto-generated from templates) =====
-// Each difficulty group has its own unique enemy pool and wave patterns
-function generateWaves(mapIndex, waveCount) {
-    const waves = [];
-    const diffGroup = Math.floor(mapIndex / 5);
-
-    for (let w = 1; w <= waveCount; w++) {
-        const wave = { enemies: [], delay: 0.6 };
-        const diff = diffGroup * 0.3 + (mapIndex % 5) * 0.06;
-        const hpScale = 1 + (w - 1) * 0.12 + diff * 0.15;
-        const countBase = Math.floor(5 + w * 1.2 + diff * 2);
-
-        if (diffGroup === 0) {
-            // ===== EASY: Grunt, Scout, Swarmling, Medic, Boss =====
-            if (w % 10 === 0) {
-                wave.enemies.push({ type: 'boss', count: 1, hpMult: hpScale * 1.2, delay: 2.0 });
-                wave.enemies.push({ type: 'basic', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.6 });
-            } else if (w % 5 === 0) {
-                // Medic-supported push
-                wave.enemies.push({ type: 'basic', count: Math.floor(countBase * 0.5), hpMult: hpScale, delay: 0.5 });
-                wave.enemies.push({ type: 'healer', count: 1 + Math.floor(w / 15), hpMult: hpScale, delay: 1.0 });
-                wave.enemies.push({ type: 'fast', count: Math.floor(countBase * 0.2), hpMult: hpScale * 0.7, delay: 0.4 });
-            } else if (w % 3 === 0) {
-                // Swarm wave
-                wave.enemies.push({ type: 'swarm', count: countBase * 2, hpMult: hpScale * 0.5, delay: 0.2 });
-            } else if (w % 7 === 0) {
-                // Scout rush
-                wave.enemies.push({ type: 'fast', count: Math.floor(countBase * 0.7), hpMult: hpScale * 0.8, delay: 0.35 });
-                wave.enemies.push({ type: 'swarm', count: Math.floor(countBase * 0.5), hpMult: hpScale * 0.4, delay: 0.2 });
-            } else {
-                // Standard grunts + scouts
-                wave.enemies.push({ type: 'basic', count: countBase, hpMult: hpScale, delay: 0.5 });
-                if (w > 3) wave.enemies.push({ type: 'fast', count: Math.floor(countBase * 0.25), hpMult: hpScale * 0.7, delay: 0.4 });
-            }
-
-        } else if (diffGroup === 1) {
-            // ===== NORMAL: Grunt, Brute, Guardian, Medic, Splitter, Boss =====
-            if (w % 10 === 0) {
-                wave.enemies.push({ type: 'boss', count: 1 + Math.floor(w / 25), hpMult: hpScale * 1.5, delay: 2.0 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.8 });
-            } else if (w % 5 === 0) {
-                // Armored push with healer support
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.9 });
-                wave.enemies.push({ type: 'healer', count: 2, hpMult: hpScale, delay: 1.0 });
-            } else if (w % 7 === 0) {
-                // Guardian wall
-                wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.2, delay: 0.7 });
-                wave.enemies.push({ type: 'basic', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.5 });
-            } else if (w % 11 === 0) {
-                // Splitter wave
-                wave.enemies.push({ type: 'splitter', count: Math.floor(countBase * 0.5), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
-            } else if (w % 3 === 0) {
-                // Brute march
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.9 });
-                wave.enemies.push({ type: 'basic', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.5 });
-            } else {
-                // Standard mixed
-                wave.enemies.push({ type: 'basic', count: countBase, hpMult: hpScale, delay: 0.5 });
-                if (w > 3) wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.15), hpMult: hpScale, delay: 0.8 });
-                if (w > 6) wave.enemies.push({ type: 'shield', count: 1, hpMult: hpScale, delay: 1.0 });
-            }
-
-        } else if (diffGroup === 2) {
-            // ===== HARD: Shadow, Phantom, Berserker, Brute, Buzzer, Boss =====
-            if (w % 10 === 0) {
-                wave.enemies.push({ type: 'boss', count: 1 + Math.floor(w / 20), hpMult: hpScale * 1.8, delay: 2.0 });
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.9 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
-            } else if (w % 5 === 0) {
-                // Shadow ambush
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.6 });
-                wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.7 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
-            } else if (w % 7 === 0) {
-                // Berserker rage
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.5), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale * 1.2, delay: 0.9 });
-            } else if (w % 8 === 0) {
-                // Buzzer swarm
-                wave.enemies.push({ type: 'swarmfast', count: countBase * 3, hpMult: hpScale * 0.4, delay: 0.1 });
-            } else if (w % 6 === 0) {
-                // Disruptor support wave
-                wave.enemies.push({ type: 'disruptor', count: Math.max(1, Math.floor(countBase * 0.18)), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.8 });
-            } else if (w % 9 === 0) {
-                // Toxic pressure wave
-                wave.enemies.push({ type: 'toxic', count: Math.max(1, Math.floor(countBase * 0.22)), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.6 });
-            } else if (w % 13 === 0) {
-                // Tunneler ambush
-                if (typeof ENEMIES !== 'undefined' && ENEMIES.tunneler) {
-                    wave.enemies.push({ type: 'tunneler', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.7 });
-                    wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
-                } else {
-                    wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.6), hpMult: hpScale, delay: 0.6 });
-                    wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.7 });
-                }
-            } else if (w % 3 === 0) {
-                // Stealth wave
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.5), hpMult: hpScale, delay: 0.6 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
-            } else {
-                // Mixed hard
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.7 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.6 });
-                if (w > 5) wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.1), hpMult: hpScale, delay: 0.9 });
-            }
-
-        } else {
-            // ===== NIGHTMARE: ALL enemy types, elite variants, double modifiers =====
-            if (w % 10 === 0) {
-                // Multi-boss wave
-                wave.enemies.push({ type: 'boss', count: 1 + Math.floor(w / 15), hpMult: hpScale * 2.5, delay: 1.5 });
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.3, delay: 0.7 });
-                wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.6 });
-            } else if (w % 5 === 0) {
-                // Everything-at-once wave
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.25), hpMult: hpScale * 1.3, delay: 0.7 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.5 });
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.2), hpMult: hpScale * 1.2, delay: 0.8 });
-                wave.enemies.push({ type: 'splitter', count: Math.floor(countBase * 0.15), hpMult: hpScale, delay: 0.8 });
-                wave.enemies.push({ type: 'healer', count: 2, hpMult: hpScale * 1.5, delay: 1.0 });
-            } else if (w % 7 === 0) {
-                // Invisible army
-                wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.4), hpMult: hpScale * 1.2, delay: 0.5 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.5 });
-                wave.enemies.push({ type: 'healer', count: 2, hpMult: hpScale, delay: 1.0 });
-            } else if (w % 8 === 0) {
-                // Buzzer + berserker combo
-                wave.enemies.push({ type: 'swarmfast', count: countBase * 3, hpMult: hpScale * 0.5, delay: 0.1 });
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.2, delay: 0.7 });
-                wave.enemies.push({ type: 'disruptor', count: Math.max(1, Math.floor(countBase * 0.12)), hpMult: hpScale * 1.1, delay: 0.9 });
-            } else if (w % 3 === 0) {
-                // Splitter chaos
-                wave.enemies.push({ type: 'splitter', count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.2, delay: 0.6 });
-                wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.2), hpMult: hpScale * 1.3, delay: 0.8 });
-                wave.enemies.push({ type: 'swarm', count: countBase, hpMult: hpScale * 0.5, delay: 0.15 });
-            } else if (w % 9 === 0) {
-                wave.enemies.push({ type: 'toxic', count: Math.max(2, Math.floor(countBase * 0.18)), hpMult: hpScale * 1.2, delay: 0.9 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.25), hpMult: hpScale * 1.2, delay: 0.8 });
-            } else if (w % 11 === 0) {
-                // Elite berserker rush
-                wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.6), hpMult: hpScale * 1.5, delay: 0.6 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.5, delay: 0.7 });
-            } else if (w % 13 === 0) {
-                // Sapper gold heist
-                wave.enemies.push({ type: 'sapper', count: Math.floor(countBase * 0.5), hpMult: hpScale * 0.8, delay: 0.3 });
-                wave.enemies.push({ type: 'fast', count: Math.floor(countBase * 0.4), hpMult: hpScale * 0.7, delay: 0.3 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.5 });
-            } else if (w % 14 === 0) {
-                // Mirror + Summoner nightmare
-                wave.enemies.push({ type: 'mirror', count: Math.floor(countBase * 0.4), hpMult: hpScale * 1.2, delay: 0.6 });
-                wave.enemies.push({ type: 'summoner', count: Math.max(2, Math.floor(countBase * 0.15)), hpMult: hpScale * 1.3, delay: 1.0 });
-                wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.15), hpMult: hpScale * 1.2, delay: 0.8 });
-            } else if (w % 15 === 0 && w % 5 !== 0) {
-                // Tunneler invasion
-                wave.enemies.push({ type: 'tunneler', count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.3, delay: 0.7 });
-                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.4, delay: 0.8 });
-            } else {
-                // Nightmare standard — everything mixed (including new types)
-                const types = ['basic', 'fast', 'heavy', 'stealth', 'berserker', 'ghost', 'splitter', 'disruptor', 'toxic', 'tunneler', 'mirror', 'sapper', 'summoner'];
-                const pick1 = types[w % types.length];
-                const pick2 = types[(w * 3 + 1) % types.length];
-                wave.enemies.push({ type: pick1, count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.2, delay: 0.5 });
-                wave.enemies.push({ type: pick2, count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.6 });
-                if (w > 5) wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.1), hpMult: hpScale * 1.3, delay: 0.9 });
-            }
-        }
-
-        waves.push(wave);
-    }
-    return waves;
-}
+// ENEMIES and generateWaves are now sourced from split config modules.
 
 // ===== MAP DEFINITIONS (30x18 grid) =====
 const MAPS = [
@@ -2334,168 +2118,43 @@ CONFIG.PROGRESSION = {
     ],
 };
 
-// ===== RESEARCH TREE =====
-const RESEARCH = {
-    offense: {
-        name: 'OFFENSE', icon: '\u2694',
-        nodes: [
-            // Row 1
-            [
-                { id: 'sharp', name: 'Sharpened Tips', desc: '+5% damage for all towers', cost: 1, effect: { dmgMult: 0.05 }, icon: '\u{1F5E1}' },
-                { id: 'quick', name: 'Quick Hands', desc: '+3% fire rate for all towers', cost: 1, effect: { rateMult: 0.03 }, icon: '\u{23F1}' },
-                { id: 'criteye', name: 'Critical Eye', desc: '+3% crit chance for all towers', cost: 1, effect: { critChance: 0.03 }, icon: '\u{1F441}' },
-            ],
-            // Row 2
-            [
-                { id: 'heavy', name: 'Heavy Ordnance', desc: '+8% damage for all towers', cost: 2, effect: { dmgMult: 0.08 }, requires: ['sharp'], icon: '\u{1F4A3}' },
-                { id: 'rapid', name: 'Rapid Fire', desc: '+5% fire rate', cost: 2, effect: { rateMult: 0.05 }, requires: ['quick'], icon: '\u{26A1}' },
-                { id: 'vital', name: 'Vital Strikes', desc: '+5% crit, +20% crit dmg', cost: 2, effect: { critChance: 0.05, critDmg: 0.2 }, requires: ['criteye'], icon: '\u{2620}' },
-            ],
-            // Row 3
-            [
-                { id: 'optics', name: 'Extended Optics', desc: '+10% range for all towers', cost: 3, effect: { rangeMult: 0.10 }, requires: ['heavy', 'rapid'], icon: '\u{1F52D}' },
-                { id: 'elemental', name: 'Elemental Mastery', desc: 'Elemental effects last 20% longer', cost: 3, effect: { effectDuration: 0.2 }, requires: ['rapid', 'vital'], icon: '\u{1F525}' },
-                { id: 'armorpierce', name: 'Armor Piercing', desc: 'All towers ignore 10% armor', cost: 3, effect: { armorPierce: 0.1 }, requires: ['heavy', 'vital'], icon: '\u{1F6E1}' },
-            ],
-            // Row 4
-            [
-                { id: 'dualmastery', name: 'Dual Mastery', desc: 'Both paths can reach Tier 3. Only one reaches 4-5.', cost: 4, effect: { dualMastery: true }, requires: ['optics', 'elemental'], icon: '\u{2B50}' },
-                { id: 'crosstrain', name: 'Cross-Training', desc: 'Synergy bonuses 50% stronger', cost: 4, effect: { synergyMult: 0.5 }, requires: ['elemental', 'armorpierce'], icon: '\u{1F91D}' },
-                { id: 'overclock', name: 'Overclock Protocol', desc: 'Overclock recovery 2s faster', cost: 4, effect: { overclockRecovery: 2 }, requires: ['optics', 'armorpierce'], icon: '\u{2699}' },
-            ],
-            // Row 5
-            [
-                { id: 'apex', name: 'Apex Predator', desc: 'All towers gain +75 bonus kills toward mastery', cost: 5, effect: { masteryBonus: 75 }, requires: ['dualmastery', 'crosstrain'], icon: '\u{1F451}' },
-                { id: 'ultcalib', name: 'Ultimate Calibration', desc: 'Tier 5 abilities cooldown 25% faster', cost: 5, effect: { ultimateCdr: 0.25 }, requires: ['crosstrain', 'overclock'], icon: '\u{1F527}' },
-                { id: 'warmachine', name: 'War Machine', desc: '+15% dmg, +10% rate. Towers cost 5% more', cost: 5, effect: { dmgMult: 0.15, rateMult: 0.10, costMult: 0.05 }, requires: ['dualmastery', 'overclock'], icon: '\u{1F916}' },
-            ],
-        ],
-    },
-    defense: {
-        name: 'DEFENSE', icon: '\u{1F6E1}',
-        nodes: [
-            [
-                { id: 'reinforce', name: 'Reinforced Gates', desc: '+3 starting lives', cost: 1, effect: { bonusLives: 3 }, icon: '\u{1F6AA}' },
-                { id: 'harden', name: 'Tower Hardening', desc: 'Towers immune to damage', cost: 1, effect: { towerImmune: true }, icon: '\u{1F3F0}' },
-                { id: 'veteran', name: 'Veteran Guards', desc: 'Leaked enemies deal 1 less life', cost: 1, effect: { reducedLeak: 1 }, icon: '\u{1F482}' },
-            ],
-            [
-                { id: 'fortify', name: 'Fortified Walls', desc: '+5 starting lives', cost: 2, effect: { bonusLives: 5 }, requires: ['reinforce'], icon: '\u{1F9F1}' },
-                { id: 'laststand', name: 'Last Stand', desc: 'At 5 lives, +20% dmg for 30s', cost: 2, effect: { lastStand: true }, requires: ['harden'], icon: '\u{1F4AA}' },
-                { id: 'frostarmor', name: 'Frost Armor', desc: 'Tower damage freezes attackers', cost: 2, effect: { frostArmor: true }, requires: ['veteran'], icon: '\u{2744}' },
-            ],
-            [
-                { id: 'lifeins', name: 'Life Insurance', desc: '+10 gold when you lose a life', cost: 3, effect: { lifeInsGold: 10 }, requires: ['fortify', 'laststand'], icon: '\u{1F4B0}' },
-                { id: 'emergency', name: 'Emergency Protocol', desc: 'At 10 lives, abilities 50% faster', cost: 3, effect: { emergencyCdr: 0.5 }, requires: ['laststand', 'frostarmor'], icon: '\u{1F6A8}' },
-                { id: 'secondchance', name: 'Second Chance', desc: 'Survive once at 1 life', cost: 3, effect: { secondChance: true }, requires: ['fortify', 'frostarmor'], icon: '\u{1F31F}' },
-            ],
-            [
-                { id: 'immortal', name: 'Immortal Bastion', desc: '+10 lives, invuln for 10s after hit', cost: 4, effect: { bonusLives: 10, invulnWindow: 10 }, requires: ['lifeins', 'emergency'], icon: '\u{1F3F0}' },
-                { id: 'phoenix', name: 'Phoenix Protocol', desc: '25% chance sold tower respawns', cost: 4, effect: { phoenixChance: 0.25 }, requires: ['emergency', 'secondchance'], icon: '\u{1F426}' },
-                { id: 'unbreakable', name: 'Unbreakable', desc: 'Shield blocks first 5 leaks', cost: 4, effect: { startShield: 5 }, requires: ['lifeins', 'secondchance'], icon: '\u{1F6E1}' },
-            ],
-        ],
-    },
-    economy: {
-        name: 'ECONOMY', icon: '\u{1F4B0}',
-        nodes: [
-            [
-                { id: 'warchest', name: 'War Chest', desc: '+50 starting gold', cost: 1, effect: { bonusGold: 50 }, icon: '\u{1F4B0}' },
-                { id: 'efficient', name: 'Efficient Builder', desc: 'All towers cost 3% less', cost: 1, effect: { costReduce: 0.03 }, icon: '\u{1F6E0}' },
-                { id: 'interest', name: 'Interest Rate', desc: '+1% interest rate', cost: 1, effect: { interestRate: 0.01 }, icon: '\u{1F4C8}' },
-            ],
-            [
-                { id: 'trade', name: 'Trade Routes', desc: '+75 starting gold', cost: 2, effect: { bonusGold: 75 }, requires: ['warchest'], icon: '\u{1F6A2}' },
-                { id: 'bulk', name: 'Bulk Orders', desc: 'Towers cost 5% less', cost: 2, effect: { costReduce: 0.05 }, requires: ['efficient'], icon: '\u{1F4E6}' },
-                { id: 'banking', name: 'Banking', desc: 'Interest cap +25 gold', cost: 2, effect: { interestCap: 25 }, requires: ['interest'], icon: '\u{1F3E6}' },
-            ],
-            [
-                { id: 'bounty', name: 'Bounty System', desc: 'Bosses reward 50% more gold', cost: 3, effect: { bossGold: 0.5 }, requires: ['trade', 'bulk'], icon: '\u{1F4B5}' },
-                { id: 'salvage', name: 'Salvage Expert', desc: 'Sell value 80% (from 70%)', cost: 3, effect: { sellRefund: 0.8 }, requires: ['bulk', 'banking'], icon: '\u{267B}' },
-                { id: 'wavebonus', name: 'Wave Bonus', desc: 'Wave completion bonus doubled', cost: 3, effect: { waveBonusMult: 2 }, requires: ['trade', 'banking'], icon: '\u{1F3C6}' },
-            ],
-            [
-                { id: 'goldrush', name: 'Gold Rush', desc: 'Every 5 waves, +100 gold', cost: 4, effect: { goldRush: 100 }, requires: ['bounty', 'salvage'], icon: '\u{1F4B4}' },
-                { id: 'upgdiscount', name: 'Upgrade Discount', desc: 'Upgrades cost 15% less', cost: 4, effect: { upgradeDiscount: 0.15 }, requires: ['salvage', 'wavebonus'], icon: '\u{1F3F7}' },
-                { id: 'portfolio', name: 'Investment Portfolio', desc: 'Compound interest on interest', cost: 4, effect: { compoundInterest: true }, requires: ['bounty', 'wavebonus'], icon: '\u{1F4CA}' },
-            ],
-        ],
-    },
-    knowledge: {
-        name: 'KNOWLEDGE', icon: '\u{1F4DA}',
-        nodes: [
-            [
-                { id: 'scholar', name: 'Scholar', desc: '+1 research point per map clear', cost: 1, effect: { bonusRP: 1 }, icon: '\u{1F393}' },
-                { id: 'scouting', name: 'Scouting Report', desc: 'See enemy HP/stats in preview', cost: 1, effect: { scoutingReport: true }, icon: '\u{1F50D}' },
-                { id: 'blueprint', name: 'Draft Protocols', desc: 'Endless mutator draft gains 1 reroll', cost: 1, effect: { draftReroll: 1 }, icon: '\u{1F4D0}' },
-            ],
-            [
-                { id: 'advscholar', name: 'Advanced Scholar', desc: '+2 RP per map clear', cost: 2, effect: { bonusRP: 2 }, requires: ['scholar'], icon: '\u{1F4D6}' },
-                { id: 'mapmastery', name: 'Endless Mastery', desc: 'Endless milestone rewards +50%', cost: 2, effect: { endlessMilestoneBoost: 0.5 }, requires: ['scouting'], icon: '\u{1F5FA}' },
-                { id: 'tactical', name: 'Weekly Analysis', desc: 'Weekly first-victory RP bonus +50%', cost: 2, effect: { weeklyRpMult: 0.5 }, requires: ['blueprint'], icon: '\u{1F4FA}' },
-            ],
-            [
-                { id: 'achiever', name: 'Achievement Hunter', desc: 'Achievements grant +1 RP', cost: 3, effect: { achievementRP: true }, requires: ['advscholar', 'mapmastery'], icon: '\u{1F3C5}' },
-                { id: 'effexpert', name: 'Efficiency Expert', desc: '100+ kill towers earn 50% more gold', cost: 3, effect: { killGoldBonus: 0.5 }, requires: ['mapmastery', 'tactical'], icon: '\u{1F4B9}' },
-                { id: 'orbcollect', name: 'Combat Analytics', desc: 'Elite/Boss kills reduce ability cooldowns by 0.6s', cost: 3, effect: { abilityCdOnEliteKill: 0.6 }, requires: ['advscholar', 'tactical'], icon: '\u{1F4D5}' },
-            ],
-            [
-                { id: 'grandscholar', name: 'Grand Scholar', desc: '+3 RP per map clear', cost: 4, effect: { bonusRP: 3 }, requires: ['achiever', 'effexpert'], icon: '\u{1F9D9}' },
-                { id: 'towerdna', name: 'Tower DNA', desc: 'Mastery bonuses 50% stronger', cost: 4, effect: { masteryMult: 0.5 }, requires: ['effexpert', 'orbcollect'], icon: '\u{1F9EC}' },
-                { id: 'omniscience', name: 'Omniscience', desc: 'All enemies visible, see pathing', cost: 4, effect: { omniscience: true }, requires: ['achiever', 'orbcollect'], icon: '\u{1F4A0}' },
-            ],
-        ],
-    },
+// RESEARCH, PLAYER_ABILITIES, and ACHIEVEMENTS now come from split config modules.
+
+function installLegacyConfigGlobals(globalScope = globalThis) {
+    if (!globalScope || typeof globalScope !== 'object') return;
+
+    Object.assign(globalScope, {
+        CONFIG,
+        PROJECTILE_FAMILY_DEFAULTS,
+        PROJECTILE_IMPACT_PRESETS,
+        PROJECTILE_VISUALS,
+        LASER_BEAM_VISUALS,
+        TOWERS,
+        ENEMIES,
+        MAPS,
+        RESEARCH,
+        PLAYER_ABILITIES,
+        ACHIEVEMENTS,
+        generateWaves,
+        getTowerTotalCost,
+        getScaledUpgradeCost,
+    });
+}
+
+export {
+    CONFIG,
+    PROJECTILE_FAMILY_DEFAULTS,
+    PROJECTILE_IMPACT_PRESETS,
+    PROJECTILE_VISUALS,
+    LASER_BEAM_VISUALS,
+    TOWERS,
+    ENEMIES,
+    MAPS,
+    RESEARCH,
+    PLAYER_ABILITIES,
+    ACHIEVEMENTS,
+    generateWaves,
+    getTowerTotalCost,
+    getScaledUpgradeCost,
+    installLegacyConfigGlobals,
 };
-
-// ===== PLAYER ABILITIES =====
-const PLAYER_ABILITIES = [
-    { id: 'airstrike', name: 'Air Strike', desc: 'Deals 200 damage in target area', cooldown: 30, icon: '\u{2708}', key: 'Q',
-        effect: { type: 'aoe', damage: 200, radius: 80 } },
-    { id: 'reinforce', name: 'Reinforce', desc: '+5 temporary lives for 20 seconds', cooldown: 45, icon: '\u{1F6E1}', key: 'W',
-        effect: { type: 'buff', bonusLives: 5, duration: 20 } },
-    { id: 'goldmine', name: 'Gold Mine', desc: 'Earn 100 bonus gold', cooldown: 60, icon: '\u{1F4B0}', key: 'E',
-        effect: { type: 'gold', amount: 100 } },
-    { id: 'slowfield', name: 'Slow Field', desc: 'Slow all enemies 50% for 8 seconds', cooldown: 40, icon: '\u{2744}', key: 'R',
-        effect: { type: 'slow', amount: 0.5, duration: 8 } },
-    { id: 'overcharge', name: 'Overcharge', desc: 'All towers +50% damage for 10s', cooldown: 50, icon: '\u{26A1}', key: 'T',
-        effect: { type: 'towerbuff', dmgMult: 0.5, duration: 10 } },
-];
-
-// ===== ACHIEVEMENT DEFINITIONS =====
-const ACHIEVEMENTS = [
-    { id: 'first_blood', name: 'First Blood', desc: 'Kill your first enemy', icon: '\u{1F5E1}', check: s => s.totalKills >= 1 },
-    { id: 'wave10', name: 'Holding Strong', desc: 'Survive 10 waves', icon: '\u{1F6E1}', check: s => s.wavesCompleted >= 10 },
-    { id: 'wave30', name: 'Veteran Defender', desc: 'Survive 30 waves', icon: '\u{1F3C5}', check: s => s.wavesCompleted >= 30 },
-    { id: 'rich', name: 'War Chest', desc: 'Have 1000 gold at once', icon: '\u{1F4B0}', check: s => s.maxGold >= 1000 },
-    { id: 'mythic_tower', name: 'Mythic Guardian', desc: 'Get a tower to Mythic mastery', icon: '\u{1F48E}', check: s => s.maxMastery >= 500 },
-    { id: 'tier5', name: 'Ultimate Power', desc: 'Upgrade a tower to Tier 5', icon: '\u{2B50}', check: s => s.maxTier >= 5 },
-    { id: 'no_leak', name: 'Perfect Defense', desc: 'Complete a map with no leaks', icon: '\u{1F31F}', check: s => s.perfectWaves > 0 },
-    { id: 'kills100', name: 'Centurion', desc: 'Kill 100 enemies in one game', icon: '\u{1F5E1}', check: s => s.totalKills >= 100 },
-    { id: 'kills500', name: 'Slayer', desc: 'Kill 500 enemies in one game', icon: '\u{2694}', check: s => s.totalKills >= 500 },
-    { id: 'map1', name: 'Valley Victor', desc: 'Complete Green Valley', icon: '\u{1F332}', check: s => s.mapsCompleted?.includes(0) },
-    { id: 'map2', name: 'Desert Storm', desc: 'Complete Desert Pass', icon: '\u{1F3DC}', check: s => s.mapsCompleted?.includes(1) },
-    { id: 'map3', name: 'Ice Breaker', desc: 'Complete Frozen Peak', icon: '\u{2744}', check: s => s.mapsCompleted?.includes(2) },
-    { id: 'map4', name: 'Fire Walker', desc: 'Complete Volcanic Rift', icon: '\u{1F30B}', check: s => s.mapsCompleted?.includes(3) },
-    { id: 'map5', name: 'Shadow Lord', desc: 'Complete Shadow Realm', icon: '\u{1F47B}', check: s => s.mapsCompleted?.includes(4) },
-    { id: 'towers8', name: 'Arsenal', desc: 'Build all 8 tower types in one game', icon: '\u{1F3F0}', check: s => s.towerTypesBuilt >= 8 },
-    { id: 'speed3', name: 'Fast Forward', desc: 'Play at 3x speed', icon: '\u{23E9}', check: s => s.usedSpeed3 },
-    { id: 'boss5', name: 'Boss Hunter', desc: 'Kill 5 bosses in one game', icon: '\u{1F479}', check: s => s.bossKills >= 5 },
-    { id: 'combo8', name: 'Tower Army', desc: 'Get 8 towers of same type combo', icon: '\u{1F3AF}', check: s => s.maxCombo >= 8 },
-    { id: 'research5', name: 'Researcher', desc: 'Unlock 5 research nodes', icon: '\u{1F52C}', check: s => s.researchCount >= 5 },
-    { id: 'all_maps', name: 'Conqueror', desc: 'Complete all 5 maps', icon: '\u{1F451}', check: s => (s.mapsCompleted?.length || 0) >= 5 },
-
-    // New achievements
-    { id: 'kills1000', name: 'Annihilator', desc: 'Kill 1000 enemies in one game', icon: '\u{1F480}', check: s => s.totalKills >= 1000 },
-    { id: 'kills5000', name: 'Extinction Event', desc: 'Kill 5000 enemies in one game', icon: '\u{2622}', check: s => s.totalKills >= 5000 },
-    { id: 'wave50', name: 'Unbreakable Wall', desc: 'Survive 50 waves', icon: '\u{1F3F0}', check: s => s.wavesCompleted >= 50 },
-    { id: 'gold5000', name: 'Dragon Hoard', desc: 'Have 5000 gold at once', icon: '\u{1F4B0}', check: s => s.maxGold >= 5000 },
-    { id: 'boss20', name: 'Boss Slayer', desc: 'Kill 20 bosses in one game', icon: '\u{1F47E}', check: s => s.bossKills >= 20 },
-    { id: 'overclock10', name: 'Overclocker', desc: 'Overclock towers 10 times in one game', icon: '\u{2699}', check: s => s.overclockCount >= 10 },
-    { id: 'no_tower_lost', name: 'Zero Casualties', desc: 'Complete a map without selling any tower', icon: '\u{1F3C6}', check: s => s.towersNeverSold },
-    { id: 'speed_run', name: 'Speed Demon', desc: 'Complete a map in under 10 minutes', icon: '\u{23F1}', check: s => s.fastestClear < 600 },
-    { id: 'full_research', name: 'Research Complete', desc: 'Unlock all research nodes', icon: '\u{1F9EA}', check: s => s.researchCount >= 30 },
-    { id: 'multi_tier5', name: 'Tower of Power', desc: 'Have 3 Tier 5 towers at once', icon: '\u{1F31F}', check: s => s.tier5Count >= 3 },
-    { id: 'first_ability', name: 'Ability Unlocked', desc: 'Use an ability for the first time', icon: '\u{2728}', check: s => s.abilitiesUsed >= 1 },
-    { id: 'synergy_master', name: 'Synergy Master', desc: 'Activate 5 different synergy types', icon: '\u{1F91D}', check: s => s.synergyTypesActivated >= 5 },
-];

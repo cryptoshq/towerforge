@@ -1,4 +1,3 @@
-const path = require('path');
 const { chromium } = require('playwright');
 
 function assert(condition, message) {
@@ -13,8 +12,7 @@ async function run() {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 
-    const fileUrl = `file:///${path.resolve(__dirname, '..', 'index.html').replace(/\\/g, '/')}`;
-    await page.goto(process.env.BASE_URL || fileUrl);
+    await page.goto(process.env.BASE_URL || 'http://localhost:3000');
     await page.waitForFunction(() => typeof startGame === 'function' && typeof WaveSystem !== 'undefined');
 
     const statusExpiry = await page.evaluate(() => {
