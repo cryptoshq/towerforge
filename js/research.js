@@ -19,6 +19,7 @@ const ResearchSystem = {
     NODE_SIZE: 58,
     NODE_GAP_X: 260,
     NODE_GAP_Y: 220,
+    VERTICAL_DEPTH_STEP: 180,
     CENTER_X: 1600,
     CENTER_Y: 1400,
 
@@ -110,7 +111,11 @@ const ResearchSystem = {
         // Center the tree initially
         requestAnimationFrame(() => {
             container.scrollLeft = (this.TREE_W - container.clientWidth) / 2;
-            container.scrollTop = (this.TREE_H - container.clientHeight) / 2;
+            const centerScrollTop = this.CENTER_Y - container.clientHeight / 2;
+            const economyRowTwoTop = this.CENTER_Y - (2 * this.VERTICAL_DEPTH_STEP) - this.NODE_SIZE / 2;
+            const preferredTopMargin = 24;
+            const economyAlignedTop = economyRowTwoTop - preferredTopMargin;
+            container.scrollTop = Math.max(0, Math.min(centerScrollTop, economyAlignedTop));
         });
     },
 
@@ -137,7 +142,7 @@ const ResearchSystem = {
         // depthStep: distance between successive rows along the branch direction.
         // perpStep: distance between sibling nodes perpendicular to branch direction.
         const depthStepX = gx;            // 260 px between rows for horizontal branches
-        const depthStepY = gy;            // 220 px between rows for vertical branches
+        const depthStepY = this.VERTICAL_DEPTH_STEP;
         const horizPerpStep = this.NODE_SIZE + 90;  // 148 px perpendicular for horizontal branches
         const vertPerpStep  = this.NODE_SIZE + 90;  // 148 px perpendicular for vertical branches
 
@@ -343,12 +348,46 @@ const ResearchSystem = {
     _collectActiveBonusLines(limit = 6) {
         const out = [];
         const rb = GameState.researchBonuses || {};
-        for (const [key, value] of Object.entries(rb)) {
-            if (!this._isMeaningfulBonusValue(value)) continue;
+
+        const priorityKeys = [
+            'dmgMult', 'rateMult', 'rangeMult', 'critChance', 'critDmg',
+            'bonusGold', 'bonusLives', 'costReduce', 'upgradeDiscount',
+            'interestRate', 'interestCap', 'sellRefund',
+            'ultimateCdr', 'masteryMult', 'synergyMult',
+            'bossGold', 'killGoldBonus', 'abilityCdOnEliteKill',
+            'waveBonusMult', 'goldRush', 'bonusRP',
+        ];
+
+        const seen = new Set();
+        const pushKey = (key) => {
+            if (seen.has(key)) return;
+            seen.add(key);
+            const value = rb[key];
+            if (!this._isMeaningfulBonusValue(value)) return;
             const label = this._effectLabel(key);
             out.push(`${label}: ${this._formatBonusValue(value)}`);
+        };
+
+        for (const key of priorityKeys) {
             if (out.length >= limit) break;
+            pushKey(key);
         }
+
+        if (out.length < limit) {
+            for (const key of Object.keys(rb)) {
+                if (out.length >= limit) break;
+                pushKey(key);
+            }
+        }
+
+        const compressionNotes = Array.isArray(GameState.researchCompressionNotes)
+            ? GameState.researchCompressionNotes
+            : [];
+        if (compressionNotes.length > 0 && out.length < limit) {
+            const noteText = compressionNotes.slice(0, 2).join(', ');
+            out.push(`Balance Compression: ${noteText}`);
+        }
+
         return out;
     },
 
@@ -441,8 +480,8 @@ const ResearchSystem = {
         const labelAnchor = {
             offense: { x: cx + 610, y: cy - 260 },
             defense: { x: cx - 610, y: cy - 260 },
-            economy: { x: cx + 360, y: cy - 640 },
-            knowledge: { x: cx + 360, y: cy + 640 },
+            economy: { x: cx + 360, y: cy - 330 },
+            knowledge: { x: cx + 360, y: cy + 330 },
         };
 
         for (const branchKey of Object.keys(RESEARCH)) {
@@ -692,7 +731,15 @@ const ResearchSystem = {
         if (this._skipScrollToCenter) return;
         requestAnimationFrame(() => {
             const scrollLeft = this.CENTER_X - container.clientWidth / 2;
-            const scrollTop = this.CENTER_Y - container.clientHeight / 2;
+            const centerScrollTop = this.CENTER_Y - container.clientHeight / 2;
+
+            // Bias the first view slightly upward so economy lane rows do not clip
+            // against the top edge on common 16:9 resolutions.
+            const economyRowTwoTop = this.CENTER_Y - (2 * this.VERTICAL_DEPTH_STEP) - this.NODE_SIZE / 2;
+            const preferredTopMargin = 24;
+            const economyAlignedTop = economyRowTwoTop - preferredTopMargin;
+            const scrollTop = Math.max(0, Math.min(centerScrollTop, economyAlignedTop));
+
             container.scrollLeft = Math.max(0, scrollLeft);
             container.scrollTop = Math.max(0, scrollTop);
         });

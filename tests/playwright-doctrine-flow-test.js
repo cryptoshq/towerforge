@@ -15,7 +15,17 @@ async function run() {
         localStorage.clear();
         GameState.purchasedResearch = new Set();
         GameState.researchPoints = 0;
+        GameState.mapScores = new Array(MAPS.length).fill(0);
+        GameState.mapWaveRecords = new Array(MAPS.length).fill(0);
+        for (let i = 0; i < 5; i++) {
+            GameState.mapScores[i] = 1000 + i;
+        }
+        GameState.metaProgress = SaveSystem._normalizeMetaProgress({
+            mapMarkBits: [7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            commandMarks: 15,
+        });
         GameState.computeResearchBonuses();
+        ProgressionSystem.syncPersistentProgress({ silent: true });
 
         GameState.settings.difficulty = 'normal';
         GameState._pendingChallenges = [];

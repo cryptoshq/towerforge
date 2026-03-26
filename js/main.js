@@ -231,6 +231,10 @@ function startGame(mapIndex) {
         ...a, cooldownTimer: 0, ready: true,
     }));
 
+    // Reset juice features
+    if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.reset();
+    if (typeof TowerPolish !== 'undefined') TowerPolish.reset();
+
     // Switch to game screen
     MenuSystem.showScreen('game');
     resizeCanvas();
@@ -524,6 +528,23 @@ function updateGame(rawDt) {
         }
     }
 
+    if (Array.isArray(GameState.poisonClouds) && GameState.poisonClouds.length > 0) {
+        for (let i = GameState.poisonClouds.length - 1; i >= 0; i--) {
+            const cloud = GameState.poisonClouds[i];
+            if (!cloud || GameState.time >= cloud.until) {
+                GameState.poisonClouds.splice(i, 1);
+                continue;
+            }
+            for (const e of GameState.enemies) {
+                if (!e.alive) continue;
+                if (Math.hypot(e.x - cloud.x, e.y - cloud.y) > cloud.radius) continue;
+                e.applyPoison(cloud.dps, dt * 2, {
+                    sourceTower: cloud.sourceTower || null,
+                });
+            }
+        }
+    }
+
     // Shield enemy behavior (group shield aura)
     updateShieldEnemies();
 
@@ -555,6 +576,12 @@ function updateGame(rawDt) {
 
     // ===== VFX SUB-SYSTEMS (weather, env particles, decals, ring waves) =====
     VFXRenderer.update(dt);
+
+    // ===== JUICE FEATURES (combos, economy, wave pacing) =====
+    if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.update(dt);
+
+    // ===== TOWER POLISH (idle anims, build/sell, ambience, env reactivity) =====
+    if (typeof TowerPolish !== 'undefined') TowerPolish.update(dt);
 
     // ===== SCREEN SHAKE =====
     updateScreenShake();
@@ -767,6 +794,9 @@ function renderGame() {
     // === LAYER 2: Synergy zones (glowing areas under towers) ===
     SynergySystem.drawZones(ctx);
 
+    // === LAYER 2.5: Environmental reactivity (path wear, scorch, frost under towers) ===
+    if (typeof TowerPolish !== 'undefined') TowerPolish.draw(ctx);
+
     // === LAYER 3: Tower range indicators (for selected tower) ===
     if (GameState.selectedTower) {
         drawTowerRange(ctx, GameState.selectedTower);
@@ -777,6 +807,9 @@ function renderGame() {
         TowerRenderer.draw(ctx, tower);
     }
 
+    // === LAYER 4.5: Tower polish overlays (sell anim, anticipation glow) ===
+    if (typeof TowerPolish !== 'undefined') TowerPolish.drawOverlay(ctx);
+
     // === LAYER 5: Enemies ===
     for (const enemy of GameState.enemies) {
         EnemyRenderer.draw(ctx, enemy);
@@ -784,6 +817,9 @@ function renderGame() {
 
     // === LAYER 6: VFX (projectiles, particles, weather, overlays) ===
     VFXRenderer.draw(ctx);
+
+    // === LAYER 6.5: Juice features (placement preview, spotlights, combo meter) ===
+    if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.draw(ctx);
 
     // === LAYER 7: Canvas-based UI (wave progress, tooltips, previews) ===
     UIRenderer.drawCanvasUI(ctx);
@@ -946,6 +982,9 @@ function drawTowerRange(ctx, tower) {
 // ===== GAME OVER =====
 function gameOver() {
     GameState.gamePhase = 'gameover';
+    if (typeof UIRenderer !== 'undefined' && typeof UIRenderer.updateDirectiveTracker === 'function') {
+        UIRenderer.updateDirectiveTracker(true);
+    }
 
     // Multiplayer: report loss instead of showing normal game over screen
     if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
@@ -985,6 +1024,9 @@ function gameOver() {
     const mapIdx = GameState.mapIndex;
     GameState.mapScores[mapIdx] = Math.max(GameState.mapScores[mapIdx] || 0, GameState.score);
     GameState.mapWaveRecords[mapIdx] = Math.max(GameState.mapWaveRecords[mapIdx] || 0, GameState.wave);
+    if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.recordRunOutcome === 'function') {
+        ProgressionSystem.recordRunOutcome({ victory: false });
+    }
 
     // Calculate total gold earned
     const totalGoldEarned = GameState.stats.maxGold || 0;
@@ -1008,7 +1050,12 @@ function gameOver() {
             ${endlessDepth > 0 ? `<div class="stat-row"><span class="sr-label">Endless Depth</span><span class="sr-value">+${endlessDepth} (Best +${endlessBest})</span></div>` : ''}
             ${weeklyResult.active ? `<div class="stat-row"><span class="sr-label">Weekly Challenge</span><span class="sr-value">${GameState.weeklyChallengeRun.weekId || 'Active'} | Best ${weeklyResult.record.bestScore || 0}</span></div>` : ''}
             <div class="stat-row"><span class="sr-label">Leaks</span><span class="sr-value" style="color:#ff4040">${GameState.stats.leaksThisGame}</span></div>
+            <div class="stat-row"><span class="sr-label">Max Combo</span><span class="sr-value">${typeof KillFeedback !== 'undefined' ? KillFeedback.maxCombo : 0}x</span></div>
         `;
+        // Append detailed post-game stats
+        if (typeof JuiceFeatures !== 'undefined') {
+            statsEl.innerHTML += JuiceFeatures.buildPostGameHTML(statsEl, false);
+        }
     }
 
     const rpEl = document.getElementById('gameover-rp');
@@ -1045,6 +1092,9 @@ function gameOver() {
 // ===== VICTORY =====
 function victory() {
     GameState.gamePhase = 'victory';
+    if (typeof UIRenderer !== 'undefined' && typeof UIRenderer.updateDirectiveTracker === 'function') {
+        UIRenderer.updateDirectiveTracker(true);
+    }
 
     // Multiplayer: report survived instead of showing normal victory screen
     if (typeof Multiplayer !== 'undefined' && Multiplayer.active) {
@@ -1127,12 +1177,9 @@ function victory() {
     if (!GameState.stats.mapsCompleted.includes(mapIdx)) {
         GameState.stats.mapsCompleted.push(mapIdx);
     }
-    const groupStart = Math.floor(mapIdx / 5) * 5;
-    const groupEnd = groupStart + 5;
-    const nextInGroup = mapIdx + 1;
-    if (nextInGroup < groupEnd && nextInGroup < MAPS.length) {
-        GameState.unlockedMaps[nextInGroup] = true;
-    }
+    const progressionSummary = (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.applyCampaignVictoryProgress === 'function')
+        ? ProgressionSystem.applyCampaignVictoryProgress(mapIdx)
+        : null;
 
     // Total gold earned
     const totalGoldEarned = GameState.stats.maxGold || 0;
@@ -1153,7 +1200,15 @@ function victory() {
             ${GameState.activeChallenges.length > 0 ? `<div class="stat-row"><span class="sr-label">Challenge Streak</span><span class="sr-value">${GameState.metaProgress.challengeWinStreak}</span></div>` : ''}
             ${weeklyResult.active ? `<div class="stat-row"><span class="sr-label">Weekly Challenge</span><span class="sr-value">${GameState.weeklyChallengeRun.weekId || 'Active'} | Best ${weeklyResult.record.bestScore || 0}</span></div>` : ''}
             <div class="stat-row"><span class="sr-label">Leaks</span><span class="sr-value" style="color:${GameState.stats.leaksThisGame === 0 ? '#40ff80' : '#ff4040'}">${GameState.stats.leaksThisGame}</span></div>
+            <div class="stat-row"><span class="sr-label">Max Combo</span><span class="sr-value">${typeof KillFeedback !== 'undefined' ? KillFeedback.maxCombo : 0}x</span></div>
         `;
+        // Append detailed post-game stats
+        if (typeof JuiceFeatures !== 'undefined') {
+            statsEl.innerHTML += JuiceFeatures.buildPostGameHTML(statsEl, true);
+        }
+        if (progressionSummary && typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.buildVictoryProgressHTML === 'function') {
+            statsEl.innerHTML += ProgressionSystem.buildVictoryProgressHTML(progressionSummary);
+        }
     }
 
     // RP display with bonuses

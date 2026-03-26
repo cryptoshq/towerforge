@@ -36,7 +36,10 @@ const MultiplayerUI = {
             <div class="mp-network-panel">
                 <div class="mp-network-header">
                     <span class="mp-network-title">SIGNALING</span>
-                    <span class="mp-network-status" id="mp-network-status"></span>
+                    <div class="mp-network-header-actions">
+                        <button type="button" class="mp-network-copy-btn" id="mp-btn-copy-endpoint">COPY VPN ENDPOINT</button>
+                        <span class="mp-network-status" id="mp-network-status"></span>
+                    </div>
                 </div>
                 <div class="mp-network-grid">
                     <div class="mp-field">
@@ -107,6 +110,35 @@ const MultiplayerUI = {
         if (!config) return '';
         const scheme = config.secure ? 'wss' : 'ws';
         return `${scheme}://${config.host}:${config.port}${config.path}`;
+    },
+
+    _buildEndpointShareText(config) {
+        const endpoint = this._formatEndpoint(config);
+        const gameUrl = `${window.location.protocol}//${window.location.host}`;
+        return [
+            'TowerForge Multiplayer Endpoint',
+            `Signal: ${endpoint}`,
+            `Game URL: ${gameUrl}`,
+        ].join('\n');
+    },
+
+    _copyCurrentEndpoint() {
+        if (typeof Multiplayer === 'undefined') return;
+
+        if (!this._applyNetworkConfigFromForm(true)) {
+            return;
+        }
+
+        const config = Multiplayer.getSignalingConfig();
+        if (!config || config.mode === 'cloud') {
+            this._toast('Switch to Radmin VPN / LAN or Custom mode first.');
+            return;
+        }
+
+        const payload = this._buildEndpointShareText(config);
+        navigator.clipboard.writeText(payload)
+            .then(() => this._toast('VPN endpoint copied'))
+            .catch(() => this._toast(payload));
     },
 
     _updateNetworkHint(message, isError = false) {
@@ -183,6 +215,7 @@ const MultiplayerUI = {
         const secureEl = document.getElementById('mp-signal-secure');
         const secureRow = document.getElementById('mp-signal-secure-row');
         const statusEl = document.getElementById('mp-network-status');
+        const copyBtn = document.getElementById('mp-btn-copy-endpoint');
         if (!modeEl || !hostEl || !portEl || !pathEl || !secureEl || !secureRow || !statusEl) return;
 
         const mode = modeEl.value;
@@ -198,6 +231,9 @@ const MultiplayerUI = {
         if (!validation.ok) {
             statusEl.textContent = 'INVALID';
             statusEl.className = 'mp-network-status mp-network-status-invalid';
+            if (copyBtn) {
+                copyBtn.disabled = true;
+            }
             this._updateNetworkHint(validation.message, true);
             return;
         }
@@ -209,12 +245,20 @@ const MultiplayerUI = {
         if (cloudMode) {
             statusEl.textContent = 'CLOUD';
             statusEl.className = 'mp-network-status mp-network-status-cloud';
+            if (copyBtn) {
+                copyBtn.disabled = true;
+                copyBtn.textContent = 'COPY VPN ENDPOINT';
+            }
             this._updateNetworkHint('Public signaling on 0.peerjs.com. Fast to start, may fail on strict networks.', false);
             return;
         }
 
         statusEl.textContent = 'CUSTOM';
         statusEl.className = 'mp-network-status mp-network-status-custom';
+        if (copyBtn) {
+            copyBtn.disabled = false;
+            copyBtn.textContent = mode === 'vpn' ? 'COPY VPN ENDPOINT' : 'COPY ENDPOINT';
+        }
         if (mode === 'vpn') {
             this._updateNetworkHint(`Radmin mode endpoint: ${this._formatEndpoint(config)}. Host runs npm run peerserver.`, false);
         } else {
@@ -228,6 +272,7 @@ const MultiplayerUI = {
         const portEl = document.getElementById('mp-signal-port');
         const pathEl = document.getElementById('mp-signal-path');
         const secureEl = document.getElementById('mp-signal-secure');
+        const copyBtn = document.getElementById('mp-btn-copy-endpoint');
         if (!modeEl || !hostEl || !portEl || !pathEl || !secureEl || typeof Multiplayer === 'undefined') return;
 
         modeEl.addEventListener('change', () => {
@@ -265,6 +310,12 @@ const MultiplayerUI = {
         portEl.addEventListener('input', updateConfig);
         pathEl.addEventListener('input', updateConfig);
         secureEl.addEventListener('change', updateConfig);
+
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                this._copyCurrentEndpoint();
+            });
+        }
 
         this._applyNetworkConfigFromForm(false);
         this._refreshNetworkFormState();

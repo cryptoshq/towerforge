@@ -9,6 +9,8 @@ const STATUS_EFFECTS = {
     marked: { name: 'Marked', color: '#ff40ff', icon: 'M', priority: 2 },
     stunned: { name: 'Stunned', color: '#ffe040', icon: '!', priority: 5 },
     brittle: { name: 'Brittle', color: '#a0d0ff', icon: 'X', priority: 3 },
+    vulnerable: { name: 'Vulnerable', color: '#ff80c0', icon: 'V', priority: 3 },
+    blind: { name: 'Blinded', color: '#fff0a0', icon: 'L', priority: 2 },
     shielded: { name: 'Shielded', color: '#4080e0', icon: 'O', priority: 1 },
     frenzy: { name: 'Frenzy', color: '#ff2200', icon: 'F', priority: 2 },
     fortified: { name: 'Fortified', color: '#888888', icon: 'T', priority: 1 },
@@ -51,6 +53,32 @@ const BOSS_ARCHETYPES = {
         abilityCycle: ['summon', 'speed', 'stomp'],
         introAbilities: ['Brood Call', 'Skitter Rush', 'Quake Slow'],
         castColor: '#ffb060',
+        abilityDefs: {
+            summon: { label: 'Brood Call', telegraph: 'BROOD CALL', castTime: 0.95, cooldown: 7.2, cooldownVariance: 1.2 },
+            speed: { label: 'Skitter Rush', telegraph: 'SKITTER RUSH', castTime: 0.55, cooldown: 6.2, cooldownVariance: 1.0 },
+            stomp: { label: 'Quake Slow', telegraph: 'QUAKE SLOW', castTime: 0.8, cooldown: 7.4, cooldownVariance: 1.0 },
+        },
+        phasePlan: [
+            {
+                threshold: 0.75,
+                name: 'Brood Surge',
+                abilityCycle: ['summon', 'stomp', 'speed'],
+                abilityCooldownMult: 0.95,
+                castTimeMult: 0.95,
+                summonCountBonus: 1,
+                triggerCooldown: 1.8,
+            },
+            {
+                threshold: 0.45,
+                name: 'Hatch Frenzy',
+                abilityCycle: ['summon', 'speed', 'summon', 'stomp'],
+                abilityCooldownMult: 0.85,
+                castTimeMult: 0.9,
+                summonCountBonus: 2,
+                summonHpMult: 1.1,
+                triggerCooldown: 1.4,
+            },
+        ],
         summonType: 'swarm',
         summonCountMin: 3,
         summonCountMax: 5,
@@ -68,6 +96,31 @@ const BOSS_ARCHETYPES = {
         abilityCycle: ['shield', 'stomp', 'disrupt'],
         introAbilities: ['Bastion Shield', 'Ground Slam', 'EMP Pulse'],
         castColor: '#c8b090',
+        abilityDefs: {
+            shield: { label: 'Bastion Shield', telegraph: 'BASTION SHIELD', castTime: 0.85, cooldown: 7.1, cooldownVariance: 1.0 },
+            stomp: { label: 'Ground Slam', telegraph: 'GROUND SLAM', castTime: 0.9, cooldown: 7.3, cooldownVariance: 1.0 },
+            disrupt: { label: 'EMP Pulse', telegraph: 'EMP PULSE', castTime: 1.0, cooldown: 7.8, cooldownVariance: 0.9 },
+        },
+        phasePlan: [
+            {
+                threshold: 0.7,
+                name: 'Fortress Stance',
+                abilityCycle: ['shield', 'stomp', 'disrupt'],
+                abilityCooldownMult: 0.95,
+                castTimeMult: 0.95,
+                shieldHpMult: 1.15,
+                triggerCooldown: 2.0,
+            },
+            {
+                threshold: 0.4,
+                name: 'Siege Breaker',
+                abilityCycle: ['disrupt', 'stomp', 'shield', 'disrupt'],
+                abilityCooldownMult: 0.82,
+                castTimeMult: 0.9,
+                towerDisruptDurationMult: 1.2,
+                triggerCooldown: 1.5,
+            },
+        ],
         shieldHpMult: 0.45,
         slowAmount: 0.28,
         slowDuration: 2.8,
@@ -83,6 +136,31 @@ const BOSS_ARCHETYPES = {
         abilityCycle: ['speed', 'summon', 'disrupt'],
         introAbilities: ['Blazing Sprint', 'Hellspawn Call', 'Overheat EMP'],
         castColor: '#ff7040',
+        abilityDefs: {
+            speed: { label: 'Blazing Sprint', telegraph: 'BLAZING SPRINT', castTime: 0.5, cooldown: 5.8, cooldownVariance: 1.0 },
+            summon: { label: 'Hellspawn Call', telegraph: 'HELLSPAWN CALL', castTime: 0.95, cooldown: 7.0, cooldownVariance: 1.2 },
+            disrupt: { label: 'Overheat EMP', telegraph: 'OVERHEAT EMP', castTime: 0.95, cooldown: 7.2, cooldownVariance: 1.0 },
+        },
+        phasePlan: [
+            {
+                threshold: 0.72,
+                name: 'Scorch Phase',
+                abilityCycle: ['speed', 'summon', 'disrupt'],
+                abilityCooldownMult: 0.92,
+                castTimeMult: 0.92,
+                triggerCooldown: 1.7,
+            },
+            {
+                threshold: 0.42,
+                name: 'Burnout Frenzy',
+                abilityCycle: ['speed', 'disrupt', 'summon', 'speed'],
+                abilityCooldownMult: 0.8,
+                castTimeMult: 0.85,
+                summonCountBonus: 1,
+                towerDisruptDurationMult: 1.15,
+                triggerCooldown: 1.3,
+            },
+        ],
         summonType: 'berserker',
         summonCountMin: 2,
         summonCountMax: 3,
@@ -100,6 +178,33 @@ const BOSS_ARCHETYPES = {
         abilityCycle: ['teleport', 'shield', 'summon'],
         introAbilities: ['Void Step', 'Aegis Rift', 'Mass Summon'],
         castColor: '#c090ff',
+        abilityDefs: {
+            teleport: { label: 'Void Step', telegraph: 'VOID STEP', castTime: 0.65, cooldown: 6.2, cooldownVariance: 1.0 },
+            shield: { label: 'Aegis Rift', telegraph: 'AEGIS RIFT', castTime: 0.8, cooldown: 6.8, cooldownVariance: 1.0 },
+            summon: { label: 'Mass Summon', telegraph: 'MASS SUMMON', castTime: 1.0, cooldown: 7.3, cooldownVariance: 1.2 },
+        },
+        phasePlan: [
+            {
+                threshold: 0.72,
+                name: 'Phase Drift',
+                abilityCycle: ['teleport', 'summon', 'shield'],
+                abilityCooldownMult: 0.9,
+                castTimeMult: 0.92,
+                summonCountBonus: 1,
+                triggerCooldown: 1.8,
+            },
+            {
+                threshold: 0.42,
+                name: 'Warp Collapse',
+                abilityCycle: ['teleport', 'shield', 'summon', 'teleport'],
+                abilityCooldownMult: 0.78,
+                castTimeMult: 0.85,
+                summonCountBonus: 1,
+                summonHpMult: 1.1,
+                shieldHpMult: 1.1,
+                triggerCooldown: 1.2,
+            },
+        ],
         teleportSegments: 3,
         summonType: 'ghost',
         summonCountMin: 2,
@@ -154,12 +259,21 @@ class Enemy {
         this.burning = false;
         this.burnDPS = 0;
         this.burnTimer = 0;
+        this.burnArmorMelt = 0;
+        this.burnSpreadCount = 0;
+        this.burnSpreadRadius = 0;
+        this.burnSpreadChance = 1;
         this.marked = false;
         this.markVuln = 0;
         this.markTimer = 0;
         this.brittle = false;
         this.brittleVuln = 0;
         this.brittleTimer = 0;
+        this.vulnerableMult = 1;
+        this.vulnerableTimer = 0;
+        this.blinded = false;
+        this.blindTimer = 0;
+        this.blindSlowMult = 1;
         this.shielded = false;
         this.shieldHp = 0;
 
@@ -169,6 +283,18 @@ class Enemy {
         this.poisonTimer = 0;
         this.poisonStacks = 0;
         this.maxPoisonStacks = 5;
+        this.poisonSpreadCount = 0;
+        this.poisonSpreadRadius = 0;
+        this.poisonDeathCloud = false;
+        this.poisonDeathCloudDuration = 0;
+        this.poisonDeathCloudRadius = 0;
+        this.poisonSourceTower = null;
+
+        // Corrosion / armor stripping
+        this.corrodeDPS = 0;
+        this.corrodeTimer = 0;
+        this.corrodeMax = 0;
+        this.corrodedAmount = 0;
 
         // Stealth
         this.invisible = false;
@@ -235,6 +361,15 @@ class Enemy {
         this.bossCastMaxTimer = 0;
         this.bossCastLabel = '';
         this.bossPendingAbility = null;
+        this.bossPhaseLevel = 0;
+        this.bossPhaseName = 'Phase I';
+        this.bossPhasePlan = [];
+        this.bossPhaseAbilityCooldownMult = 1;
+        this.bossPhaseCastTimeMult = 1;
+        this.bossPhaseSummonCountBonus = 0;
+        this.bossPhaseSummonHpMult = 1;
+        this.bossPhaseShieldHpMult = 1;
+        this.bossPhaseDisruptDurationMult = 1;
 
         // Shield enemy aura tracking
         this.shieldAuraCooldown = 0;
@@ -314,9 +449,23 @@ class Enemy {
         this.bossProfile = { ...p };
         this.name = p.name || this.name;
         this.color = p.color || this.color;
+        this.bossPhaseName = 'Phase I';
+        this.bossPhaseLevel = 0;
+        this.bossPhasePlan = Array.isArray(p.phasePlan)
+            ? p.phasePlan
+                .filter(phase => phase && Number.isFinite(phase.threshold))
+                .sort((a, b) => b.threshold - a.threshold)
+            : [];
+        this.bossPhaseAbilityCooldownMult = 1;
+        this.bossPhaseCastTimeMult = 1;
+        this.bossPhaseSummonCountBonus = 0;
+        this.bossPhaseSummonHpMult = 1;
+        this.bossPhaseShieldHpMult = 1;
+        this.bossPhaseDisruptDurationMult = 1;
         this.bossAbilityCycle = Array.isArray(p.abilityCycle) && p.abilityCycle.length > 0
             ? [...p.abilityCycle]
             : ['shield', 'speed', 'summon'];
+        this.bossAbilityPhase = 0;
 
         const initialCd = Number.isFinite(p.initialCooldown) ? p.initialCooldown : 4.5;
         const initialVar = Number.isFinite(p.initialCooldownVariance) ? p.initialCooldownVariance : 1.2;
@@ -333,9 +482,12 @@ class Enemy {
         if (this.marked) effects.push(STATUS_EFFECTS.marked);
         if (this.stunned) effects.push(STATUS_EFFECTS.stunned);
         if (this.brittle) effects.push(STATUS_EFFECTS.brittle);
+        if (this.vulnerableMult > 1 && this.vulnerableTimer > 0) effects.push(STATUS_EFFECTS.vulnerable);
+        if (this.blinded && this.blindTimer > 0) effects.push(STATUS_EFFECTS.blind);
         if (this.shielded) effects.push(STATUS_EFFECTS.shielded);
         if (this.frenzy) effects.push(STATUS_EFFECTS.frenzy);
         if (this.fortified) effects.push(STATUS_EFFECTS.fortified);
+        if (this.corrodeTimer > 0 || this.corrodedAmount > 0) effects.push({ name: 'Corroded', color: '#8fd05c', icon: 'C', priority: 2 });
         if (this.regenRate > 0) effects.push(STATUS_EFFECTS.regen);
         if (this.captainAuraActive && !this.isCaptain) effects.push(STATUS_EFFECTS.commanded);
         // Sort by priority descending so most important show first
@@ -363,7 +515,10 @@ class Enemy {
         }
         if (this.freezeTimer > 0) {
             this.freezeTimer -= dt;
-            if (this.freezeTimer <= 0) this.frozen = false;
+            if (this.freezeTimer <= 0) {
+                this.freezeTimer = 0;
+                this.frozen = false;
+            }
         }
         if (this.stunTimer > 0) {
             this.stunTimer -= dt;
@@ -371,7 +526,14 @@ class Enemy {
         }
         if (this.burnTimer > 0) {
             this.burnTimer -= dt;
-            this.hp -= this.burnDPS * dt;
+            const burnDmg = this.burnDPS * dt;
+            this.hp -= burnDmg;
+            GameState.stats.burnDamageDealt = (GameState.stats.burnDamageDealt || 0) + burnDmg;
+            if (this.burnArmorMelt > 0) {
+                const melt = this.burnArmorMelt * dt;
+                this.armor = Math.max(0, this.armor - melt);
+                this.baseArmor = Math.max(0, this.baseArmor - melt);
+            }
             if (this.burnTimer <= 0) this.burning = false;
         }
         if (this.markTimer > 0) {
@@ -382,6 +544,38 @@ class Enemy {
             this.brittleTimer -= dt;
             if (this.brittleTimer <= 0) { this.brittle = false; this.brittleVuln = 0; }
         }
+        if (this.vulnerableTimer > 0) {
+            this.vulnerableTimer -= dt;
+            if (this.vulnerableTimer <= 0) {
+                this.vulnerableTimer = 0;
+                this.vulnerableMult = 1;
+            }
+        }
+        if (this.blindTimer > 0) {
+            this.blindTimer -= dt;
+            if (this.blindTimer <= 0) {
+                this.blindTimer = 0;
+                this.blinded = false;
+                this.blindSlowMult = 1;
+            }
+        }
+
+        if (this.corrodeTimer > 0) {
+            this.corrodeTimer -= dt;
+            if (this.corrodeDPS > 0 && this.corrodeMax > 0 && this.corrodedAmount < this.corrodeMax) {
+                const remaining = this.corrodeMax - this.corrodedAmount;
+                const strip = Math.min(remaining, this.corrodeDPS * dt);
+                if (strip > 0) {
+                    this.corrodedAmount += strip;
+                    this.armor = Math.max(0, this.armor - strip);
+                    this.baseArmor = Math.max(0, this.baseArmor - strip);
+                }
+            }
+            if (this.corrodeTimer <= 0) {
+                this.corrodeTimer = 0;
+                this.corrodeDPS = 0;
+            }
+        }
 
         // Poison tick
         if (this.poisoned && this.poisonTimer > 0) {
@@ -389,6 +583,7 @@ class Enemy {
             const poisonDmg = this.poisonDPS * this.poisonStacks * dt;
             this.hp -= poisonDmg;
             this.totalDamageTaken += poisonDmg;
+            GameState.stats.poisonDamageDealt = (GameState.stats.poisonDamageDealt || 0) + poisonDmg;
             // Poison visual: occasional green puff
             if (Math.random() < 0.1) {
                 Effects.spawnExplosion(
@@ -401,6 +596,12 @@ class Enemy {
                 this.poisoned = false;
                 this.poisonDPS = 0;
                 this.poisonStacks = 0;
+                this.poisonSpreadCount = 0;
+                this.poisonSpreadRadius = 0;
+                this.poisonDeathCloud = false;
+                this.poisonDeathCloudDuration = 0;
+                this.poisonDeathCloudRadius = 0;
+                this.poisonSourceTower = null;
             }
         }
 
@@ -583,6 +784,7 @@ class Enemy {
 
         // Boss special abilities
         if (this.isBoss) {
+            this._updateBossPhaseState();
             this._updateBossAbilities(dt);
         }
 
@@ -610,6 +812,7 @@ class Enemy {
             spd = this.speed; // Already calculated above
         }
         if (this.slow > 0) spd *= (1 - this.slow);
+        if (this.blinded) spd *= this.blindSlowMult;
         if (GameState.globalSlow > 0) spd *= (1 - GameState.globalSlow);
         if (this.captainSpeedMult && Number.isFinite(this.captainSpeedMult) && this.captainSpeedMult > 0) {
             spd *= this.captainSpeedMult;
@@ -729,6 +932,61 @@ class Enemy {
     }
 
     // Boss special abilities
+    _updateBossPhaseState() {
+        if (!this.isBoss) return;
+        if (!Array.isArray(this.bossPhasePlan) || this.bossPhasePlan.length === 0) return;
+
+        while (this.bossPhaseLevel < this.bossPhasePlan.length) {
+            const phase = this.bossPhasePlan[this.bossPhaseLevel];
+            if (!phase || !Number.isFinite(phase.threshold)) {
+                this.bossPhaseLevel++;
+                continue;
+            }
+            if (this.hp > this.maxHp * phase.threshold) {
+                break;
+            }
+
+            this._enterBossPhase(phase, this.bossPhaseLevel + 2);
+            this.bossPhaseLevel++;
+        }
+    }
+
+    _enterBossPhase(phase, phaseNumber) {
+        this.bossPhaseName = phase && phase.name ? phase.name : `Phase ${phaseNumber}`;
+
+        if (phase && Array.isArray(phase.abilityCycle) && phase.abilityCycle.length > 0) {
+            this.bossAbilityCycle = [...phase.abilityCycle];
+            this.bossAbilityPhase = 0;
+        }
+
+        this.bossPhaseAbilityCooldownMult = Number.isFinite(phase?.abilityCooldownMult) && phase.abilityCooldownMult > 0
+            ? phase.abilityCooldownMult
+            : 1;
+        this.bossPhaseCastTimeMult = Number.isFinite(phase?.castTimeMult) && phase.castTimeMult > 0
+            ? phase.castTimeMult
+            : 1;
+        this.bossPhaseSummonCountBonus = Number.isFinite(phase?.summonCountBonus)
+            ? Math.max(0, Math.floor(phase.summonCountBonus))
+            : 0;
+        this.bossPhaseSummonHpMult = Number.isFinite(phase?.summonHpMult) && phase.summonHpMult > 0
+            ? phase.summonHpMult
+            : 1;
+        this.bossPhaseShieldHpMult = Number.isFinite(phase?.shieldHpMult) && phase.shieldHpMult > 0
+            ? phase.shieldHpMult
+            : 1;
+        this.bossPhaseDisruptDurationMult = Number.isFinite(phase?.towerDisruptDurationMult) && phase.towerDisruptDurationMult > 0
+            ? phase.towerDisruptDurationMult
+            : 1;
+
+        const triggerCd = Number.isFinite(phase?.triggerCooldown) ? phase.triggerCooldown : 1.8;
+        this.bossAbilityCooldown = Math.min(this.bossAbilityCooldown, Math.max(0.5, triggerCd));
+
+        const label = phase && phase.name ? phase.name.toUpperCase() : `PHASE ${phaseNumber}`;
+        Effects.addFloatingText(this.x, this.y - this.size - 16, `PHASE ${phaseNumber}: ${label}`, this.bossProfile?.castColor || '#ffcc88', 15);
+        Effects.spawnExplosion(this.x, this.y, this.bossProfile?.castColor || '#ffcc88', 16, { speed: 1.4, life: 0.6, glow: true });
+        addScreenShake(3.2);
+    }
+
     _updateBossAbilities(dt) {
         if (this.bossCastTimer > 0) {
             this.bossCastTimer -= dt;
@@ -750,13 +1008,13 @@ class Enemy {
         this.bossAbilityPhase++;
 
         const def = this._getBossAbilityDef(nextAbility);
-        this.bossCastLabel = def.label;
+        this.bossCastLabel = def.telegraph || def.label;
         this.bossCastTimer = Math.max(0, def.castTime);
         this.bossCastMaxTimer = this.bossCastTimer;
         this.bossPendingAbility = nextAbility;
         this.bossAbilityCooldown = def.cooldown + Math.random() * def.cooldownVariance;
 
-        Effects.addFloatingText(this.x, this.y - this.size - 10, `${def.label}...`, this.bossProfile?.castColor || '#ffcc88', 12);
+        Effects.addFloatingText(this.x, this.y - this.size - 10, `${this.bossCastLabel}...`, this.bossProfile?.castColor || '#ffcc88', 12);
 
         if (this.bossCastTimer <= 0) {
             this._executeBossAbility(nextAbility);
@@ -766,7 +1024,7 @@ class Enemy {
 
     _getBossAbilityDef(key) {
         const profile = this.bossProfile || DEFAULT_BOSS_ARCHETYPE;
-        const defs = {
+        const defaultDefs = {
             shield: { label: 'Aegis', castTime: 0.75, cooldown: 6.5, cooldownVariance: 1.0 },
             speed: { label: 'Rush', castTime: 0.55, cooldown: 6.0, cooldownVariance: 1.2 },
             summon: { label: 'Summon', castTime: 0.9, cooldown: 7.0, cooldownVariance: 1.5 },
@@ -774,12 +1032,33 @@ class Enemy {
             disrupt: { label: 'EMP Pulse', castTime: 0.9, cooldown: 7.5, cooldownVariance: 1.0 },
             teleport: { label: 'Void Step', castTime: 0.6, cooldown: 6.6, cooldownVariance: 1.2 },
         };
-        const d = defs[key] || defs.summon;
-        if (profile.abilityCastTimeMult) d.castTime *= profile.abilityCastTimeMult;
-        if (profile.abilityCooldownMult) {
-            d.cooldown *= profile.abilityCooldownMult;
-            d.cooldownVariance *= profile.abilityCooldownMult;
-        }
+        const profileDefs = profile.abilityDefs && typeof profile.abilityDefs === 'object'
+            ? profile.abilityDefs
+            : null;
+        const merged = {
+            ...(defaultDefs[key] || defaultDefs.summon),
+            ...(profileDefs && profileDefs[key] ? profileDefs[key] : {}),
+        };
+
+        const d = {
+            label: merged.label || 'Ability',
+            telegraph: merged.telegraph || merged.label || 'Ability',
+            castTime: Number.isFinite(merged.castTime) ? merged.castTime : 0.75,
+            cooldown: Number.isFinite(merged.cooldown) ? merged.cooldown : 6.5,
+            cooldownVariance: Number.isFinite(merged.cooldownVariance) ? merged.cooldownVariance : 1.0,
+        };
+
+        let castMult = 1;
+        if (profile.abilityCastTimeMult) castMult *= profile.abilityCastTimeMult;
+        castMult *= (this.bossPhaseCastTimeMult || 1);
+        d.castTime *= castMult;
+
+        let cooldownMult = 1;
+        if (profile.abilityCooldownMult) cooldownMult *= profile.abilityCooldownMult;
+        cooldownMult *= (this.bossPhaseAbilityCooldownMult || 1);
+        d.cooldown *= cooldownMult;
+        d.cooldownVariance *= cooldownMult;
+
         return d;
     }
 
@@ -812,7 +1091,7 @@ class Enemy {
     _bossActivateShield() {
         if (this.bossShieldActive) return;
         this.bossShieldActive = true;
-        const shieldMult = this.bossProfile?.shieldHpMult || 0.3;
+        const shieldMult = (this.bossProfile?.shieldHpMult || 0.3) * (this.bossPhaseShieldHpMult || 1);
         this.bossShieldMaxHp = this.maxHp * shieldMult;
         this.bossShieldHp = this.bossShieldMaxHp;
         Effects.addFloatingText(this.x, this.y - this.size - 10, 'SHIELD!', '#4080ff', 14);
@@ -828,24 +1107,44 @@ class Enemy {
 
     _bossSpawnMinions() {
         const profile = this.bossProfile || DEFAULT_BOSS_ARCHETYPE;
-        const minCount = profile.summonCountMin || 2;
-        const maxCount = profile.summonCountMax || 3;
+        const minCount = (profile.summonCountMin || 2) + (this.bossPhaseSummonCountBonus || 0);
+        const maxCount = (profile.summonCountMax || 3) + (this.bossPhaseSummonCountBonus || 0);
         const type = profile.summonType || 'swarm';
-        const hpMult = profile.summonHpMult || 0.5;
+        const hpMult = (profile.summonHpMult || 0.5) * (this.bossPhaseSummonHpMult || 1);
         const count = minCount + Math.floor(Math.random() * Math.max(1, maxCount - minCount + 1));
         for (let i = 0; i < count; i++) {
-            const minion = new Enemy(type, hpMult);
-            minion.pathIndex = Math.max(0, this.pathIndex - 2);
-            minion.progress = this.progress;
-            // Position near boss with offset
             const angle = (Math.PI * 2 / count) * i;
             const offsetDist = 15;
-            minion.x = this.x + Math.cos(angle) * offsetDist;
-            minion.y = this.y + Math.sin(angle) * offsetDist;
-            minion.renderX = minion.x;
-            minion.renderY = minion.y;
-            GameState.enemies.push(minion);
-            GameState.enemiesAlive++;
+            const spawnPos = {
+                x: this.x + Math.cos(angle) * offsetDist,
+                y: this.y + Math.sin(angle) * offsetDist,
+            };
+
+            if (typeof WaveSystem !== 'undefined' && typeof WaveSystem.spawnEnemyFromEntry === 'function') {
+                WaveSystem.spawnEnemyFromEntry(
+                    { type, hpMult, delay: 0, isElite: false },
+                    {
+                        pathIndex: Math.max(0, this.pathIndex - 2),
+                        progress: this.progress,
+                        position: spawnPos,
+                        includeInWaveTotal: true,
+                    }
+                );
+            } else {
+                const minion = new Enemy(type, hpMult);
+                minion.pathIndex = Math.max(0, this.pathIndex - 2);
+                minion.progress = this.progress;
+                minion.x = spawnPos.x;
+                minion.y = spawnPos.y;
+                minion.renderX = minion.x;
+                minion.renderY = minion.y;
+                minion.prevX = minion.x;
+                minion.prevY = minion.y;
+                GameState.enemies.push(minion);
+                GameState.enemiesAlive++;
+                GameState.enemiesSpawned++;
+                GameState.totalEnemiesInWave++;
+            }
         }
         Effects.addFloatingText(this.x, this.y - this.size - 10, 'SUMMON!', '#ff4040', 14);
         Effects.spawnExplosion(this.x, this.y, '#ff4040', 10, { speed: 0.8, life: 0.4 });
@@ -864,7 +1163,7 @@ class Enemy {
 
     _bossTowerDisrupt() {
         const radius = this.bossProfile?.towerDisruptRadius || 160;
-        const duration = this.bossProfile?.towerDisruptDuration || 2.2;
+        const duration = (this.bossProfile?.towerDisruptDuration || 2.2) * (this.bossPhaseDisruptDurationMult || 1);
         let affected = 0;
         for (const tower of GameState.towers) {
             if (dist(this, tower) > radius) continue;
@@ -943,6 +1242,7 @@ class Enemy {
         // Mark vulnerability
         if (this.marked) dmg *= (1 + this.markVuln);
         if (this.brittle) dmg *= (1 + this.brittleVuln);
+        if (this.vulnerableMult > 1) dmg *= this.vulnerableMult;
 
         // Global buff
         if (GameState.globalDmgBuff > 0) dmg *= (1 + GameState.globalDmgBuff);
@@ -1064,14 +1364,17 @@ class Enemy {
         this.slowTimer = Math.max(this.slowTimer, duration * durMult);
     }
 
-    applyFreeze(duration) {
-        if (this.isBoss) return; // Bosses immune unless special
+    applyFreeze(duration, options = {}) {
+        const ignoreBossImmunity = options === true || !!(options && options.ignoreBossImmunity);
+        if (this.isBoss && !ignoreBossImmunity) return false; // Bosses immune unless special
         const rb = GameState.researchBonuses;
         const durMult = 1 + (rb.effectDuration || 0);
         this.frozen = true;
         this.freezeTimer = Math.max(this.freezeTimer, duration * durMult);
+        GameState.stats.freezeApplications = (GameState.stats.freezeApplications || 0) + 1;
         Effects.spawnFrostRing(this.x, this.y);
         Audio.play('freeze');
+        return true;
     }
 
     applyStun(duration) {
@@ -1080,10 +1383,13 @@ class Enemy {
         this.stunTimer = Math.max(this.stunTimer, duration);
     }
 
-    applyBurn(dps, duration) {
+    applyBurn(dps, duration, options = {}) {
         this.burning = true;
         this.burnDPS = Math.max(this.burnDPS, dps);
         this.burnTimer = Math.max(this.burnTimer, duration);
+        if (Number.isFinite(options.meltArmor) && options.meltArmor > 0) {
+            this.burnArmorMelt = Math.max(this.burnArmorMelt || 0, options.meltArmor);
+        }
     }
 
     applyMark(vuln, duration) {
@@ -1098,12 +1404,53 @@ class Enemy {
         this.brittleTimer = Math.max(this.brittleTimer, duration);
     }
 
+    applyVulnerability(multiplier, duration) {
+        if (!Number.isFinite(multiplier) || multiplier <= 1) return;
+        const rb = GameState.researchBonuses;
+        const durMult = 1 + (rb.effectDuration || 0);
+        this.vulnerableMult = Math.max(this.vulnerableMult, multiplier);
+        this.vulnerableTimer = Math.max(this.vulnerableTimer, duration * durMult);
+    }
+
+    applyBlind(duration, slowMult = 0.3) {
+        const rb = GameState.researchBonuses;
+        const durMult = 1 + (rb.effectDuration || 0);
+        this.blinded = true;
+        this.blindTimer = Math.max(this.blindTimer, duration * durMult);
+        const clampedSlowMult = Math.max(0.15, Math.min(1, slowMult));
+        this.blindSlowMult = Math.min(this.blindSlowMult, clampedSlowMult);
+    }
+
     // Apply poison (stacking)
-    applyPoison(dps, duration) {
+    applyPoison(dps, duration, options = {}) {
         this.poisoned = true;
         this.poisonDPS = Math.max(this.poisonDPS, dps);
         this.poisonTimer = Math.max(this.poisonTimer, duration);
+        if (Number.isFinite(options.maxStacks) && options.maxStacks > 0) {
+            this.maxPoisonStacks = Math.max(this.maxPoisonStacks || 1, Math.floor(options.maxStacks));
+        }
         this.poisonStacks = Math.min(this.poisonStacks + 1, this.maxPoisonStacks);
+        if (Number.isFinite(options.spreadCount) && options.spreadCount > 0) {
+            this.poisonSpreadCount = Math.max(this.poisonSpreadCount || 0, Math.floor(options.spreadCount));
+            this.poisonSpreadRadius = Math.max(this.poisonSpreadRadius || 0, options.spreadRadius || 0);
+        }
+        if (options.deathCloud) {
+            this.poisonDeathCloud = true;
+            this.poisonDeathCloudDuration = Math.max(this.poisonDeathCloudDuration || 0, options.cloudDuration || 0);
+            this.poisonDeathCloudRadius = Math.max(this.poisonDeathCloudRadius || 0, options.cloudRadius || 0);
+        }
+        if (options.sourceTower) {
+            this.poisonSourceTower = options.sourceTower;
+        }
+    }
+
+    applyCorrosion(dps, duration, maxStrip) {
+        if (!Number.isFinite(dps) || dps <= 0) return;
+        this.corrodeDPS = Math.max(this.corrodeDPS, dps);
+        this.corrodeTimer = Math.max(this.corrodeTimer, duration || 0);
+        if (Number.isFinite(maxStrip) && maxStrip > 0) {
+            this.corrodeMax = Math.max(this.corrodeMax, maxStrip);
+        }
     }
 
     // Select death animation based on damage source
@@ -1150,6 +1497,9 @@ class Enemy {
         // Stats
         GameState.stats.totalKills++;
         if (this.isBoss) GameState.stats.bossKills++;
+        if (this.isCaptain) {
+            GameState.stats.captainKillsThisRun = (GameState.stats.captainKillsThisRun || 0) + 1;
+        }
         GameState.stats.maxGold = Math.max(GameState.stats.maxGold, GameState.gold);
 
         // Wave stats
@@ -1185,6 +1535,56 @@ class Enemy {
         if (this.isElite) {
             Effects.spawnExplosion(this.x, this.y, this.eliteVariant ? this.eliteVariant.color : '#ffaa00', 12, { speed: 1.8, life: 0.5 });
             Effects.addFloatingText(this.x, this.y - 30, 'ELITE SLAIN!', '#ffaa00', 11);
+        }
+
+        if (this.lastHitTower && this.lastHitTower.special && this.lastHitTower.special.witherHeal) {
+            const heal = Math.max(1, Math.floor(this.lastHitTower.special.healPerKill || 1));
+            GameState.lives = Math.min(GameState.maxLives, GameState.lives + heal);
+            Effects.addFloatingText(this.lastHitTower.x, this.lastHitTower.y - 18, `+${heal} HP`, '#90ff90', 10);
+        }
+
+        if (this.poisoned && this.poisonSpreadCount > 0 && this.poisonSourceTower) {
+            let spreadApplied = 0;
+            const spreadRadius = this.poisonSpreadRadius || 80;
+            for (const ally of GameState.enemies) {
+                if (!ally.alive || ally === this) continue;
+                if (dist(this, ally) > spreadRadius) continue;
+                ally.applyPoison(
+                    this.poisonDPS,
+                    Math.max(0.5, this.poisonTimer || 2),
+                    {
+                        maxStacks: this.maxPoisonStacks,
+                        sourceTower: this.poisonSourceTower,
+                        spreadCount: this.poisonSpreadCount,
+                        spreadRadius,
+                        deathCloud: this.poisonDeathCloud,
+                        cloudDuration: this.poisonDeathCloudDuration,
+                        cloudRadius: this.poisonDeathCloudRadius,
+                    }
+                );
+                spreadApplied++;
+                if (spreadApplied >= this.poisonSpreadCount) break;
+            }
+            if (spreadApplied > 0) {
+                Effects.addFloatingText(this.x, this.y - this.size - 10, 'PLAGUE!', '#80ff80', 10);
+            }
+        }
+
+        if (this.poisoned && this.poisonDeathCloud && this.poisonDeathCloudRadius > 0) {
+            const cloudDuration = Math.max(0.25, this.poisonDeathCloudDuration || 2.5);
+            const cloudRadius = this.poisonDeathCloudRadius;
+            const cloudDps = Math.max(1, this.poisonDPS * 0.5);
+            const cloudUntil = GameState.time + cloudDuration;
+            if (!Array.isArray(GameState.poisonClouds)) GameState.poisonClouds = [];
+            GameState.poisonClouds.push({
+                x: this.x,
+                y: this.y,
+                radius: cloudRadius,
+                dps: cloudDps,
+                until: cloudUntil,
+                sourceTower: this.poisonSourceTower || null,
+            });
+            Effects.spawnExplosion(this.x, this.y, '#70d060', Math.floor(cloudRadius / 8), { speed: 0.8, life: 0.5 });
         }
 
         Audio.play('death');
@@ -1230,7 +1630,7 @@ class Enemy {
     // Check if the enemy has any negative status effects
     hasDebuffs() {
         return this.slow > 0 || this.frozen || this.stunned || this.burning ||
-               this.marked || this.brittle || this.poisoned;
+               this.marked || this.brittle || this.poisoned || this.blinded || this.vulnerableMult > 1;
     }
 
     // Get shield status (combines normal shield and boss shield)

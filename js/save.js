@@ -2,7 +2,7 @@
 const SaveSystem = {
     PERSIST_KEY: 'towerforge_persistent',
     GAME_KEY: 'towerforge_game',
-    SAVE_VERSION: 6,
+    SAVE_VERSION: 7,
     MAX_SLOTS: 3,
     MAX_UNDO_SNAPSHOTS: 3,
 
@@ -95,12 +95,47 @@ const SaveSystem = {
                 data.metaProgress.weeklyRecords = {};
             }
         }
+        // Migration from version 6 to 7: add command-mark progression fields
+        if (fromVersion < 7) {
+            if (!data.metaProgress || typeof data.metaProgress !== 'object') {
+                data.metaProgress = {};
+            }
+            if (!Array.isArray(data.metaProgress.mapMarkBits)) {
+                data.metaProgress.mapMarkBits = new Array(20).fill(0);
+            }
+            if (!data.metaProgress.towerLicenses || typeof data.metaProgress.towerLicenses !== 'object') {
+                data.metaProgress.towerLicenses = {};
+            }
+            if (!Number.isFinite(data.metaProgress.commandMarks)) {
+                data.metaProgress.commandMarks = 0;
+            }
+            if (data.metaProgress.legacyProgressionBackfillDone === undefined) {
+                data.metaProgress.legacyProgressionBackfillDone = false;
+            }
+            if (!Number.isFinite(data.metaProgress.progressionVersion)) {
+                data.metaProgress.progressionVersion = 1;
+            }
+            if (!Number.isFinite(data.metaProgress.lifetimeMapsCleared)) data.metaProgress.lifetimeMapsCleared = 0;
+            if (!Number.isFinite(data.metaProgress.lifetimePerfectClears)) data.metaProgress.lifetimePerfectClears = 0;
+            if (!Number.isFinite(data.metaProgress.lifetimeDirectiveClears)) data.metaProgress.lifetimeDirectiveClears = 0;
+            if (!Number.isFinite(data.metaProgress.lifetimeBossKills)) data.metaProgress.lifetimeBossKills = 0;
+        }
         data._version = this.SAVE_VERSION;
         return data;
     },
 
     _normalizeMetaProgress(metaProgress) {
         const base = {
+            progressionVersion: 1,
+            commandMarks: 0,
+            mapMarkBits: new Array(20).fill(0),
+            towerLicenses: {},
+            legacyProgressionBackfillDone: false,
+            lifetimeMapsCleared: 0,
+            lifetimePerfectClears: 0,
+            lifetimeDirectiveClears: 0,
+            lifetimeBossKills: 0,
+            lifetimeCaptainKills: 0,
             endlessBestDepthByMap: new Array(20).fill(0),
             endlessMilestonesClaimed: {},
             totalEndlessMilestones: 0,
@@ -112,6 +147,18 @@ const SaveSystem = {
         if (!metaProgress || typeof metaProgress !== 'object') return base;
 
         const out = { ...base, ...metaProgress };
+        out.progressionVersion = Number.isFinite(out.progressionVersion) ? Math.max(1, Math.floor(out.progressionVersion)) : 1;
+        out.commandMarks = Number.isFinite(out.commandMarks) ? Math.max(0, Math.floor(out.commandMarks)) : 0;
+        if (!Array.isArray(out.mapMarkBits)) out.mapMarkBits = [...base.mapMarkBits];
+        while (out.mapMarkBits.length < 20) out.mapMarkBits.push(0);
+        out.mapMarkBits = out.mapMarkBits.slice(0, 20).map(v => Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+        if (!out.towerLicenses || typeof out.towerLicenses !== 'object') out.towerLicenses = {};
+        out.legacyProgressionBackfillDone = !!out.legacyProgressionBackfillDone;
+        out.lifetimeMapsCleared = Number.isFinite(out.lifetimeMapsCleared) ? Math.max(0, Math.floor(out.lifetimeMapsCleared)) : 0;
+        out.lifetimePerfectClears = Number.isFinite(out.lifetimePerfectClears) ? Math.max(0, Math.floor(out.lifetimePerfectClears)) : 0;
+        out.lifetimeDirectiveClears = Number.isFinite(out.lifetimeDirectiveClears) ? Math.max(0, Math.floor(out.lifetimeDirectiveClears)) : 0;
+        out.lifetimeBossKills = Number.isFinite(out.lifetimeBossKills) ? Math.max(0, Math.floor(out.lifetimeBossKills)) : 0;
+        out.lifetimeCaptainKills = Number.isFinite(out.lifetimeCaptainKills) ? Math.max(0, Math.floor(out.lifetimeCaptainKills)) : 0;
         if (!Array.isArray(out.endlessBestDepthByMap)) out.endlessBestDepthByMap = [...base.endlessBestDepthByMap];
         while (out.endlessBestDepthByMap.length < 20) out.endlessBestDepthByMap.push(0);
         out.endlessBestDepthByMap = out.endlessBestDepthByMap.slice(0, 20).map(v => Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
@@ -219,6 +266,14 @@ const SaveSystem = {
 
     _compressTowerData(towers) {
         // Compress tower data by omitting default values
+        const indexById = new Map(towers.map((tower, index) => [tower.id, index]));
+        const legacySpentXp = (level) => {
+            let spent = 0;
+            for (let i = 0; i < (level || 0); i++) {
+                spent += Math.floor(100 * Math.pow(1.15, i));
+            }
+            return spent;
+        };
         return towers.map(t => {
             const compressed = {
                 t: t.type,
@@ -232,14 +287,20 @@ const SaveSystem = {
             if (t.kills > 0) compressed.k = t.kills;
             if (t.totalCost) compressed.$ = t.totalCost;
             if (t.targetMode !== 'first') compressed.m = t.targetMode;
-            if (t.xp > 0) compressed.xp = Math.floor(t.xp);
-            if (t.xpLevel > 0) compressed.xl = t.xpLevel;
-            if (t.xpToNextLevel && t.xpToNextLevel !== 100) compressed.xt = t.xpToNextLevel;
-            if (t.xpBonusDmg > 0) compressed.xd = t.xpBonusDmg;
-            if (t.xpBonusRate > 0) compressed.xr = t.xpBonusRate;
-            if (t.xpBonusRange > 0) compressed.xg = t.xpBonusRange;
+            const looksLegacyXp = (t.xpBonusDmg > 0 || t.xpBonusRate > 0 || t.xpBonusRange > 0)
+                || (t.xpLevel > 0 && t.xpToNextLevel && t.xpToNextLevel !== CONFIG.MASTERY_XP_PER_SCORE);
+            const progressXp = looksLegacyXp
+                ? (t.xp || 0) + legacySpentXp(t.xpLevel || 0)
+                : (t.xp || 0);
+            if (progressXp > 0) compressed.px = Math.floor(progressXp);
             if (t.masteryLevel > 0) compressed.ml = t.masteryLevel;
             if (t.beamRamp > 0) compressed.br = t.beamRamp;
+            if (Array.isArray(t.links) && t.links.length > 0) {
+                const linkIndexes = t.links
+                    .map(id => indexById.get(id))
+                    .filter(index => Number.isFinite(index));
+                if (linkIndexes.length > 0) compressed.ln = [...new Set(linkIndexes)];
+            }
             if (t.stats) compressed.st = { ...t.stats };
             return compressed;
         });
@@ -261,6 +322,7 @@ const SaveSystem = {
                 kills: c.k || 0,
                 totalCost: c.$ || 0,
                 targetMode: c.m || 'first',
+                progressXp: Number.isFinite(c.px) ? c.px : null,
                 xp: c.xp || 0,
                 xpLevel: c.xl || 0,
                 xpToNextLevel: c.xt || 100,
@@ -269,6 +331,7 @@ const SaveSystem = {
                 xpBonusRange: c.xg || 0,
                 masteryLevel: c.ml || 0,
                 beamRamp: c.br || 0,
+                linkIndexes: Array.isArray(c.ln) ? c.ln : [],
                 stats: c.st || null,
             };
         });
@@ -329,7 +392,7 @@ const SaveSystem = {
 
             GameState.researchPoints = data.researchPoints || 0;
             GameState.purchasedResearch = new Set(data.purchasedResearch || []);
-            GameState.unlockedMaps = data.unlockedMaps || [true,false,false,false,false,true,false,false,false,false,true,false,false,false,false,true,false,false,false,false];
+            GameState.unlockedMaps = data.unlockedMaps || [true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false];
             GameState.achievementsUnlocked = new Set(data.achievementsUnlocked || []);
             GameState.mapScores = data.mapScores || [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
             GameState.mapWaveRecords = data.mapWaveRecords || [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
@@ -339,11 +402,8 @@ const SaveSystem = {
             while (GameState.unlockedMaps.length < 20) GameState.unlockedMaps.push(false);
             while (GameState.mapScores.length < 20) GameState.mapScores.push(0);
             while (GameState.mapWaveRecords.length < 20) GameState.mapWaveRecords.push(0);
-            // First map of each difficulty group is always unlocked
+            // Only the first easy map is always unlocked; later bands are progression gated.
             GameState.unlockedMaps[0] = true;
-            GameState.unlockedMaps[5] = true;
-            GameState.unlockedMaps[10] = true;
-            GameState.unlockedMaps[15] = true;
 
             if (data.settings) {
                 Object.assign(GameState.settings, data.settings);
@@ -360,6 +420,13 @@ const SaveSystem = {
             }
 
             GameState.computeResearchBonuses();
+
+            if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.syncPersistentProgress === 'function') {
+                const sync = ProgressionSystem.syncPersistentProgress({ silent: true });
+                if (sync.changed) {
+                    this.savePersistent();
+                }
+            }
         } catch (e) {
             console.warn('Failed to load persistent data', e);
         }
@@ -733,12 +800,15 @@ const SaveSystem = {
             if (payload.persistent) {
                 GameState.researchPoints = payload.persistent.researchPoints || 0;
                 GameState.purchasedResearch = new Set(payload.persistent.purchasedResearch || []);
-                GameState.unlockedMaps = payload.persistent.unlockedMaps || [true, false, false, false, false];
+                GameState.unlockedMaps = payload.persistent.unlockedMaps || [true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];
                 GameState.achievementsUnlocked = new Set(payload.persistent.achievementsUnlocked || []);
                 GameState.mapScores = payload.persistent.mapScores || [0, 0, 0, 0, 0];
                 GameState.mapWaveRecords = payload.persistent.mapWaveRecords || [0, 0, 0, 0, 0];
                 GameState.metaProgress = this._normalizeMetaProgress(payload.persistent.metaProgress);
                 GameState.computeResearchBonuses();
+                if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.syncPersistentProgress === 'function') {
+                    ProgressionSystem.syncPersistentProgress({ silent: true });
+                }
                 this.savePersistent();
             }
             return true;
@@ -944,6 +1014,15 @@ const SaveSystem = {
             // Rebuild towers (support both compressed and legacy format)
             GameState.towers = [];
             const towerData = this._decompressTowerData(data.towers);
+            const calcLegacyProgressXp = (td) => {
+                if (Number.isFinite(td.progressXp)) return td.progressXp;
+                const legacyLevel = td.xpLevel || 0;
+                let spent = 0;
+                for (let i = 0; i < legacyLevel; i++) {
+                    spent += Math.floor(100 * Math.pow(1.15, i));
+                }
+                return (td.xp || 0) + spent;
+            };
             for (const td of towerData) {
                 const hasWorldPos = Number.isFinite(td.x) && Number.isFinite(td.y);
                 const worldX = hasWorldPos ? td.x : ((td.gridCol + 0.5) * CONFIG.TILE_SIZE);
@@ -960,12 +1039,12 @@ const SaveSystem = {
                 tower.totalCost = td.totalCost || TOWERS[td.type].baseCost;
                 tower.targetMode = td.targetMode || 'first';
                 tower.masteryLevel = td.masteryLevel || 0;
-                tower.xp = td.xp || 0;
-                tower.xpLevel = td.xpLevel || 0;
-                tower.xpToNextLevel = td.xpToNextLevel || 100;
-                tower.xpBonusDmg = td.xpBonusDmg || 0;
-                tower.xpBonusRate = td.xpBonusRate || 0;
-                tower.xpBonusRange = td.xpBonusRange || 0;
+                tower.xp = calcLegacyProgressXp(td);
+                tower.xpLevel = tower.getXPScoreContribution();
+                tower.xpToNextLevel = CONFIG.MASTERY_XP_PER_SCORE;
+                tower.xpBonusDmg = 0;
+                tower.xpBonusRate = 0;
+                tower.xpBonusRange = 0;
                 tower.beamRamp = td.beamRamp || 0;
                 if (td.stats && typeof td.stats === 'object') {
                     tower.stats = {
@@ -974,6 +1053,26 @@ const SaveSystem = {
                     };
                 }
                 GameState.towers.push(tower);
+            }
+
+            for (let i = 0; i < towerData.length; i++) {
+                const td = towerData[i];
+                const tower = GameState.towers[i];
+                if (!tower || !Array.isArray(td.linkIndexes)) continue;
+                for (const linkIndex of td.linkIndexes) {
+                    const other = GameState.towers[linkIndex];
+                    if (!other || other === tower) continue;
+                    tower.addLink(other);
+                }
+            }
+
+            let grandfatheredTypes = [];
+            if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.grandfatherUnlockedTowerTypesFromRun === 'function') {
+                grandfatheredTypes = ProgressionSystem.grandfatherUnlockedTowerTypesFromRun(GameState.towers, { save: false });
+            }
+
+            if (typeof TowerCommands !== 'undefined' && TowerCommands.refreshTowerSystems) {
+                TowerCommands.refreshTowerSystems();
             }
 
             // Restore stats
@@ -986,6 +1085,10 @@ const SaveSystem = {
 
             if (typeof WaveSystem._restorePendingTacticalEventModal === 'function') {
                 WaveSystem._restorePendingTacticalEventModal();
+            }
+
+            if (grandfatheredTypes.length > 0) {
+                this.savePersistent();
             }
 
             return true;

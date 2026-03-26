@@ -159,17 +159,7 @@ function createSeededRng(seed) {
     };
 }
 
-// Screen shake helper
+// Screen shake disabled — kept as stubs so callers don't break
 let shakeX = 0, shakeY = 0, shakeIntensity = 0, shakeDecay = 0.9;
-function addScreenShake(intensity) {
-    shakeIntensity = Math.max(shakeIntensity, intensity);
-}
-function updateScreenShake() {
-    if (shakeIntensity > 0.5) {
-        shakeX = (Math.random() - 0.5) * shakeIntensity * 2;
-        shakeY = (Math.random() - 0.5) * shakeIntensity * 2;
-        shakeIntensity *= shakeDecay;
-    } else {
-        shakeX = shakeY = shakeIntensity = 0;
-    }
-}
+function addScreenShake(intensity) { /* disabled */ }
+function updateScreenShake() { /* disabled */ }

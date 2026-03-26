@@ -46,6 +46,8 @@ const AchievementSystem = {
         const popup = document.getElementById('achievement-popup');
         if (!popup) return;
 
+        const iconEl = document.getElementById('achieve-toast-icon');
+        if (iconEl) iconEl.textContent = ach.icon || '\uD83C\uDFC6';
         document.getElementById('achievement-name').textContent = ach.name;
 
         if (this._popupHideTimer) clearTimeout(this._popupHideTimer);
@@ -53,18 +55,18 @@ const AchievementSystem = {
 
         popup.style.display = 'flex';
         popup.classList.remove('is-exiting', 'is-visible');
-        popup.offsetHeight; // Force reflow
+        popup.offsetHeight;
         popup.classList.add('is-visible');
 
         this._popupExitTimer = setTimeout(() => {
             popup.classList.remove('is-visible');
             popup.classList.add('is-exiting');
-        }, 2650);
+        }, 3000);
 
         this._popupHideTimer = setTimeout(() => {
             popup.classList.remove('is-exiting');
             popup.style.display = 'none';
-        }, 2900);
+        }, 3250);
     },
 
     getCategory(ach) {

@@ -370,17 +370,11 @@ const ScreenEffects = {
         }
         this.slowMotionFactor += (this.slowMotionTarget - this.slowMotionFactor) * dt * 5.0;
 
-        // Screen shake
-        if (this.shakeDuration > 0) {
-            this.shakeDuration -= dt;
-            const intensity = this.shakeIntensity * clamp(this.shakeDuration / 0.3, 0, 1);
-            this.shakeX = (Math.random() - 0.5) * intensity * 2;
-            this.shakeY = (Math.random() - 0.5) * intensity * 2;
-        } else {
-            this.shakeX = 0;
-            this.shakeY = 0;
-            this.shakeIntensity = 0;
-        }
+        // Screen shake disabled
+        this.shakeX = 0;
+        this.shakeY = 0;
+        this.shakeIntensity = 0;
+        this.shakeDuration = 0;
     },
 
     triggerBossZoom(x, y) {
@@ -399,8 +393,7 @@ const ScreenEffects = {
     },
 
     triggerShake(intensity, duration) {
-        this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
-        this.shakeDuration = Math.max(this.shakeDuration, duration);
+        // Screen shake disabled
     },
 
     applyTransform(ctx, canvasW, canvasH) {
@@ -431,15 +424,7 @@ const ScreenEffects = {
             ctx.restore();
         }
 
-        // Screen shake vignette
-        if (this.shakeIntensity > 2) {
-            ctx.save();
-            const alpha = Math.min(this.shakeIntensity / 20, 0.15);
-            ctx.globalAlpha = alpha;
-            ctx.fillStyle = '#ff2020';
-            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            ctx.restore();
-        }
+        // (shake vignette removed)
 
         // Boss zoom vignette
         if (this.cameraZoom > 1.02) {
@@ -883,7 +868,34 @@ const Effects = {
     },
 
     spawnBeam(x1, y1, x2, y2, color, width, life) {
-        GameState.beams.push({ x1, y1, x2, y2, color, width, life, maxLife: life });
+        const beamLife = Number.isFinite(life) && life > 0 ? life : 0.08;
+        const beamWidth = Number.isFinite(width) && width > 0 ? width : 2;
+        const isStyled = color && typeof color === 'object';
+        const outerColor = isStyled ? (color.outerColor || color.color || '#ffffff') : (color || '#ffffff');
+
+        const beam = {
+            x1,
+            y1,
+            x2,
+            y2,
+            color: outerColor,
+            width: beamWidth,
+            life: beamLife,
+            maxLife: beamLife,
+            outerColor,
+            coreColor: isStyled ? (color.coreColor || outerColor) : outerColor,
+            glowColor: isStyled ? (color.glowColor || outerColor) : outerColor,
+            altColor: isStyled ? (color.altColor || outerColor) : outerColor,
+            dual: isStyled ? !!color.dual : false,
+            dualOffset: isStyled && Number.isFinite(color.dualOffset) ? color.dualOffset : 0,
+            jitter: isStyled && Number.isFinite(color.jitter) ? color.jitter : 0,
+            pulseHz: isStyled && Number.isFinite(color.pulseHz) ? color.pulseHz : 0,
+            pulseAmp: isStyled && Number.isFinite(color.pulseAmp) ? color.pulseAmp : 0,
+            taper: isStyled && Number.isFinite(color.taper) ? color.taper : 1,
+            dash: isStyled && Array.isArray(color.dash) ? [...color.dash] : null,
+        };
+
+        GameState.beams.push(beam);
     },
 
     addFloatingText(x, y, text, color, size = 14) {
@@ -920,6 +932,7 @@ const Effects = {
 
     // Group damage numbers that occur close together
     addGroupedDamage(x, y, damage, color) {
+        if (GameState.settings.showDamageNumbers === false) return;
         // Check if there's a recent floating text nearby we can merge with
         const mergeRadius = 30;
         const mergeTimeWindow = 0.15;
@@ -1286,17 +1299,80 @@ const Effects = {
         // Beams
         for (const b of GameState.beams) {
             const alpha = clamp(b.life / b.maxLife, 0, 1);
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.strokeStyle = b.color;
-            ctx.lineWidth = b.width * alpha;
-            ctx.shadowColor = b.color;
-            ctx.shadowBlur = b.width * 2;
-            ctx.beginPath();
-            ctx.moveTo(b.x1, b.y1);
-            ctx.lineTo(b.x2, b.y2);
-            ctx.stroke();
-            ctx.restore();
+
+            const pulse = (b.pulseHz && b.pulseAmp)
+                ? (1 + Math.sin(GameState.time * b.pulseHz) * b.pulseAmp)
+                : 1;
+            const width = Math.max(0.35, b.width * alpha * pulse);
+            const jitter = (b.jitter || 0) * (0.25 + alpha * 0.75);
+            const jx1 = b.x1 + (jitter ? Math.sin(GameState.time * 23 + b.y1 * 0.03) * jitter : 0);
+            const jy1 = b.y1 + (jitter ? Math.cos(GameState.time * 19 + b.x1 * 0.03) * jitter : 0);
+            const jx2 = b.x2 + (jitter ? Math.sin(GameState.time * 21 + b.y2 * 0.03) * jitter : 0);
+            const jy2 = b.y2 + (jitter ? Math.cos(GameState.time * 17 + b.x2 * 0.03) * jitter : 0);
+
+            const drawBeamStroke = (x1, y1, x2, y2, outerColor, coreColor) => {
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                if (b.dash && b.dash.length > 0) {
+                    ctx.setLineDash(b.dash);
+                }
+                ctx.strokeStyle = outerColor;
+                ctx.lineCap = 'round';
+                ctx.lineWidth = width;
+                ctx.shadowColor = b.glowColor || outerColor;
+                ctx.shadowBlur = width * 2.4;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                const coreWidth = Math.max(0.3, width * 0.38 * (b.taper || 1));
+                ctx.setLineDash([]);
+                ctx.strokeStyle = coreColor;
+                ctx.lineWidth = coreWidth;
+                ctx.shadowBlur = coreWidth * 1.4;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.restore();
+            };
+
+            if (b.dual && b.dualOffset > 0) {
+                const dx = jx2 - jx1;
+                const dy = jy2 - jy1;
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = -dy / len;
+                const ny = dx / len;
+                const ox = nx * b.dualOffset;
+                const oy = ny * b.dualOffset;
+
+                drawBeamStroke(
+                    jx1 + ox,
+                    jy1 + oy,
+                    jx2 + ox,
+                    jy2 + oy,
+                    b.outerColor || b.color,
+                    b.coreColor || '#ffffff'
+                );
+                drawBeamStroke(
+                    jx1 - ox,
+                    jy1 - oy,
+                    jx2 - ox,
+                    jy2 - oy,
+                    b.altColor || b.outerColor || b.color,
+                    b.coreColor || '#ffffff'
+                );
+            } else {
+                drawBeamStroke(
+                    jx1,
+                    jy1,
+                    jx2,
+                    jy2,
+                    b.outerColor || b.color,
+                    b.coreColor || '#ffffff'
+                );
+            }
         }
 
         // Particles

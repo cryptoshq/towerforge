@@ -8,6 +8,8 @@ const UIRenderer = {
     interestPreviewEl: null,
     _lastNextWavePreviewBounds: null,
     _lastCountdownBounds: null,
+    _lastTowerInfoStateKey: '',
+    _lastDirectiveTrackerKey: '',
     _pathPreviewAnimIds: [],
 
     _stopPathPreviewAnimations() {
@@ -152,12 +154,116 @@ const UIRenderer = {
             this._lastUpgradeCheckGold = GameState.gold;
             const upgradeBtn = document.getElementById('btn-upgrade-tower');
             if (upgradeBtn && !upgradeBtn.classList.contains('path-choose-btn')) {
-                const info = GameState.selectedTower.getUpgradeCost();
+                const selectedTower = GameState.selectedTower;
+                const info = selectedTower.getUpgradeCost();
+
+                let upgradeCost = null;
                 if (info && info.cost !== undefined) {
-                    const canAfford = GameState.gold >= info.cost;
+                    upgradeCost = info.cost;
+                } else if (
+                    selectedTower.tier >= 5
+                    && typeof TowerUltimates !== 'undefined'
+                    && TowerUltimates.canUpgradeToUltimate(selectedTower)
+                ) {
+                    upgradeCost = TowerUltimates.getUpgradeCost(selectedTower);
+                }
+
+                if (upgradeCost !== null && upgradeCost !== undefined) {
+                    const canAfford = GameState.gold >= upgradeCost;
                     upgradeBtn.classList.toggle('cant-afford', !canAfford);
                 }
             }
+        }
+
+        const towerInfoPanel = document.getElementById('tower-info');
+        if (GameState.selectedTower && this._isElementVisible(towerInfoPanel)) {
+            const selectedTower = GameState.selectedTower;
+            const batchCount = (typeof Input !== 'undefined'
+                && Input.isMultiSelected
+                && Input.getMultiSelectCount
+                && Input.isMultiSelected(selectedTower))
+                ? Input.getMultiSelectCount()
+                : 1;
+            const panelStateKey = [
+                selectedTower.id,
+                selectedTower.tier,
+                selectedTower.path || '-',
+                selectedTower.sellConfirmActive ? 1 : 0,
+                Math.ceil(selectedTower.sellConfirmTimer || 0),
+                selectedTower.isBeingMoved ? 1 : 0,
+                selectedTower.linkMode ? 1 : 0,
+                selectedTower.links.length,
+                selectedTower.overclocked ? 1 : 0,
+                selectedTower.disabled ? 1 : 0,
+                selectedTower.targetMode,
+                batchCount,
+                GameState.gold >= selectedTower.getMoveCost() ? 1 : 0,
+                GameState.gold >= CONFIG.LINK_COST ? 1 : 0,
+            ].join('|');
+            if (panelStateKey !== this._lastTowerInfoStateKey) {
+                this._lastTowerInfoStateKey = panelStateKey;
+                this.showTowerInfo(selectedTower);
+            }
+        } else if (this._lastTowerInfoStateKey) {
+            this._lastTowerInfoStateKey = '';
+        }
+
+        this.updateDirectiveTracker();
+    },
+
+    _buildDirectiveTrackerHTML(data, compact = false) {
+        if (!data) return '';
+        const markChips = [
+            { label: 'Clear', cls: data.clearEarned ? 'done' : '' },
+            { label: 'Perfect', cls: data.perfectEarned ? 'done' : (data.perfectFailed ? 'failed' : '') },
+            { label: 'Directive', cls: data.directiveEarned ? 'done' : (data.directiveReady ? 'done' : '') },
+        ];
+        return `
+            <div class="directive-hud-title">Mission Directive</div>
+            <div class="directive-hud-name">${data.directive.name}</div>
+            <div class="directive-hud-desc">${data.directive.desc}</div>
+            <div class="directive-mark-row">
+                ${markChips.map((chip) => `<span class="directive-mark-chip ${chip.cls}">${chip.label}</span>`).join('')}
+            </div>
+            <div class="directive-progress-list">
+                ${data.lines.map((line) => `<div class="directive-progress-line ${line.met ? 'done' : ''}"><span>${line.text}</span><strong>${line.met ? 'READY' : 'LIVE'}</strong></div>`).join('')}
+            </div>
+        `;
+    },
+
+    updateDirectiveTracker(force = false) {
+        const hudEl = document.getElementById('directive-hud');
+        const pauseEl = document.getElementById('pause-directive-panel');
+        if (typeof ProgressionSystem === 'undefined' || !hudEl) return;
+
+        const onGameScreen = GameState.screen === 'game';
+        const validPhase = ['idle', 'playing', 'paused'].includes(GameState.gamePhase);
+        if (!onGameScreen || !validPhase) {
+            hudEl.style.display = 'none';
+            if (pauseEl) pauseEl.innerHTML = '';
+            this._lastDirectiveTrackerKey = '';
+            return;
+        }
+
+        const tracker = ProgressionSystem.getActiveDirectiveTrackerData();
+        if (!tracker) {
+            hudEl.style.display = 'none';
+            if (pauseEl) pauseEl.innerHTML = '';
+            this._lastDirectiveTrackerKey = '';
+            return;
+        }
+
+        if (force || tracker.stateKey !== this._lastDirectiveTrackerKey) {
+            hudEl.innerHTML = this._buildDirectiveTrackerHTML(tracker, true);
+            if (pauseEl) {
+                pauseEl.innerHTML = this._buildDirectiveTrackerHTML(tracker, false);
+            }
+            this._lastDirectiveTrackerKey = tracker.stateKey;
+        }
+
+        hudEl.style.display = (GameState.gamePhase === 'paused') ? 'none' : 'block';
+        if (pauseEl && GameState.gamePhase !== 'paused') {
+            pauseEl.innerHTML = this._buildDirectiveTrackerHTML(tracker, false);
         }
     },
 
@@ -171,20 +277,8 @@ const UIRenderer = {
         if (GameState.gamePhase === 'idle') {
             const nextWave = GameState.wave + 1;
             const preview = WaveSystem.getWavePreview(nextWave);
-            if (preview && preview.bossName) {
-                return `NEXT BOSS: ${preview.bossName.toUpperCase()}`;
-            }
-            if (preview && preview.scenario && preview.scenario.name) {
-                return `NEXT SCENARIO: ${preview.scenario.name.toUpperCase()}`;
-            }
-            if (preview && preview.faction && preview.faction.name) {
-                return `NEXT FACTION: ${preview.faction.name.toUpperCase()}`;
-            }
-            if (preview && preview.arc && preview.arc.name) {
-                return `NEXT ARC: ${preview.arc.name.toUpperCase()}`;
-            }
-            if (preview && preview.mapPressure && preview.mapPressure.name) {
-                return `MAP PRESSURE: ${preview.mapPressure.name.toUpperCase()}`;
+            if (preview && preview.primaryIdentity) {
+                return `NEXT: ${preview.primaryIdentity.toUpperCase()}`;
             }
             const tags = preview && Array.isArray(preview.threatTags) ? preview.threatTags : [];
             if (tags.length > 0) {
@@ -249,9 +343,13 @@ const UIRenderer = {
         list.innerHTML = '';
 
         for (const [type, def] of Object.entries(TOWERS)) {
+            const towerMeta = (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.getTowerCardMeta === 'function')
+                ? ProgressionSystem.getTowerCardMeta(type)
+                : { unlocked: true, text: '', detail: '' };
             const btn = document.createElement('div');
             btn.className = 'tower-btn';
             btn.dataset.type = type;
+            if (!towerMeta.unlocked) btn.classList.add('locked');
 
             let cost = this._getTowerCost(type);
             const disabled = GameState.gold < cost;
@@ -274,6 +372,7 @@ const UIRenderer = {
                 <span class="tb-name">${def.nickname}</span>
                 <span class="tb-cost">${cost}g</span>
                 <span class="tb-desc">${def.description}</span>
+                ${towerMeta.unlocked ? '' : `<span class="tb-lock">${towerMeta.text}</span><span class="tb-lock-detail">${towerMeta.detail}</span>`}
             `;
 
             const key = document.createElement('span');
@@ -293,7 +392,12 @@ const UIRenderer = {
             });
 
             btn.addEventListener('click', () => {
-                if (GameState.gold >= cost) {
+                if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.tryToggleTowerSelection === 'function') {
+                    const result = ProgressionSystem.tryToggleTowerSelection(type, { requireGold: true });
+                    if (result.ok) {
+                        Audio.play('click');
+                    }
+                } else if (GameState.gold >= cost) {
                     if (GameState.selectedTowerType === type) {
                         GameState.selectedTowerType = null;
                     } else {
@@ -346,6 +450,9 @@ const UIRenderer = {
                 <div style="color:#40a0ff">Path A: ${def.pathA.name} — ${def.pathA.desc}</div>
                 <div style="color:#ff8040">Path B: ${def.pathB.name} — ${def.pathB.desc}</div>
             </div>
+            ${typeof ProgressionSystem !== 'undefined' && !ProgressionSystem.isTowerUnlocked(type)
+                ? `<div class="stt-lock">LOCKED: ${ProgressionSystem.getTowerLockSummary(type)}</div>`
+                : ''}
         `;
 
         const rect = btn.getBoundingClientRect();
@@ -371,10 +478,17 @@ const UIRenderer = {
         btns.forEach(btn => {
             const type = btn.dataset.type;
             const cost = this._getTowerCost(type);
+            const locked = typeof ProgressionSystem !== 'undefined' && !ProgressionSystem.isTowerUnlocked(type);
             const disabled = GameState.gold < cost;
             btn.classList.toggle('disabled', disabled);
+            btn.classList.toggle('locked', locked);
             const costEl = btn.querySelector('.tb-cost');
             if (costEl) costEl.textContent = cost + 'g';
+            const lockEl = btn.querySelector('.tb-lock-detail');
+            if (lockEl && typeof ProgressionSystem !== 'undefined') {
+                const meta = ProgressionSystem.getTowerCardMeta(type);
+                lockEl.textContent = meta.detail;
+            }
         });
     },
 
@@ -467,27 +581,29 @@ const UIRenderer = {
         this._updateSidebarSelection();
 
         const def = TOWERS[tower.type];
+        const multiSelectCount = (typeof Input !== 'undefined'
+            && Input.isMultiSelected
+            && Input.getMultiSelectCount
+            && Input.isMultiSelected(tower))
+            ? Input.getMultiSelectCount()
+            : 1;
+        const targetModeAppliesToGroup = multiSelectCount > 1 && tower.type !== 'boost';
 
         // Header
         document.getElementById('info-name').textContent = def.name;
         const tierEl = document.getElementById('info-tier');
-        tierEl.textContent = `Tier ${tower.tier}`;
-        tierEl.className = 'tower-info-tier tier-' + tower.tier;
+        tierEl.textContent = `T${tower.tier}`;
+        tierEl.className = 'tip2-tier tier-' + tower.tier;
 
         // Path
         const pathEl = document.getElementById('info-path');
         if (tower.path) {
             const pathDef = tower.path === 'A' ? def.pathA : def.pathB;
-            pathEl.innerHTML = `
-                <span class="path-badge" style="border-color:${def.iconColor}">
-                    ${pathDef.icon} ${pathDef.name}
-                </span>
-                <span class="path-desc">${pathDef.desc}</span>
-            `;
+            pathEl.innerHTML = `<span class="tip2-path-badge" style="border-color:${def.iconColor}">${pathDef.icon} ${pathDef.name}</span>`;
         } else if (tower.tier >= 2) {
-            pathEl.innerHTML = '<span class="path-desc" style="color:#ffaa00">Choose a path at Tier 3</span>';
+            pathEl.innerHTML = '<span class="tip2-path-hint">Pick a path at T3</span>';
         } else {
-            pathEl.innerHTML = '<span class="path-desc">Upgrade to unlock paths</span>';
+            pathEl.innerHTML = '';
         }
 
         // Stats — with upgrade diff preview when an upgrade is available
@@ -497,7 +613,9 @@ const UIRenderer = {
         const effRate = tower.getEffectiveFireRate();
         const dps = effRate > 0 ? (effDmg / effRate).toFixed(1) : (tower.special.dps || 0).toFixed(1);
         const boost = tower.getBoostBuff();
-        const combo = tower.getComboBonus();
+        const formation = tower.getFormationBonus();
+        const linkNet = tower.getLinkBonuses();
+        const progression = tower.getProgressionData();
 
         // Get next tier data for diff preview
         const upgInfo = tower.getUpgradeCost();
@@ -538,29 +656,29 @@ const UIRenderer = {
             return ` <span style="color:${color};font-size:11px">\u2192 ${next > 0 ? next.toFixed(2) + 's' : 'Beam'}</span>`;
         };
 
-        // Show base stats on left, effective (with bonuses) in parentheses
         const baseDmg = tower.damage;
         const baseRange = tower.range;
         const baseRate = tower.fireRate;
-        const hasBonus = Math.abs(effDmg - baseDmg) > 0.5 || Math.abs(effRange - baseRange) > 0.5;
-        const bonusSuffix = (base, eff) => {
-            if (Math.abs(eff - base) < 0.5) return '';
-            return ` <span style="color:#80ff80;font-size:10px">(${Math.floor(eff)})</span>`;
-        };
+        // Primary stats strip
+        let statsHTML = `<div class="tip2-primary">
+            <div class="tip2-pstat"><div class="tip2-pval">${Math.floor(effDmg)}${diffArrow(baseDmg, nextDmg)}</div><div class="tip2-plbl">DMG</div></div>
+            <div class="tip2-pstat"><div class="tip2-pval">${Math.floor(effRange)}${diffArrow(baseRange, nextRange)}</div><div class="tip2-plbl">RNG</div></div>
+            <div class="tip2-pstat"><div class="tip2-pval">${effRate > 0 ? effRate.toFixed(2) + 's' : 'Beam'}${rateDiff(baseRate, nextRate)}</div><div class="tip2-plbl">RATE</div></div>
+            <div class="tip2-pstat tip2-pstat-hl"><div class="tip2-pval">${dps}${nextDps !== null ? diffArrow(parseFloat(dps), parseFloat(nextDps)) : ''}</div><div class="tip2-plbl">DPS</div></div>
+        </div>`;
 
-        let statsHTML = `
-            <div class="stat-item"><span class="stat-label">Damage</span><span class="stat-value">${Math.floor(baseDmg)}${bonusSuffix(baseDmg, effDmg)}${diffArrow(baseDmg, nextDmg)}</span></div>
-            <div class="stat-item"><span class="stat-label">Range</span><span class="stat-value">${Math.floor(baseRange)}${bonusSuffix(baseRange, effRange)}${diffArrow(baseRange, nextRange)}</span></div>
-            <div class="stat-item"><span class="stat-label">Fire Rate</span><span class="stat-value">${baseRate > 0 ? baseRate.toFixed(2) + 's' : 'Beam'}${rateDiff(baseRate, nextRate)}</span></div>
-            <div class="stat-item highlight"><span class="stat-label">DPS</span><span class="stat-value">${dps}${nextDps !== null ? diffArrow(parseFloat(dps), parseFloat(nextDps)) : ''}</span></div>
-            <div class="stat-item"><span class="stat-label">Kills</span><span class="stat-value">${tower.kills}</span></div>
-            <div class="stat-item"><span class="stat-label">Value</span><span class="stat-value gold">${tower.getSellValue()}g</span></div>
-        `;
+        // Secondary stats row
+        statsHTML += `<div class="tip2-secondary">
+            <span class="tip2-sstat">${tower.kills} kills</span>
+            <span class="tip2-sstat">${linkNet.count}/${CONFIG.MAX_LINKS_PER_TOWER} links</span>
+            <span class="tip2-sstat tip2-gold">${tower.getSellValue()}g value</span>
+        </div>`;
 
         // Bonus indicators
         const bonuses = [];
         if (boost.dmg > 0) bonuses.push(`<span class="bonus-tag buff">+${Math.round(boost.dmg * 100)}% Buff</span>`);
-        if (combo.dmg > 0) bonuses.push(`<span class="bonus-tag combo">+${Math.round(combo.dmg * 100)}% Combo</span>`);
+        if (formation.dmg > 0 || formation.rate > 0) bonuses.push(`<span class="bonus-tag combo">FORMATION ${formation.count}</span>`);
+        if (linkNet.count > 0) bonuses.push(`<span class="bonus-tag buff">LINK NET ${linkNet.count}</span>`);
         if (tower.overclocked) bonuses.push(`<span class="bonus-tag overclock">OVERCLOCKED</span>`);
         if (tower.disabled) bonuses.push(`<span class="bonus-tag disabled">DISABLED</span>`);
 
@@ -597,6 +715,8 @@ const UIRenderer = {
             if (tower.special.upgradeDiscount) specials.push(`-${Math.round(tower.special.upgradeDiscount * 100)}% upgrade cost`);
             if (tower.special.markVuln) specials.push(`Mark: +${Math.round(tower.special.markVuln * 100)}% dmg for ${tower.special.markDuration}s`);
             if (tower.special.seeInvisible) specials.push('Detects invisible');
+            if (formation.count >= 2) specials.push(`Formation: ${formation.count}-tower local cluster`);
+            if (linkNet.count > 0) specials.push(`Links: ${linkNet.linkedNames.join(', ')}`);
 
             if (specials.length > 0) {
                 statsHTML += `<div class="stat-specials">`;
@@ -611,12 +731,9 @@ const UIRenderer = {
 
         // Mastery
         const masteryEl = document.getElementById('info-mastery');
-        const mastery = tower.getMasteryData();
-        const kills = tower.kills + (GameState.researchBonuses.masteryBonus || 0);
-        const nextMastery = CONFIG.MASTERY.find(m => m.kills > kills);
-        const nextKills = nextMastery ? nextMastery.kills : CONFIG.MASTERY[CONFIG.MASTERY.length - 1].kills;
-        const prevKills = mastery ? mastery.kills : 0;
-        const progress = clamp((kills - prevKills) / Math.max(nextKills - prevKills, 1), 0, 1);
+        const mastery = progression.mastery;
+        const nextMastery = progression.nextMastery;
+        const progress = clamp(progression.percent, 0, 1);
 
         let masteryBonusText = '';
         if (mastery) {
@@ -631,7 +748,7 @@ const UIRenderer = {
         const masteryIdx = mastery ? CONFIG.MASTERY.indexOf(mastery) : -1;
         const stars = '\u2605'.repeat(masteryIdx + 1) + '\u2606'.repeat(Math.max(0, 4 - masteryIdx));
         const isMaxRank = mastery && !nextMastery;
-        const killsToNext = nextMastery ? (nextKills - kills) : 0;
+        const scoreToNext = nextMastery ? progression.scoreToNext : 0;
 
         masteryEl.innerHTML = `
             <div class="mastery-section${isMaxRank ? ' mastery-mythic' : ''}">
@@ -641,17 +758,17 @@ const UIRenderer = {
                 </div>
                 <div class="mastery-progress-wrap">
                     <div class="mastery-bar-large"><div class="mastery-fill-large" style="width:${progress * 100}%;background:linear-gradient(90deg, ${mastery ? mastery.color : '#555'}, ${mastery ? mastery.color + 'cc' : '#666'})"></div></div>
-                    <span class="mastery-kill-count">${kills} kills</span>
+                    <span class="mastery-kill-count">score ${progression.score} | kills ${progression.kills} | sync +${progression.xpContribution}</span>
                 </div>
                 ${masteryBonusText ? `<div class="mastery-active-bonuses">${masteryBonusText}</div>` : ''}
-                ${nextMastery ? `<div class="mastery-next-info">${killsToNext} more kills to <span style="color:${nextMastery.color}">${nextMastery.title}</span></div>` : `<div class="mastery-next-info" style="color:#a040ff">\u2728 Maximum Rank Achieved</div>`}
+                ${nextMastery ? `<div class="mastery-next-info">${scoreToNext} more score to <span style="color:${nextMastery.color}">${nextMastery.title}</span> · next sync point in ${progression.xpToNextScore} xp</div>` : `<div class="mastery-next-info" style="color:#a040ff">\u2728 Maximum Rank Achieved</div>`}
             </div>
         `;
 
         // Targeting
         const targetEl = document.getElementById('info-targeting');
         if (tower.type !== 'boost') {
-            let targetHTML = '<div class="targeting-header">Targeting Priority</div><div class="targeting-btns">';
+            let targetHTML = `<div class="targeting-header">Targeting Priority${targetModeAppliesToGroup ? ` <span class="targeting-batch-note">(${multiSelectCount} towers)</span>` : ''}</div><div class="targeting-btns">`;
             for (const mode of CONFIG.TARGETING_MODES) {
                 const isActive = tower.targetMode === mode;
                 const icons = {
@@ -668,7 +785,7 @@ const UIRenderer = {
             // Bind targeting buttons
             targetEl.querySelectorAll('.target-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    tower.targetMode = btn.dataset.mode;
+                    TowerCommands.setTargetMode(tower, btn.dataset.mode);
                     this.showTowerInfo(tower);
                     Audio.play('click');
                 });
@@ -679,62 +796,150 @@ const UIRenderer = {
 
         // Actions
         const actionsEl = document.getElementById('info-actions');
-        let actionsHTML = '';
+        const actionRows = [];
+        const actionHints = [];
 
-        // Upgrade button (upgInfo already computed above for stat diff)
+        const upgradeChips = [];
+        const pushUpgradeChip = (label, curV, newV, invertBetter = false, formatter = (v) => Math.floor(v)) => {
+            if (newV === null || newV === undefined) return;
+            const diff = newV - curV;
+            if (Math.abs(diff) < 0.001) return;
+            const better = invertBetter ? diff < 0 : diff > 0;
+            const cls = better ? 'positive' : 'negative';
+            const pct = curV !== 0 ? Math.round((Math.abs(diff) / Math.abs(curV)) * 100) : 0;
+            const sign = diff > 0 ? '+' : '-';
+            upgradeChips.push(`<span class="tip2-upgrade-chip ${cls}">${label} ${formatter(newV)} ${sign}${pct}%</span>`);
+        };
+
+        let primaryUpgradeHTML = '';
         if (upgInfo) {
             if (upgInfo.needsPath) {
-                actionsHTML += `<button class="action-btn upgrade path-choose-btn" id="btn-upgrade-tower">
-                    <span class="action-icon">\u{2B06}</span> CHOOSE PATH
-                    <span class="action-hint">Pick your specialization!</span>
+                primaryUpgradeHTML = `<button class="action-btn upgrade path-choose-btn tip2-upgrade-primary" id="btn-upgrade-tower">
+                    <span class="tip2-action-kicker">SPECIALIZE</span>
+                    <span class="tip2-action-main"><span class="action-icon">\u{2B06}</span> CHOOSE PATH</span>
+                    <span class="action-hint">Tier 3 unlock: choose Branch A or B</span>
                 </button>`;
             } else {
                 const canAfford = GameState.gold >= upgInfo.cost;
-                actionsHTML += `<button class="action-btn upgrade ${canAfford ? '' : 'cant-afford'}" id="btn-upgrade-tower">
-                    <span class="action-icon">\u{2B06}</span> UPGRADE TO T${upgInfo.nextTier} <span class="action-cost">${upgInfo.cost}g</span>
+                pushUpgradeChip('DMG', baseDmg, nextDmg);
+                pushUpgradeChip('RNG', baseRange, nextRange);
+                pushUpgradeChip('RATE', baseRate, nextRate, true, (v) => v > 0 ? `${v.toFixed(2)}s` : 'Beam');
+                if (nextDps !== null && nextDps !== undefined) {
+                    pushUpgradeChip('DPS', parseFloat(dps), parseFloat(nextDps), false, (v) => Number(v).toFixed(1));
+                }
+
+                primaryUpgradeHTML = `<button class="action-btn upgrade tip2-upgrade-primary ${canAfford ? '' : 'cant-afford'}" id="btn-upgrade-tower">
+                    <span class="tip2-action-kicker">NEXT UPGRADE</span>
+                    <span class="tip2-action-main"><span class="action-icon">\u{2B06}</span> T${upgInfo.nextTier} <span class="action-cost">${upgInfo.cost}g</span></span>
+                    ${upgradeChips.length > 0
+                        ? `<span class="tip2-upgrade-preview">${upgradeChips.join('')}</span>`
+                        : '<span class="action-hint">Applies next tier combat stats</span>'}
                 </button>`;
             }
         } else if (tower.tier >= 5) {
-            actionsHTML += `<div class="max-tier-badge">\u2B50 MAX TIER REACHED \u2B50<div class="max-tier-sub">This tower is fully upgraded</div></div>`;
+            if (typeof TowerUltimates !== 'undefined' && TowerUltimates.canUpgradeToUltimate(tower)) {
+                const ultDef = TowerUltimates.getUltimateDef(tower.type, tower.path);
+                const ultCost = TowerUltimates.getUpgradeCost(tower);
+                const canAfford = GameState.gold >= ultCost;
+                primaryUpgradeHTML = `<button class="action-btn upgrade ultimate-upgrade tip2-upgrade-primary ${canAfford ? '' : 'cant-afford'}" id="btn-upgrade-tower">
+                    <span class="tip2-action-kicker">ASCENSION</span>
+                    <span class="tip2-action-main"><span class="action-icon">\u2B50</span> ULTIMATE: ${ultDef.name.toUpperCase()} <span class="action-cost">${ultCost}g</span></span>
+                    <div class="ultimate-desc">${ultDef.desc}</div>
+                </button>`;
+            } else if (tower.tier === 6) {
+                primaryUpgradeHTML = `<div class="max-tier-badge">\u{1F451} ULTIMATE TIER \u{1F451}<div class="max-tier-sub">This tower has reached its ultimate form</div></div>`;
+            } else {
+                primaryUpgradeHTML = `<div class="max-tier-badge">\u2B50 MAX TIER REACHED \u2B50<div class="max-tier-sub">This tower is fully upgraded</div></div>`;
+            }
         } else if (tower.tier === 2 && !tower.path) {
-            actionsHTML += `<button class="action-btn upgrade path-choose-btn" id="btn-upgrade-tower">
-                <span class="action-icon">\u{2B06}</span> CHOOSE PATH
-                <span class="action-hint">Pick your specialization!</span>
+            primaryUpgradeHTML = `<button class="action-btn upgrade path-choose-btn tip2-upgrade-primary" id="btn-upgrade-tower">
+                <span class="tip2-action-kicker">SPECIALIZE</span>
+                <span class="tip2-action-main"><span class="action-icon">\u{2B06}</span> CHOOSE PATH</span>
+                <span class="action-hint">Tier 3 unlock: choose Branch A or B</span>
             </button>`;
         }
+        if (primaryUpgradeHTML) {
+            actionRows.push(`<div class="tip2-action-row tip2-action-row-upgrade">${primaryUpgradeHTML}</div>`);
+        }
 
-        // Overclock
+        const utilityButtons = [];
         if (tower.type !== 'boost') {
             if (tower.overclocked) {
-                actionsHTML += `<button class="action-btn overclock active" disabled>
+                utilityButtons.push(`<button class="action-btn overclock active" disabled>
                     <span class="action-icon">\u{26A1}</span> OVERCLOCKED
-                </button>`;
+                </button>`);
             } else if (tower.disabled) {
-                actionsHTML += `<button class="action-btn overclock" disabled>
+                utilityButtons.push(`<button class="action-btn overclock" disabled>
                     <span class="action-icon">\u{23F3}</span> COOLING DOWN
-                </button>`;
+                </button>`);
             } else {
-                actionsHTML += `<button class="action-btn overclock" id="btn-overclock-tower">
+                utilityButtons.push(`<button class="action-btn overclock" id="btn-overclock-tower">
                     <span class="action-icon">\u{26A1}</span> OVERCLOCK
-                </button>`;
+                </button>`);
             }
         }
 
-        // Sell
-        actionsHTML += `<button class="action-btn sell" id="btn-sell-tower">
-            <span class="action-icon">\u{1F4B0}</span> SELL <span class="action-cost">${tower.getSellValue()}g</span>
-        </button>`;
+        const moveCost = tower.getMoveCost();
+        if (tower.isBeingMoved) {
+            utilityButtons.push(`<button class="action-btn move active" id="btn-move-tower">
+                <span class="action-icon">\u2716</span> CANCEL MOVE
+                <span class="action-hint">Click a build tile to relocate</span>
+            </button>`);
+        } else {
+            const canAffordMove = GameState.gold >= moveCost;
+            utilityButtons.push(`<button class="action-btn move ${canAffordMove ? '' : 'cant-afford'}" id="btn-move-tower">
+                <span class="action-icon">\u21F2</span> MOVE <span class="action-cost">${moveCost}g</span>
+            </button>`);
+        }
 
-        actionsEl.innerHTML = actionsHTML;
+        if (tower.linkMode) {
+            utilityButtons.push(`<button class="action-btn link active" id="btn-link-tower">
+                <span class="action-icon">\u26D3</span> CANCEL LINK
+                <span class="action-hint">Click another tower to link or unlink</span>
+            </button>`);
+        } else {
+            const linkCapReached = linkNet.count >= CONFIG.MAX_LINKS_PER_TOWER;
+            utilityButtons.push(`<button class="action-btn link ${linkCapReached ? 'cant-afford' : ''}" id="btn-link-tower">
+                <span class="action-icon">\u26D3</span> LINK <span class="action-cost">${CONFIG.LINK_COST}g</span>
+                <span class="action-hint">${linkCapReached ? 'Link cap reached' : `${linkNet.count}/${CONFIG.MAX_LINKS_PER_TOWER} active`}</span>
+            </button>`);
+        }
+        actionRows.push(`<div class="tip2-action-row tip2-action-row-utility">${utilityButtons.join('')}</div>`);
+
+        const sellAction = `<button class="action-btn sell ${tower.sellConfirmActive ? 'confirm' : ''}" id="btn-sell-tower">
+            <span class="action-icon">\u{1F4B0}</span> ${tower.sellConfirmActive ? 'CONFIRM SELL' : 'SELL'} <span class="action-cost">${tower.getSellValue()}g</span>
+            ${tower.sellConfirmActive ? `<span class="action-hint">${Math.max(1, Math.ceil(tower.sellConfirmTimer || 0))}s remaining</span>` : ''}
+        </button>`;
+        actionRows.push(`<div class="tip2-action-row tip2-action-row-economy">${sellAction}</div>`);
+
+        if (targetModeAppliesToGroup) {
+            actionHints.push(`Targeting changes apply to ${multiSelectCount} selected towers.`);
+        }
+        if (tower.isBeingMoved) {
+            actionHints.push('Relocation preview uses current tower range and move cost.');
+        }
+        if (tower.linkMode) {
+            actionHints.push(`Links cost ${CONFIG.LINK_COST}g, require ${CONFIG.LINK_RANGE}px range, and can be toggled by clicking another tower.`);
+        } else if (linkNet.count > 0) {
+            actionHints.push(`Link network: +${Math.round(linkNet.dmg * 100)}% dmg, +${Math.round(linkNet.rate * 100)}% rate, +${Math.round(linkNet.range * 100)}% range.`);
+        }
+
+        actionsEl.innerHTML = actionRows.join('') + (actionHints.length
+            ? `<div class="tip2-action-notes">${actionHints.map((line) => `<div class="action-hint-line">${line}</div>`).join('')}</div>`
+            : '');
 
         // Bind action buttons
         const upgradeBtn = document.getElementById('btn-upgrade-tower');
         if (upgradeBtn) {
             upgradeBtn.addEventListener('click', () => {
-                if (upgInfo.needsPath) {
-                    this.showPathChoice(tower);
-                } else if (GameState.gold >= upgInfo.cost) {
-                    tower.upgrade();
+                // Tier 6 Ultimate upgrade
+                if (tower.tier >= 5 && typeof TowerUltimates !== 'undefined' && TowerUltimates.canUpgradeToUltimate(tower)) {
+                    if (TowerUltimates.applyUltimate(tower)) {
+                        this.showTowerInfo(tower);
+                        this.updateSidebarCosts();
+                    }
+                } else {
+                    TowerCommands.upgradeTower(tower);
                     this.showTowerInfo(tower);
                     this.updateSidebarCosts();
                 }
@@ -744,17 +949,52 @@ const UIRenderer = {
         const overclockBtn = document.getElementById('btn-overclock-tower');
         if (overclockBtn) {
             overclockBtn.addEventListener('click', () => {
-                tower.overclock();
+                TowerCommands.overclockTower(tower);
                 this.showTowerInfo(tower);
-                Effects.spawnExplosion(tower.x, tower.y, '#ff8040', 12, { speed: 2, glow: true });
+                if (tower.overclocked) {
+                    Effects.spawnExplosion(tower.x, tower.y, '#ff8040', 12, { speed: 2, glow: true });
+                }
+            });
+        }
+
+        const moveBtn = document.getElementById('btn-move-tower');
+        if (moveBtn) {
+            moveBtn.addEventListener('click', () => {
+                if (tower.isBeingMoved) {
+                    TowerCommands.cancelMoveTower(tower);
+                } else {
+                    const moveResult = TowerCommands.beginMoveTower(tower);
+                    if (!moveResult.ok && moveResult.reason === 'gold') {
+                        Effects.addFloatingText(tower.x, tower.y - 26, `NEED ${moveResult.cost}g`, '#ff8800', 11);
+                        Audio.play('error');
+                    }
+                }
+                this.showTowerInfo(tower);
+                this.updateSidebarCosts();
+            });
+        }
+
+        const linkBtn = document.getElementById('btn-link-tower');
+        if (linkBtn) {
+            linkBtn.addEventListener('click', () => {
+                if (tower.linkMode) {
+                    TowerCommands.cancelLinkMode(tower);
+                } else {
+                    TowerCommands.beginLinkMode(tower);
+                }
+                this.showTowerInfo(tower);
             });
         }
 
         const sellBtn = document.getElementById('btn-sell-tower');
         if (sellBtn) {
             sellBtn.addEventListener('click', () => {
-                tower.sell();
-                panel.style.display = 'none';
+                const sellResult = TowerCommands.requestSellTower(tower);
+                if (sellResult.sold) {
+                    panel.style.display = 'none';
+                } else {
+                    this.showTowerInfo(tower);
+                }
                 this.updateSidebarCosts();
             });
         }
@@ -766,391 +1006,159 @@ const UIRenderer = {
         this._stopPathPreviewAnimations();
         modal.style.display = 'flex';
 
-        document.getElementById('path-tower-name').textContent = def.name + ' \u2014 Tier 2 \u2192 Tier 3';
+        document.getElementById('path-tower-name').textContent = def.name;
 
-        // Current tower stats for comparison
-        const curDmg = tower.damage;
-        const curRange = tower.range;
-        const curRate = tower.fireRate;
-        const curSplash = tower.splash || 0;
+        const cur = { dmg: tower.damage, rng: tower.range, rate: tower.fireRate, splash: tower.splash || 0 };
+        const curDps = cur.rate > 0 ? cur.dmg / cur.rate : 0;
 
-        // Helper: build a stat comparison bar
-        const buildStatBar = (label, oldVal, newVal, isFireRate) => {
-            // For fire rate, lower is better (faster)
-            const diff = newVal - oldVal;
-            const isBeam = newVal === 0 || oldVal === 0;
-            if (isBeam) {
-                const cls = 'neutral';
-                return `<div class="stat-bar-row">
-                    <span class="stat-bar-label">${label}</span>
-                    <span class="stat-bar-values">
-                        <span class="stat-bar-old">${oldVal > 0 ? oldVal + 's' : 'Beam'}</span>
-                        <span class="stat-bar-arrow">\u2192</span>
-                        <span class="stat-bar-new ${cls}">${newVal > 0 ? newVal + 's' : 'Beam'}</span>
-                        <span class="stat-change-pct ${cls}">\u2014</span>
-                    </span>
-                </div>`;
+        const fmt = (v, isRate) => {
+            if (!Number.isFinite(v)) return '-';
+            if (isRate) return v > 0 ? v.toFixed(2) + 's' : 'Beam';
+            return Math.abs(v) >= 100 ? Math.round(v).toString() : Math.abs(v) >= 10 ? v.toFixed(1) : Number(v.toFixed(2)).toString();
+        };
+
+        const statRow = (label, oldV, newV, isRate) => {
+            const diff = newV - oldV;
+            if (isRate && (newV === 0 || oldV === 0)) {
+                return `<div class="spec-stat"><span class="spec-stat-label">${label}</span><span class="spec-stat-value">Beam</span></div>`;
             }
-            let positive;
-            if (isFireRate) {
-                positive = diff < 0; // lower fire rate = faster = better
-            } else {
-                positive = diff > 0;
-            }
-            const neutral = diff === 0;
-            const cls = neutral ? 'neutral' : (positive ? 'positive' : 'negative');
-            const pct = oldVal !== 0 ? Math.round(Math.abs(diff) / oldVal * 100) : 0;
-            const sign = diff > 0 ? '+' : (diff < 0 ? '' : '');
-            const arrow = neutral ? '\u2014' : (positive ? '\u25B2' : '\u25BC');
-            const suffix = isFireRate ? 's' : '';
-            // Bar fill percentage (relative scale)
-            const maxStat = Math.max(oldVal, newVal);
-            const fillPct = maxStat > 0 ? Math.round((newVal / maxStat) * 100) : 0;
-            return `<div class="stat-bar-row">
-                <span class="stat-bar-label">${label}</span>
-                <span class="stat-bar-values">
-                    <span class="stat-bar-old">${oldVal}${suffix}</span>
-                    <span class="stat-bar-arrow">\u2192</span>
-                    <span class="stat-bar-new ${cls}">${newVal}${suffix}</span>
-                    <div class="stat-bar-track"><div class="stat-bar-fill ${cls}" style="width:${fillPct}%"></div></div>
-                    <span class="stat-change-pct ${cls}">${sign}${pct}% ${arrow}</span>
-                </span>
+            const better = isRate ? diff < 0 : diff > 0;
+            const same = Math.abs(diff) < 0.001;
+            const cls = same ? 'neutral' : (better ? 'up' : 'down');
+            const pct = oldV !== 0 ? Math.round(Math.abs(diff) / Math.abs(oldV) * 100) : 0;
+            const sign = diff > 0 ? '+' : '\u2212';
+            return `<div class="spec-stat">
+                <span class="spec-stat-label">${label}</span>
+                <span class="spec-stat-value">${fmt(oldV, isRate)} <span class="arrow">\u2192</span> <span class="new-val ${cls}">${fmt(newV, isRate)}</span>${same ? '' : `<span class="delta ${cls}">${sign}${pct}%</span>`}</span>
             </div>`;
         };
 
-        // Helper: build sparkle particles HTML
-        const sparklesHTML = '<div class="sparkle-container">' +
-            '<div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>' +
-            '<div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>' +
-            '</div>';
-
-        // Helper: extract ultimate ability name from tier 5 desc
-        const getUltimateName = (tier5) => {
-            if (!tier5 || !tier5.desc) return null;
-            // Try to find a named ability (usually after a comma, or a capitalized phrase)
-            const desc = tier5.desc;
-            // Look for patterns like "Devastation Round", "Volley Storm", "Absolute Zero", etc.
-            const patterns = [
-                /,\s*([A-Z][a-z]+(?: [A-Z][a-z]+)+)/,
-                /([A-Z][a-z]+(?: [A-Z][a-z]+)+)\s+every/,
-                /([A-Z][a-z]+(?: [A-Z][a-z]+)+)$/,
-            ];
-            for (const pat of patterns) {
-                const m = desc.match(pat);
-                if (m) return m[1];
+        const buildStats = (tier3) => {
+            let h = '';
+            h += statRow('DMG', cur.dmg, tier3.damage, false);
+            h += statRow('RNG', cur.rng, tier3.range, false);
+            h += statRow('RATE', cur.rate, tier3.fireRate, true);
+            if (tier3.splash || cur.splash) h += statRow('SPLASH', cur.splash, tier3.splash || 0, false);
+            const nDps = tier3.fireRate > 0 ? tier3.damage / tier3.fireRate : tier3.damage;
+            if (curDps > 0 && nDps > 0) {
+                const cls = nDps >= curDps ? 'up' : 'down';
+                h += `<div class="spec-stat spec-stat-dps"><span class="spec-stat-label">DPS</span><span class="spec-stat-value">${fmt(curDps, false)} <span class="arrow">\u2192</span> <span class="new-val ${cls}">${fmt(nDps, false)}</span></span></div>`;
             }
-            // Fallback: check for special keys
-            if (tier5.special) {
-                const abilityKeys = ['devastation', 'volleyStorm', 'absoluteZero', 'glacialLance',
-                    'overload', 'thunderstorm', 'markedForDeath', 'designate', 'deathRay',
-                    'solarFlare', 'tacticalNuke', 'rocketBarrage', 'supernova', 'blackMarket'];
-                for (const key of abilityKeys) {
-                    if (tier5.special[key]) {
-                        return key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
-                    }
-                }
-            }
-            return 'ULTIMATE POWER';
+            return h;
         };
 
-        // Helper: build tier progression timeline
-        const buildTierProgression = (pathDef) => {
-            let html = '<div class="tier-progression"><div class="tier-progression-title">UPGRADE PATH PREVIEW</div>';
-            for (let t = 3; t <= 5; t++) {
-                const tierData = pathDef.tiers[t];
-                if (!tierData) continue;
-                const isUlt = t === 5;
-                const stepClass = isUlt ? 'tier-step tier-step-ultimate' : 'tier-step';
-                html += `<div class="${stepClass}">
-                    <span class="tier-badge tier-badge-${t}">T${t}</span>
-                    <span class="tier-step-desc">${tierData.desc || 'Enhanced stats'}</span>
-                </div>`;
-            }
-            html += '</div>';
-            return html;
-        };
-
-        // Helper: build ultimate showcase
-        const buildUltimateShowcase = (pathDef) => {
+        const buildAbilities = (pathDef, tier3) => {
+            let h = '';
+            if (tier3.desc) h += `<div class="spec-ability"><span class="spec-ability-tier t3">T3</span>${tier3.desc}</div>`;
+            const t4 = pathDef.tiers[4];
+            if (t4 && t4.desc) h += `<div class="spec-ability"><span class="spec-ability-tier t4">T4</span>${t4.desc}</div>`;
             const t5 = pathDef.tiers[5];
-            if (!t5) return '';
-            const ultName = getUltimateName(t5);
-            return `<div class="ultimate-showcase">
-                <div class="ultimate-label">TIER 5 ULTIMATE</div>
-                <div class="ultimate-name">\u2605 ${ultName ? ultName.toUpperCase() : 'ULTIMATE POWER'} \u2605</div>
-                <div class="ultimate-desc">${t5.desc || ''}</div>
-            </div>`;
+            if (t5 && t5.desc) h += `<div class="spec-ability"><span class="spec-ability-tier t5">T5</span>${t5.desc}</div>`;
+            return h;
         };
 
-        // Helper: build a full path card's stats content
-        const buildPathContent = (pathDef, canAfford, tier3) => {
-            let html = '<div class="path-stats-preview">';
-            html += '<div class="ps-section-title">STAT COMPARISON (TIER 2 \u2192 TIER 3)</div>';
-
-            // Stat bars
-            html += buildStatBar('Damage', curDmg, tier3.damage, false);
-            html += buildStatBar('Range', curRange, tier3.range, false);
-            html += buildStatBar('Fire Rate', curRate, tier3.fireRate, true);
-            if (tier3.splash || curSplash) {
-                html += buildStatBar('Splash', curSplash, tier3.splash || 0, false);
-            }
-
-            // Special ability for tier 3
-            if (tier3.desc) {
-                html += `<div class="ps-special">\u2726 ${tier3.desc}</div>`;
-            }
-
-            html += '</div>'; // close path-stats-preview
-
-            // Tier progression timeline
-            html += buildTierProgression(pathDef);
-
-            // Ultimate showcase
-            html += buildUltimateShowcase(pathDef);
-
-
-
-            return html;
-        };
-
-        // Populate "CURRENT STATS" section (the "before")
-        const currentStatsEl = document.getElementById('path-current-stats');
-        const rateDisplay = curRate > 0 ? curRate + 's' : 'Beam';
-        currentStatsEl.innerHTML = `
-            <div class="pcs-title">CURRENT TOWER STATS (TIER 2)</div>
-            <div class="pcs-row">
-                <span class="pcs-stat"><span class="pcs-label">DMG:</span> <span class="pcs-val">${curDmg}</span></span>
-                <span class="pcs-stat"><span class="pcs-label">RNG:</span> <span class="pcs-val">${curRange}</span></span>
-                <span class="pcs-stat"><span class="pcs-label">RATE:</span> <span class="pcs-val">${rateDisplay}</span></span>
-                ${curSplash ? `<span class="pcs-stat"><span class="pcs-label">SPLASH:</span> <span class="pcs-val">${curSplash}</span></span>` : ''}
-            </div>`;
-
-        // Path A
-        const pa3 = def.pathA.tiers[3];
-        const canAffordA = GameState.gold >= pa3.cost;
-        document.getElementById('path-a-name').textContent = `${def.pathA.icon} ${def.pathA.name}`;
-        document.getElementById('path-a-desc').textContent = def.pathA.desc;
-        document.getElementById('path-a-stats').innerHTML = buildPathContent(def.pathA, canAffordA, pa3);
-
-        // Path B
-        const pb3 = def.pathB.tiers[3];
-        const canAffordB = GameState.gold >= pb3.cost;
-        document.getElementById('path-b-name').textContent = `${def.pathB.icon} ${def.pathB.name}`;
-        document.getElementById('path-b-desc').textContent = def.pathB.desc;
-        document.getElementById('path-b-stats').innerHTML = buildPathContent(def.pathB, canAffordB, pb3);
-
-        // Tower visual preview — render what the tower will look like at T3 and T5
-        const renderTowerPreview = (containerId, path) => {
+        const renderPreview = (containerId, path) => {
             const container = document.getElementById(containerId);
             if (!container) return;
-            // Remove any existing preview
-            container.querySelectorAll('.path-tower-preview').forEach(el => el.remove());
+            container.innerHTML = '';
+            const sz = 80;
+            const canvas = document.createElement('canvas');
+            canvas.width = sz; canvas.height = sz;
+            canvas.style.width = sz + 'px'; canvas.style.height = sz + 'px';
+            container.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+            const pathDef = def['path' + path];
+            const t3 = pathDef.tiers[3] || {};
+            const fake = {
+                type: tower.type, tier: 3, path,
+                x: sz / 2, y: sz / 2, gridCol: 0, gridRow: 0,
+                angle: -Math.PI / 4, fireTimer: 0, kills: 0,
+                overclock: false, overclockTimer: 0, selected: false,
+                damage: t3.damage || 0, range: t3.range || 100, fireRate: t3.fireRate || 1,
+                splash: 0, stats: { totalDamageDealt: 0 },
+                getEffectiveRange() { return this.range; },
+                getEffectiveFireRate() { return this.fireRate; },
+                getMasteryData() { return null; },
+                getMasteryLevel() { return 0; },
+            };
+            const anim = { id: 0, stopped: false };
+            this._pathPreviewAnimIds.push(anim);
+            const draw = (ms) => {
+                if (anim.stopped) return;
+                const s = ms / 1000;
+                const tx = sz / 2 + Math.cos(s * 1.5) * 18;
+                const ty = sz / 2 + Math.sin(s * 1.2) * 12;
+                fake.angle = Math.atan2(ty - sz / 2, tx - sz / 2);
+                const phase = (s % 0.8) / 0.8;
+                fake.fireTimer = phase < 0.12 ? 0 : 0.2;
+                ctx.clearRect(0, 0, sz, sz);
+                try { TowerRenderer.draw(ctx, fake); } catch (e) {}
+                anim.id = requestAnimationFrame(draw);
+            };
+            anim.id = requestAnimationFrame(draw);
+        };
 
-            const previewDiv = document.createElement('div');
-            previewDiv.className = 'path-tower-preview';
+        const populateCard = (path, pathDef) => {
+            const p = path.toLowerCase();
+            const tier3 = pathDef.tiers[3];
+            const canAfford = GameState.gold >= tier3.cost;
 
-            // Create canvases for T3 and T5
-            for (const tier of [3, 5]) {
-                const wrap = document.createElement('div');
-                wrap.className = 'ptv-tier-wrap';
+            document.getElementById(`path-${p}-icon`).textContent = pathDef.icon || '';
+            document.getElementById(`path-${p}-name`).textContent = pathDef.name;
+            document.getElementById(`path-${p}-desc`).textContent = pathDef.desc;
+            document.getElementById(`path-${p}-stats`).innerHTML = buildStats(tier3);
+            document.getElementById(`path-${p}-abilities`).innerHTML = buildAbilities(pathDef, tier3);
+            renderPreview(`path-${p}-preview`, path);
 
-                const canvas = document.createElement('canvas');
-                canvas.width = 80;
-                canvas.height = 80;
-                const pCtx = canvas.getContext('2d');
-
-                // Create a fake tower object for rendering
-                const fakeTower = {
-                    type: tower.type,
-                    tier: tier,
-                    path: path,
-                    x: 40,
-                    y: 40,
-                    gridCol: 0,
-                    gridRow: 0,
-                    angle: -Math.PI / 4,
-                    fireTimer: 0,
-                    kills: 0,
-                    overclock: false,
-                    overclockTimer: 0,
-                    selected: false,
-                    damage: def['path' + path].tiers[tier] ? def['path' + path].tiers[tier].damage || 0 : 0,
-                    range: def['path' + path].tiers[tier] ? def['path' + path].tiers[tier].range || 100 : 100,
-                    fireRate: def['path' + path].tiers[tier] ? def['path' + path].tiers[tier].fireRate || 1 : 1,
-                    splash: 0,
-                    stats: { totalDamageDealt: 0 },
-                    getEffectiveRange() { return this.range; },
-                    getMasteryLevel() { return 0; },
-                };
-
-                const orbitR = tier === 5 ? 21 : 17;
-                const cycle = tier === 5 ? 0.55 : 0.8;
-                const animRef = { id: 0, stopped: false };
-                this._pathPreviewAnimIds.push(animRef);
-
-                const drawFrame = (ms) => {
-                    if (animRef.stopped) return;
-                    const sec = ms / 1000;
-                    const enemyX = 40 + Math.cos(sec * (tier === 5 ? 1.9 : 1.5)) * orbitR;
-                    const enemyY = 40 + Math.sin(sec * (tier === 5 ? 1.4 : 1.2)) * (orbitR * 0.75);
-
-                    fakeTower.angle = Math.atan2(enemyY - fakeTower.y, enemyX - fakeTower.x);
-                    const phase = (sec % cycle) / cycle;
-                    fakeTower.fireTimer = phase < 0.12 ? 0 : 0.2;
-
-                    pCtx.clearRect(0, 0, 80, 80);
-
-                    // Draw dark background circle
-                    pCtx.fillStyle = 'rgba(20,20,40,0.8)';
-                    pCtx.beginPath();
-                    pCtx.arc(40, 40, 36, 0, Math.PI * 2);
-                    pCtx.fill();
-                    pCtx.strokeStyle = 'rgba(100,100,200,0.3)';
-                    pCtx.lineWidth = 1;
-                    pCtx.stroke();
-
-                    // Enemy marker in the model box
-                    pCtx.fillStyle = '#ff7070';
-                    pCtx.beginPath();
-                    pCtx.arc(enemyX, enemyY, 2.5, 0, Math.PI * 2);
-                    pCtx.fill();
-
-                    // Shot tracer when firing
-                    if (phase < 0.12) {
-                        pCtx.strokeStyle = 'rgba(255, 220, 160, 0.7)';
-                        pCtx.lineWidth = 1;
-                        pCtx.beginPath();
-                        pCtx.moveTo(40, 40);
-                        pCtx.lineTo(enemyX, enemyY);
-                        pCtx.stroke();
-                    }
-
-                    // Render the tower
-                    try {
-                        TowerRenderer.draw(pCtx, fakeTower);
-                    } catch(e) {
-                        pCtx.fillStyle = '#666';
-                        pCtx.font = '12px monospace';
-                        pCtx.textAlign = 'center';
-                        pCtx.fillText('T' + tier, 40, 44);
-                    }
-
-                    animRef.id = requestAnimationFrame(drawFrame);
-                };
-
-                animRef.id = requestAnimationFrame(drawFrame);
-
-                const label = document.createElement('div');
-                label.className = 'ptv-label';
-                label.textContent = tier === 3 ? 'TIER 3' : 'TIER 5';
-                if (tier === 5) label.style.color = '#ffd700';
-
-                wrap.appendChild(canvas);
-                wrap.appendChild(label);
-                previewDiv.appendChild(wrap);
-            }
-
-            // Insert before the stats section
-            const statsEl = container.querySelector('.path-stats-preview') || container.querySelector('[id$="-stats"]');
-            if (statsEl) {
-                statsEl.parentNode.insertBefore(previewDiv, statsEl);
+            const actionEl = document.getElementById(`path-${p}-action`);
+            if (canAfford) {
+                actionEl.className = 'spec-card-action';
+                actionEl.innerHTML = `<span class="path-card-cost-badge">${tier3.cost}g</span> \u2014 SPECIALIZE`;
             } else {
-                container.appendChild(previewDiv);
+                actionEl.className = 'spec-card-action locked';
+                actionEl.innerHTML = `<span class="path-card-cost-badge locked">${tier3.cost}g</span> \u2014 Need ${Math.ceil(tier3.cost - GameState.gold)}g more`;
             }
+
+            const card = document.getElementById(`path-${p}-card`);
+            card.classList.toggle('cant-afford', !canAfford);
+            return { card, canAfford, tier3 };
         };
 
-        renderTowerPreview('path-a-stats', 'A');
-        renderTowerPreview('path-b-stats', 'B');
+        const a = populateCard('A', def.pathA);
+        const b = populateCard('B', def.pathB);
 
-        // Inject sparkle particles into both cards
-        ['path-a-card', 'path-b-card'].forEach(cardId => {
-            const card = document.getElementById(cardId);
-            // Remove old sparkle containers
-            card.querySelectorAll('.sparkle-container').forEach(el => el.remove());
-            card.insertAdjacentHTML('beforeend', sparklesHTML);
-        });
+        const closePathChoice = () => {
+            this._stopPathPreviewAnimations();
+            modal.style.display = 'none';
+        };
 
-        // Hide standalone choose buttons — clicking the card itself is the action
-        const btnA = document.getElementById('btn-path-a');
-        const btnB = document.getElementById('btn-path-b');
-        btnA.style.display = 'none';
-        btnB.style.display = 'none';
+        const shakeCard = (card) => {
+            card.classList.remove('spec-shake');
+            void card.offsetWidth;
+            card.classList.add('spec-shake');
+        };
 
-        // Handler for choosing Path A
-        const choosePathA = () => {
-            if (!canAffordA) {
-                btnA.style.animation = 'none';
-                btnA.offsetHeight;
-                btnA.style.animation = 'shake 0.3s ease-out';
-                Audio.play('click');
-                return;
-            }
-            if (tower.upgrade('A')) {
-                this._stopPathPreviewAnimations();
-                modal.style.display = 'none';
+        const choose = (path, canAfford, card) => {
+            if (!canAfford) { shakeCard(card); Audio.play('error'); return; }
+            if (tower.upgrade(path)) {
+                closePathChoice();
                 this.showTowerInfo(tower);
                 this.updateSidebarCosts();
                 Audio.play('upgrade');
             }
         };
 
-        // Handler for choosing Path B
-        const choosePathB = () => {
-            if (!canAffordB) {
-                btnB.style.animation = 'none';
-                btnB.offsetHeight;
-                btnB.style.animation = 'shake 0.3s ease-out';
-                Audio.play('click');
-                return;
-            }
-            if (tower.upgrade('B')) {
-                this._stopPathPreviewAnimations();
-                modal.style.display = 'none';
-                this.showTowerInfo(tower);
-                this.updateSidebarCosts();
-                Audio.play('upgrade');
-            }
-        };
+        a.card.onclick = () => choose('A', a.canAfford, a.card);
+        b.card.onclick = () => choose('B', b.canAfford, b.card);
 
-        // Bind buttons
-        document.getElementById('btn-path-a').onclick = choosePathA;
-        document.getElementById('btn-path-b').onclick = choosePathB;
-
-        // Make entire card clickable
-        const cardA = document.getElementById('path-a-card');
-        const cardB = document.getElementById('path-b-card');
-        cardA.onclick = choosePathA;
-        cardB.onclick = choosePathB;
-
-        // Add pointer cursor and cost badge to cards
-        cardA.style.cursor = 'pointer';
-        cardB.style.cursor = 'pointer';
-
-        // Add clickable cost badge at bottom of each card
-        const addCostBadge = (card, cost, canAfford) => {
-            card.querySelectorAll('.path-card-cost-badge').forEach(el => el.remove());
-            const badge = document.createElement('div');
-            badge.className = 'path-card-cost-badge' + (canAfford ? '' : ' cant-afford');
-            badge.innerHTML = canAfford
-                ? `<span class="path-cost-text">CLICK TO CHOOSE \u2014 ${cost}g</span>`
-                : `<span class="path-cost-text" style="color:#ff6060">NEED ${cost}g</span>`;
-            card.appendChild(badge);
-        };
-        addCostBadge(cardA, pa3.cost, canAffordA);
-        addCostBadge(cardB, pb3.cost, canAffordB);
-
-        // Close modal button (click outside or escape)
-        modal.onclick = (e) => {
-            if (e.target === modal) {
-                this._stopPathPreviewAnimations();
-                modal.style.display = 'none';
-            }
-        };
+        document.getElementById('btn-close-path-choice').onclick = closePathChoice;
+        modal.onclick = (e) => { if (e.target === modal) closePathChoice(); };
     },
 
     hideTowerInfo() {
         document.getElementById('tower-info').style.display = 'none';
         GameState.selectedTower = null;
+        this._lastTowerInfoStateKey = '';
     },
 
     drawCanvasUI(ctx) {
@@ -1261,152 +1269,23 @@ const UIRenderer = {
             }
         }
 
-        // Next wave preview — positioned below any wave banner
-        // Delay 3 seconds after wave complete so it doesn't overlap the "WAVE X COMPLETE" banner
-        const previewReady = !WaveSystem.waveCompleteTimestamp ||
-            (performance.now() - WaveSystem.waveCompleteTimestamp > 3000);
         this._lastNextWavePreviewBounds = null;
-        if (GameState.gamePhase === 'idle' && GameState.wave < GameState.maxWave && previewReady) {
-            const previewData = WaveSystem.getWavePreview(GameState.wave + 1);
-            const preview = previewData ? (previewData.enemies || previewData) : null;
-            if (preview && Array.isArray(preview) && preview.length > 0) {
-                ctx.save();
 
-                // Compute visible logical bounds in case the map is letterboxed/cropped by fill-scale.
-                const viewLeft = typeof gridOffsetX !== 'undefined' && typeof renderScale !== 'undefined'
-                    ? -gridOffsetX / renderScale
-                    : 0;
-                const viewTop = typeof gridOffsetY !== 'undefined' && typeof renderScale !== 'undefined'
-                    ? -gridOffsetY / renderScale
-                    : 0;
-                const viewRight = typeof canvasWidth !== 'undefined' && typeof renderScale !== 'undefined'
-                    ? viewLeft + canvasWidth / renderScale
-                    : logicalWidth;
 
-                // Header text
-                let headerText = `NEXT: WAVE ${GameState.wave + 1}`;
-                if (previewData.isBonus && previewData.bonusInfo) {
-                    headerText = `BONUS: ${previewData.bonusInfo.name.toUpperCase()}`;
-                } else if (previewData.hasModifier) {
-                    headerText += ' \u26A0';
-                }
-                if (previewData.bossName) {
-                    headerText = `BOSS AHEAD: ${previewData.bossName.toUpperCase()}`;
-                } else if (previewData.scenario && previewData.scenario.name) {
-                    headerText = `SCENARIO: ${previewData.scenario.name.toUpperCase()}`;
-                } else if (previewData.faction && previewData.faction.name) {
-                    headerText = `FACTION: ${previewData.faction.name.toUpperCase()}`;
-                }
-
-                // Calculate panel dimensions
-                const colW = 90;
-                const totalWidth = Math.max(preview.length * colW + 30, 220);
-                const hasElite = previewData.eliteChance && previewData.eliteChance > 0.05;
-                const threatTags = Array.isArray(previewData.threatTags) ? previewData.threatTags : [];
-                const hasThreatTags = threatTags.length > 0;
-                const objectiveLine = (previewData.isBonus && previewData.bonusInfo && previewData.bonusInfo.objectiveTitle)
-                    ? `Objective: ${previewData.bonusInfo.objectiveTitle}`
-                    : '';
-                const hasObjectiveLine = !!objectiveLine;
-                const showScouting = !!GameState.researchBonuses.scoutingReport;
-                const basePanelH = showScouting
-                    ? (hasElite ? 60 : 50)
-                    : (hasElite ? 48 : 38);
-                const panelH = basePanelH + (hasObjectiveLine ? 10 : 0) + (hasThreatTags ? 14 : 0);
-                const minPanelX = viewLeft + 8;
-                const maxPanelX = Math.max(minPanelX, viewRight - totalWidth - 8);
-                const panelX = clamp((logicalWidth - totalWidth) / 2, minPanelX, maxPanelX);
-                const previewY = Math.max(10, viewTop + 8);
-                const panelCenterX = panelX + totalWidth / 2;
-
-                this._lastNextWavePreviewBounds = {
-                    x: panelX,
-                    y: previewY,
-                    width: totalWidth,
-                    height: panelH,
-                };
-
-                // Background panel with rounded corners
-                ctx.fillStyle = 'rgba(8,8,20,0.75)';
-                this._roundRect(ctx, panelX, previewY, totalWidth, panelH, 6);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(60,60,120,0.4)';
-                ctx.lineWidth = 1;
-                this._roundRect(ctx, panelX, previewY, totalWidth, panelH, 6);
-                ctx.stroke();
-
-                // Header
-                ctx.font = 'bold 10px "Orbitron"';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = previewData.isBonus ? '#ffd700' : '#778';
-                ctx.fillText(headerText, panelCenterX, previewY + 13);
-
-                let infoLineY = previewY + 23;
-                if (hasObjectiveLine) {
-                    ctx.font = '8px "Share Tech Mono"';
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = '#ffe39a';
-                    ctx.fillText(objectiveLine.toUpperCase(), panelCenterX, infoLineY);
-                    infoLineY += 10;
-                }
-
-                if (hasThreatTags) {
-                    const tagsText = threatTags.join('   ');
-                    ctx.font = '8px "Share Tech Mono"';
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = '#9ba8c7';
-                    ctx.fillText(tagsText, panelCenterX, infoLineY);
-                }
-
-                // Enemy groups — laid out horizontally
-                let offsetX = panelX + Math.max(10, (totalWidth - preview.length * colW) / 2);
-                ctx.font = '10px "Share Tech Mono"';
-                const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
-                const groupsBaseY = previewY + 26 + (hasObjectiveLine ? 10 : 0) + (hasThreatTags ? 10 : 0);
-                for (const group of preview) {
-                    // Colored dot
-                    ctx.fillStyle = group.color;
-                    ctx.shadowColor = group.color;
-                    ctx.shadowBlur = 4;
-                    ctx.beginPath();
-                    ctx.arc(offsetX + 6, groupsBaseY, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-                    // Text
-                    ctx.fillStyle = '#bbb';
-                    ctx.textAlign = 'left';
-                    const label = `${group.count}x ${group.name}${group.isObjectiveTarget ? ' [TARGET]' : ''}`;
-                    ctx.fillText(label, offsetX + 14, groupsBaseY + 3);
-
-                    if (showScouting && group.type && ENEMIES[group.type]) {
-                        const enemyDef = ENEMIES[group.type];
-                        const hpScale = (previewData.difficultyScale?.hpMult || 1) * (group.hpMult || 1) * (diffPreset.enemyHpMult || 1);
-                        const spdScale = (previewData.difficultyScale?.speedMult || 1) * (diffPreset.enemySpeedMult || 1);
-                        const hp = Math.max(1, Math.round(enemyDef.hp * hpScale));
-                        const spd = (enemyDef.speed * spdScale).toFixed(2);
-                        ctx.font = '8px "Share Tech Mono"';
-                        ctx.fillStyle = '#8ea0c2';
-                        ctx.fillText(`HP ${hp} | SPD ${spd}`, offsetX + 14, groupsBaseY + 11);
-                        ctx.font = '10px "Share Tech Mono"';
-                    }
-                    offsetX += colW;
-                }
-
-                // Elite chance on the same line, right-aligned inside the panel
-                if (hasElite) {
-                    ctx.font = '9px "Share Tech Mono"';
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = '#ffaa44';
-                    ctx.fillText(`${Math.round(previewData.eliteChance * 100)}% elite chance`, panelCenterX, previewY + panelH - 3);
-                }
-
-                ctx.restore();
-            }
-        }
+        this._drawTowerLinks(ctx);
 
         // Placement preview (ghost tower + range circle)
+        // PlacementPreview from juiceFeatures already renders the modern preview.
+        // Keep this as a fallback only to avoid double circles.
+        const hasJuicePlacementPreview = (typeof PlacementPreview !== 'undefined' && PlacementPreview.active);
         if (GameState.selectedTowerType && GameState.mouseX > 0) {
-            this._drawPlacementPreview(ctx);
+            if (!hasJuicePlacementPreview) {
+                this._drawPlacementPreview(ctx);
+            }
+        } else if (GameState.selectedTower && GameState.selectedTower.isBeingMoved && GameState.mouseX > 0) {
+            this._drawRelocationPreview(ctx, GameState.selectedTower);
+        } else if (GameState.selectedTower && GameState.selectedTower.linkMode) {
+            this._drawLinkPreview(ctx, GameState.selectedTower);
         }
 
         // Tower hover tooltip on canvas
@@ -1505,6 +1384,121 @@ const UIRenderer = {
             ctx.stroke();
             ctx.restore();
         }
+    },
+
+    _drawRelocationPreview(ctx, tower) {
+        if (!tower) return;
+        const x = GameState.mouseX;
+        const y = GameState.mouseY;
+        if (x <= 0 || y <= 0) return;
+
+        const canMove = GameState.placementValid;
+        const moveCost = tower.getMoveCost();
+        const canAfford = GameState.gold >= moveCost;
+        const color = (canMove && canAfford) ? (TOWERS[tower.type].iconColor || '#80d0ff') : '#ff4040';
+        const footprint = CONFIG.TOWER_FOOTPRINT || 14;
+        const range = tower.getEffectiveRange();
+
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, range, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = canMove && canAfford ? 0.55 : 0.28;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, footprint, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = '#ffd070';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(tower.x, tower.y, footprint + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(tower.x, tower.y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.font = 'bold 10px "Share Tech Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = canAfford ? '#ffd070' : '#ff4040';
+        const moveLabel = canMove ? `MOVE ${moveCost}g` : (canAfford ? 'INVALID TILE' : `NEED ${moveCost}g`);
+        ctx.fillText(moveLabel, x, y + CONFIG.TILE_SIZE / 2 + 12);
+        ctx.restore();
+    },
+
+    _drawTowerLinks(ctx) {
+        const drawn = new Set();
+        for (const tower of GameState.towers) {
+            const linked = tower.getLinkedTowers ? tower.getLinkedTowers() : [];
+            for (const other of linked) {
+                const key = tower.id < other.id ? `${tower.id}-${other.id}` : `${other.id}-${tower.id}`;
+                if (drawn.has(key)) continue;
+                drawn.add(key);
+
+                ctx.save();
+                ctx.globalAlpha = 0.45;
+                ctx.strokeStyle = '#7dc7ff';
+                ctx.lineWidth = (GameState.selectedTower && (GameState.selectedTower === tower || GameState.selectedTower === other)) ? 2.5 : 1.5;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(tower.x, tower.y);
+                ctx.lineTo(other.x, other.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+        }
+    },
+
+    _drawLinkPreview(ctx, tower) {
+        if (!tower) return;
+        const hovered = Input && Input.hoveredTower ? Input.hoveredTower : null;
+        const target = hovered && hovered !== tower ? hovered : null;
+
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = '#7dc7ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(tower.x, tower.y, CONFIG.LINK_RANGE, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        if (!target) return;
+
+        const valid = tower.hasLinkTo(target) || tower.canLinkTo(target);
+        ctx.save();
+        ctx.globalAlpha = 0.65;
+        ctx.strokeStyle = valid ? '#7dc7ff' : '#ff6060';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(tower.x, tower.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
     },
 
     _drawTowerHoverTooltip(ctx, tower) {

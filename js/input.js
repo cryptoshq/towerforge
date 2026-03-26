@@ -133,7 +133,13 @@ const Input = {
             const grid = worldToGrid(GameState.mouseX, GameState.mouseY);
             GameState.mouseGridCol = grid.col;
             GameState.mouseGridRow = grid.row;
-            GameState.placementValid = MapSystem.canBuildAt(GameState.mouseX, GameState.mouseY);
+
+            if (GameState.selectedTower && GameState.selectedTower.isBeingMoved) {
+                GameState.selectedTower.setMovePreview(grid.col, grid.row);
+                GameState.placementValid = GameState.selectedTower.canMoveTo(grid.col, grid.row);
+            } else {
+                GameState.placementValid = MapSystem.canBuildAt(GameState.mouseX, GameState.mouseY);
+            }
 
             // Track hovered tower for tooltips
             this.hoveredTower = null;
@@ -142,6 +148,12 @@ const Input = {
                     this.hoveredTower = t;
                     break;
                 }
+            }
+
+            if (GameState.selectedTower && GameState.selectedTower.linkMode) {
+                GameState.selectedTower.linkPreviewTargetId = this.hoveredTower && this.hoveredTower !== GameState.selectedTower
+                    ? this.hoveredTower.id
+                    : null;
             }
 
             // Update hover tooltip
@@ -159,6 +171,13 @@ const Input = {
             } else {
                 this.hoverTooltipTimer = 0;
                 this.hoverTooltipVisible = false;
+            }
+
+            // Update tower placement ghost preview
+            if (GameState.selectedTowerType && typeof PlacementPreview !== 'undefined') {
+                PlacementPreview.show(GameState.selectedTowerType, GameState.mouseX, GameState.mouseY, GameState.placementValid);
+            } else if (typeof PlacementPreview !== 'undefined') {
+                PlacementPreview.hide();
             }
 
             // Update mouse trail during tower placement
@@ -260,7 +279,29 @@ const Input = {
                         if (GameState.wave > 0) {
                             SaveSystem.autoSave();
                         }
+                    } else {
+                        // Placement failed — likely can't afford
+                        if (typeof EconomyVisibility !== 'undefined') {
+                            EconomyVisibility.showCantAfford(GameState.selectedTowerType);
+                        }
                     }
+                }
+                return;
+            }
+
+            if (GameState.selectedTower && GameState.selectedTower.isBeingMoved) {
+                const moveResult = TowerCommands.confirmMoveTower(GameState.selectedTower, grid.col, grid.row);
+                if (moveResult.ok) {
+                    UIRenderer.showTowerInfo(GameState.selectedTower);
+                    UIRenderer.updateSidebarCosts();
+                    if (GameState.wave > 0) {
+                        SaveSystem.autoSave();
+                    }
+                } else if (moveResult.reason === 'gold') {
+                    Effects.addFloatingText(GameState.mouseX, GameState.mouseY - 20, `NEED ${moveResult.cost}g`, '#ff8800', 11);
+                    Audio.play('error');
+                } else {
+                    Audio.play('error');
                 }
                 return;
             }
@@ -276,6 +317,26 @@ const Input = {
                 }
             }
 
+            if (GameState.selectedTower && GameState.selectedTower.linkMode) {
+                if (clickedTower && clickedTower !== GameState.selectedTower) {
+                    const linkResult = TowerCommands.toggleLink(GameState.selectedTower, clickedTower);
+                    if (linkResult.ok) {
+                        const msg = linkResult.linked ? 'LINKED' : 'UNLINKED';
+                        const color = linkResult.linked ? '#7dc7ff' : '#ffd070';
+                        Effects.addFloatingText(clickedTower.x, clickedTower.y - 20, msg, color, 10);
+                        Audio.play(linkResult.linked ? 'powerup' : 'click');
+                    } else if (linkResult.reason === 'gold') {
+                        Effects.addFloatingText(clickedTower.x, clickedTower.y - 20, `NEED ${linkResult.cost}g`, '#ff8800', 11);
+                        Audio.play('error');
+                    } else {
+                        Audio.play('error');
+                    }
+                }
+                UIRenderer.showTowerInfo(GameState.selectedTower);
+                UIRenderer.updateSidebarCosts();
+                return;
+            }
+
             if (clickedTower) {
                 // Multi-select with shift held
                 if (this.isShiftHeld) {
@@ -285,16 +346,9 @@ const Input = {
 
                 // Double-click to upgrade
                 if (isDoubleClick && GameState.selectedTower === clickedTower) {
-                    const upgInfo = clickedTower.getUpgradeCost();
-                    if (upgInfo) {
-                        if (upgInfo.needsPath) {
-                            UIRenderer.showPathChoice(clickedTower);
-                        } else if (GameState.gold >= upgInfo.cost) {
-                            clickedTower.upgrade();
-                            UIRenderer.showTowerInfo(clickedTower);
-                            UIRenderer.updateSidebarCosts();
-                        }
-                    }
+                    TowerCommands.upgradeTower(clickedTower);
+                    UIRenderer.showTowerInfo(clickedTower);
+                    UIRenderer.updateSidebarCosts();
                 } else {
                     // Clear multi-select when clicking without shift
                     this.multiSelectedTowers = [];
@@ -309,10 +363,52 @@ const Input = {
             }
         });
 
-        // Right click — disabled for in-game context actions
         gameCanvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            this._hideContextMenu();
+
+            const rect = gameCanvas.getBoundingClientRect();
+            const screenX = e.clientX - rect.left;
+            const screenY = e.clientY - rect.top;
+            if (!isInGameArea(screenX, screenY)) {
+                this._hideContextMenu();
+                return;
+            }
+
+            if (GameState.selectedTower && GameState.selectedTower.isBeingMoved) {
+                TowerCommands.cancelMoveTower(GameState.selectedTower);
+                UIRenderer.showTowerInfo(GameState.selectedTower);
+                this._hideContextMenu();
+                return;
+            }
+
+            if (GameState.selectedTower && GameState.selectedTower.linkMode) {
+                TowerCommands.cancelLinkMode(GameState.selectedTower);
+                UIRenderer.showTowerInfo(GameState.selectedTower);
+                this._hideContextMenu();
+                return;
+            }
+
+            const logical = screenToLogical(screenX, screenY);
+            let clickedTower = null;
+            let clickDist = Infinity;
+            for (const tower of GameState.towers) {
+                const d = dist({ x: logical.x, y: logical.y }, tower);
+                if (d < (CONFIG.TOWER_FOOTPRINT || 14) + 8 && d < clickDist) {
+                    clickedTower = tower;
+                    clickDist = d;
+                }
+            }
+
+            if (!clickedTower) {
+                this._hideContextMenu();
+                return;
+            }
+
+            if (!this.isShiftHeld) {
+                this.multiSelectedTowers = [];
+                UIRenderer.showTowerInfo(clickedTower);
+            }
+            this._showContextMenu(e.clientX, e.clientY, clickedTower);
         });
 
         // Mouse wheel — zoom (future feature) or cycle targeting
@@ -321,11 +417,10 @@ const Input = {
                 e.preventDefault();
                 const modes = CONFIG.TARGETING_MODES;
                 const current = modes.indexOf(GameState.selectedTower.targetMode);
-                if (e.deltaY > 0) {
-                    GameState.selectedTower.targetMode = modes[(current + 1) % modes.length];
-                } else {
-                    GameState.selectedTower.targetMode = modes[(current - 1 + modes.length) % modes.length];
-                }
+                const nextMode = e.deltaY > 0
+                    ? modes[(current + 1) % modes.length]
+                    : modes[(current - 1 + modes.length) % modes.length];
+                TowerCommands.setTargetMode(GameState.selectedTower, nextMode);
                 UIRenderer.showTowerInfo(GameState.selectedTower);
                 Audio.play('click');
             }
@@ -425,16 +520,11 @@ const Input = {
             // A/B keys — choose path when path-choice modal is open
             if (document.getElementById('path-choice-modal').style.display === 'flex') {
                 if (e.key.toLowerCase() === 'a') {
-                    const btnA = document.getElementById('btn-path-a');
-                    if (btnA) btnA.click();
-                    // Also click the card itself
                     const cardA = document.getElementById('path-a-card');
                     if (cardA) cardA.click();
                     return;
                 }
                 if (e.key.toLowerCase() === 'b') {
-                    const btnB = document.getElementById('btn-path-b');
-                    if (btnB) btnB.click();
                     const cardB = document.getElementById('path-b-card');
                     if (cardB) cardB.click();
                     return;
@@ -475,14 +565,18 @@ const Input = {
                 const types = Object.keys(TOWERS);
                 if (idx < types.length) {
                     const type = types[idx];
-                    if (GameState.selectedTowerType === type) {
-                        GameState.selectedTowerType = null;
+                    if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.tryToggleTowerSelection === 'function') {
+                        ProgressionSystem.tryToggleTowerSelection(type);
                     } else {
-                        GameState.selectedTowerType = type;
-                        GameState.selectedTower = null;
-                        document.getElementById('tower-info').style.display = 'none';
+                        if (GameState.selectedTowerType === type) {
+                            GameState.selectedTowerType = null;
+                        } else {
+                            GameState.selectedTowerType = type;
+                            GameState.selectedTower = null;
+                            document.getElementById('tower-info').style.display = 'none';
+                        }
+                        UIRenderer._updateSidebarSelection();
                     }
-                    UIRenderer._updateSidebarSelection();
                 }
             }
 
@@ -511,8 +605,12 @@ const Input = {
                 if (this.multiSelectedTowers.length > 0) {
                     this._multiSell();
                 } else if (GameState.selectedTower) {
-                    GameState.selectedTower.sell();
-                    document.getElementById('tower-info').style.display = 'none';
+                    const sellResult = TowerCommands.requestSellTower(GameState.selectedTower);
+                    if (sellResult.sold) {
+                        document.getElementById('tower-info').style.display = 'none';
+                    } else {
+                        UIRenderer.showTowerInfo(GameState.selectedTower);
+                    }
                     UIRenderer.updateSidebarCosts();
                 }
             }
@@ -522,16 +620,9 @@ const Input = {
                 if (this.multiSelectedTowers.length > 0) {
                     this._multiUpgrade();
                 } else if (GameState.selectedTower) {
-                    const upgInfo = GameState.selectedTower.getUpgradeCost();
-                    if (upgInfo) {
-                        if (upgInfo.needsPath) {
-                            UIRenderer.showPathChoice(GameState.selectedTower);
-                        } else if (GameState.gold >= upgInfo.cost) {
-                            GameState.selectedTower.upgrade();
-                            UIRenderer.showTowerInfo(GameState.selectedTower);
-                            UIRenderer.updateSidebarCosts();
-                        }
-                    }
+                    TowerCommands.upgradeTower(GameState.selectedTower);
+                    UIRenderer.showTowerInfo(GameState.selectedTower);
+                    UIRenderer.updateSidebarCosts();
                 }
             }
 
@@ -547,6 +638,7 @@ const Input = {
             // Toggle range display
             if (this._matchesHotkey(e, 'toggleRanges')) {
                 GameState.settings.showRanges = !GameState.settings.showRanges;
+                if (typeof Menu !== 'undefined' && Menu._hudToggleSync) Menu._hudToggleSync();
             }
 
             // Toggle FPS counter
@@ -556,8 +648,12 @@ const Input = {
 
             // Delete key — sell selected tower
             if (e.key === 'Delete' && GameState.selectedTower) {
-                GameState.selectedTower.sell();
-                document.getElementById('tower-info').style.display = 'none';
+                const sellResult = TowerCommands.requestSellTower(GameState.selectedTower);
+                if (sellResult.sold) {
+                    document.getElementById('tower-info').style.display = 'none';
+                } else {
+                    UIRenderer.showTowerInfo(GameState.selectedTower);
+                }
                 UIRenderer.updateSidebarCosts();
             }
 
@@ -677,7 +773,7 @@ const Input = {
     },
 
     _isReservedHotkeyCode(code) {
-        return /^Digit[1-8]$/.test(code);
+        return /^Digit[0-9]$/.test(code) || code === 'Minus' || code === 'Equal';
     },
 
     mouseButtonToHotkeyCode(button) {
@@ -732,6 +828,12 @@ const Input = {
         } else if (GameState.selectedTowerType) {
             GameState.selectedTowerType = null;
             UIRenderer._updateSidebarSelection();
+        } else if (GameState.selectedTower && GameState.selectedTower.isBeingMoved) {
+            TowerCommands.cancelMoveTower(GameState.selectedTower);
+            UIRenderer.showTowerInfo(GameState.selectedTower);
+        } else if (GameState.selectedTower && GameState.selectedTower.linkMode) {
+            TowerCommands.cancelLinkMode(GameState.selectedTower);
+            UIRenderer.showTowerInfo(GameState.selectedTower);
         } else if (GameState.selectedTower) {
             UIRenderer.hideTowerInfo();
         } else if (document.getElementById('path-choice-modal').style.display === 'flex') {
@@ -916,21 +1018,14 @@ const Input = {
 
     _multiSell() {
         const towers = [...this.multiSelectedTowers];
-        for (const tower of towers) {
-            tower.sell();
-        }
+        TowerCommands.sellSelection(towers);
         this.multiSelectedTowers = [];
         document.getElementById('tower-info').style.display = 'none';
         UIRenderer.updateSidebarCosts();
     },
 
     _multiUpgrade() {
-        for (const tower of this.multiSelectedTowers) {
-            const upgInfo = tower.getUpgradeCost();
-            if (upgInfo && !upgInfo.needsPath && GameState.gold >= upgInfo.cost) {
-                tower.upgrade();
-            }
-        }
+        TowerCommands.upgradeSelection(this.multiSelectedTowers);
         UIRenderer.updateSidebarCosts();
         if (this.multiSelectedTowers.length > 0) {
             UIRenderer.showTowerInfo(this.multiSelectedTowers[0]);
@@ -1008,6 +1103,8 @@ const Input = {
         const upgInfo = tower.getUpgradeCost();
         const canUpgrade = upgInfo && !upgInfo.needsPath && GameState.gold >= upgInfo.cost;
         const needsPath = upgInfo && upgInfo.needsPath;
+        const moveCost = tower.getMoveCost();
+        const canMove = GameState.gold >= moveCost;
 
         let html = '';
 
@@ -1020,9 +1117,28 @@ const Input = {
             html += this._contextMenuItem(`Upgrade (${upgInfo.cost}g)`, 'upgrade', false);
         }
 
+        // Move option
+        if (tower.isBeingMoved) {
+            html += this._contextMenuItem('Cancel Relocate', 'move_cancel', true);
+        } else {
+            html += this._contextMenuItem(`Relocate (${moveCost}g)`, 'move', canMove);
+        }
+
+        if (tower.linkMode) {
+            html += this._contextMenuItem('Cancel Link Mode', 'link_cancel', true);
+        } else {
+            const linkCapReached = tower.links.length >= CONFIG.MAX_LINKS_PER_TOWER;
+            html += this._contextMenuItem(`Link (${CONFIG.LINK_COST}g)`, 'link', !linkCapReached);
+        }
+
         // Sell option
-        const sellValue = Math.floor(tower.totalCost * (CONFIG.SELL_REFUND));
-        html += this._contextMenuItem(`Sell (+${sellValue}g)`, 'sell', true);
+        const sellValue = tower.getSellValue();
+        html += this._contextMenuItem(
+            tower.sellConfirmActive ? `Confirm Sell (+${sellValue}g)` : `Sell (+${sellValue}g)`,
+            'sell',
+            true,
+            tower.sellConfirmActive ? '#ffd070' : null
+        );
 
         // Divider
         html += '<div style="height:1px;background:#333;margin:4px 0;"></div>';
@@ -1084,20 +1200,39 @@ const Input = {
         if (!tower) return;
 
         if (action === 'upgrade') {
-            const upgInfo = tower.getUpgradeCost();
-            if (upgInfo && GameState.gold >= upgInfo.cost) {
-                tower.upgrade();
-                UIRenderer.showTowerInfo(tower);
-                UIRenderer.updateSidebarCosts();
-            }
+            TowerCommands.upgradeTower(tower);
+            UIRenderer.showTowerInfo(tower);
+            UIRenderer.updateSidebarCosts();
         } else if (action === 'path') {
             UIRenderer.showPathChoice(tower);
         } else if (action === 'sell') {
-            tower.sell();
-            document.getElementById('tower-info').style.display = 'none';
+            const sellResult = TowerCommands.requestSellTower(tower);
+            if (sellResult.sold) {
+                document.getElementById('tower-info').style.display = 'none';
+            } else {
+                UIRenderer.showTowerInfo(tower);
+            }
             UIRenderer.updateSidebarCosts();
+        } else if (action === 'move') {
+            const moveResult = TowerCommands.beginMoveTower(tower);
+            if (moveResult.ok) {
+                UIRenderer.showTowerInfo(tower);
+                Effects.addFloatingText(tower.x, tower.y - 26, 'RELOCATE', '#80d0ff', 11);
+            } else if (moveResult.reason === 'gold') {
+                Effects.addFloatingText(tower.x, tower.y - 26, `NEED ${moveResult.cost}g`, '#ff8800', 11);
+                Audio.play('error');
+            }
+        } else if (action === 'move_cancel') {
+            TowerCommands.cancelMoveTower(tower);
+            UIRenderer.showTowerInfo(tower);
+        } else if (action === 'link') {
+            TowerCommands.beginLinkMode(tower);
+            UIRenderer.showTowerInfo(tower);
+        } else if (action === 'link_cancel') {
+            TowerCommands.cancelLinkMode(tower);
+            UIRenderer.showTowerInfo(tower);
         } else if (action === 'overclock') {
-            tower.overclock();
+            TowerCommands.overclockTower(tower);
             if (GameState.selectedTower === tower) {
                 UIRenderer.showTowerInfo(tower);
             }
@@ -1108,7 +1243,7 @@ const Input = {
             }
         } else if (action.startsWith('target_')) {
             const mode = action.replace('target_', '');
-            tower.targetMode = mode;
+            TowerCommands.setTargetMode(tower, mode);
             if (GameState.selectedTower === tower) {
                 UIRenderer.showTowerInfo(tower);
             }
@@ -1214,7 +1349,7 @@ const Input = {
         const rows = [
             [this.getHotkeyLabel('startWave'), 'Start Wave'],
             [this.getHotkeyLabel('pause'), 'Pause / Deselect'],
-            ['1-8', 'Select Tower Type'],
+            ['1-0 / - / =', 'Select Tower Type'],
             [abilityKeys, 'Abilities'],
             [this.getHotkeyLabel('sellTower'), 'Sell Tower'],
             [this.getHotkeyLabel('upgradeTower'), 'Upgrade Tower'],
@@ -1485,8 +1620,14 @@ function togglePause() {
     if (GameState.gamePhase === 'playing' || GameState.gamePhase === 'idle') {
         GameState.gamePhase = 'paused';
         document.getElementById('pause-menu').style.display = 'flex';
+        if (typeof UIRenderer !== 'undefined' && typeof UIRenderer.updateDirectiveTracker === 'function') {
+            UIRenderer.updateDirectiveTracker(true);
+        }
     } else if (GameState.gamePhase === 'paused') {
         GameState.gamePhase = GameState.enemies.length > 0 ? 'playing' : 'idle';
         document.getElementById('pause-menu').style.display = 'none';
+        if (typeof UIRenderer !== 'undefined' && typeof UIRenderer.updateDirectiveTracker === 'function') {
+            UIRenderer.updateDirectiveTracker(true);
+        }
     }
 }

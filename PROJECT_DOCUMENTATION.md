@@ -365,7 +365,7 @@ Persistent data saved to LocalStorage:
 - Hover: Tooltip, placement preview
 
 **Keyboard:**
-- 1-8: Quick-select tower type
+- 1-0, -, =: Quick-select tower type
 - Space: Start wave
 - P: Pause
 - Esc: Cancel/menu

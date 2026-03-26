@@ -1,722 +1,700 @@
-# TowerForge Roadmap (Execution Plan)
+# TowerForge Roadmap
 
-## Why This Rewrite Exists
+## Product Direction
 
-This roadmap is rewritten to align with the current direction of TowerForge development and recent feedback:
+TowerForge is being reshaped into a polished single-player tower defense game built around three core promises:
 
-- preserve the current gameplay feel while increasing depth,
-- improve progression quality and long-term retention,
-- fix real-world quality issues like background simulation behavior and SFX spam fatigue,
-- keep every change testable on the live local server,
-- use Context7 + Playwright as standard quality tooling during implementation.
+- memorable boss encounters
+- trustworthy and readable combat rules
+- curated replayability built on top of a strong core game
 
-This is not just a feature wishlist. It is a build plan with priorities, sequencing, and verification standards.
+This roadmap intentionally rejects breadth for breadth's sake. The current codebase already contains a large number of systems, including doctrines, research, tactical events, objective bonus waves, endless mutators, weekly challenges, a multiplayer layer, and tier-6 ultimate upgrades. The next stage of development is not about adding more systems. It is about deciding which systems deserve to survive, making the best ones excellent, and cutting or freezing the rest.
 
----
+This roadmap is phase-gated, not feature-hoarding and not deadline-driven. A later phase should not begin just because a calendar says so. A later phase should begin only when the earlier phase has met clear quality gates.
 
-## Development Environment Standards
+## Strategic Principles
 
-### Local Runtime Target
+1. Bosses are the product anchor.
+Bosses already have visible scaffolding in the current game through archetypes, intros, previews, and cast logic in `js/enemy.js:46`, `js/enemy.js:310`, `js/enemy.js:731`, and `js/wave.js:1805`. They should become the strongest part of the game, not just the most advertised part.
 
-Primary dev runtime:
+2. Combat truth comes before expansion.
+If a status effect, tower special, or enemy mechanic exists in config but is not fully trustworthy in runtime behavior, it is a liability. Combat must be mechanically honest before the game earns the right to expand.
 
-- `http://localhost:3000`
+3. Fewer better systems beats many partial systems.
+Every retained system must improve either moment-to-moment combat, boss identity, or long-term replay value in a way the player can clearly feel.
 
-All behavior changes should be verified against this local server, not `file://` execution.
+4. Campaign clarity beats tuning noise.
+The current game can stack many encounter identity layers at once through modifiers, scenarios, factions, wave arcs, map pressure, tactical modifiers, endless mutators, and captain auras in `js/wave.js:18`, `js/wave.js:43`, `js/wave.js:52`, `js/wave.js:77`, `js/wave.js:161`, `js/wave.js:331`, and `js/wave.js:408`. The campaign should use fewer layers more intentionally.
 
-Reason:
+5. Replayability should be built on mastery, not confusion.
+Endless mode, weekly challenges, and meta progression are valuable only if the core combat loop is already readable, reliable, and worth replaying.
 
-- browser security restrictions and scheduling behavior differ on `file://`,
-- game-loop timing, asset behavior, and console warnings are more reliable on localhost,
-- Playwright automation is stable and reproducible with HTTP base URLs.
+## Current Reality
 
-### Context7 Requirement
+### What is already strong
 
-When tooling/library usage is involved (especially Playwright), use Context7 documentation as source-of-truth.
+TowerForge is already a real game with broad coverage across core systems.
 
-Use Context7 for:
+- Core run flow, menu flow, and game state are established in `js/main.js`, `js/menu.js`, and `js/gameState.js:1`.
+- Twenty maps across four difficulty bands are defined in `js/config.js:1102`, with custom pathing, terrain themes, and decoration logic supported by `js/map.js:1`.
+- A broad tower roster and upgrade framework exists in `js/config.js` and `js/tower.js`.
+- Boss intros, wave preview intel, doctrines, research, tactical events, endless draft, and weekly challenges are already implemented in visible form.
+- There is meaningful automated coverage for several higher-level flows in `tests/playwright-faction-captain-test.js:1`, `tests/playwright-weekly-endless-meta-test.js:1`, `tests/playwright-doctrine-flow-test.js:1`, `tests/playwright-tactical-choice-test.js:1`, and `tests/playwright-bonus-objective-test.js:1`.
 
-- Playwright best practices,
-- stable assertion strategy,
-- waiting patterns and anti-flake patterns,
-- API usage confirmation before introducing structural test changes.
+### What is holding the game back
 
-### Playwright Requirement
+The project's breadth is now larger than its current level of mechanical trust and product coherence.
 
-Every non-trivial change should be validated with regression tests.
+- Bosses exist, but they still sit on top of a generic enemy chassis. Boss identity is defined mostly through profile swaps in `js/enemy.js:46` and `js/enemy.js:310`, while the base boss type is still a single generic `ENEMIES.boss` entry in `js/config.js:887`.
+- Boss summons appear to bypass the normal spawn-time modification pipeline. `_bossSpawnMinions()` in `js/enemy.js:829` creates minions directly instead of routing them through the same wave-spawn processing used elsewhere in `js/wave.js`.
+- Several combat-status interactions look incomplete or broken. The clearest example is the `frozenTimer` / `freezeTimer` mismatch between `js/tower.js:654`, `js/tower.js:685`, and `js/enemy.js:151`.
+- Some tower specials appear defined in config but only partially supported in stable combat logic.
+- The game's UI and documentation are not fully synchronized with the actual mechanics. The difficulty screen sells specific boss fantasies in `js/menu.js:1121`, but those descriptions do not cleanly align with the implemented boss behavior in `js/enemy.js:46`.
+- The codebase has accumulated feature-spike architecture, especially in `js/juiceFeatures.js`, where permanent game behavior is added through monkey-patching and grab-bag integration hooks.
 
-Current suite expectations:
+## Strategic Cuts and Freezes
 
-- run gameplay regression,
-- run UI alignment regression,
-- run targeted smoke checks for newly introduced systems,
-- ensure no new console errors for changed features.
+This section is not optional. The roadmap only works if scope reduction is treated as real work.
 
-Do not rely on visual assumptions only.
+### Remove from active product scope
 
----
+- Multiplayer is removed from the active roadmap.
+- The multiplayer code in `js/multiplayer.js:1` is large, real, and technically impressive, but it is effectively a second product. It competes directly with the chosen goal of making TowerForge a polished single-player game.
+- The existence of the system does not justify continued roadmap investment.
+- Multiplayer should not receive major feature work, polish work, or design attention during Phases I or II.
+- If keeping the code creates UI or maintenance drag, it should be hidden from the main product surface until the single-player game is mature enough to justify revisiting it.
 
-## Product Priorities (Global)
+### Freeze until the core game is excellent
 
-Use this order for engineering decisions:
+- Tier-6 ultimates are frozen.
+- The ultimate system in `js/juiceFeatures.js:948` and the upgrade hook in `js/tower.js:1194` add power fantasy and content breadth on top of a combat layer that is not yet fully trustworthy.
+- Ultimates should not be expanded, balanced, or treated as core product surface until the base tower roster is clean, the boss layer is strong, and the core T5 ecosystem is stable.
+- If necessary, ultimates should be hidden behind a debug or experimental label rather than presented as fully supported content.
 
-1. Stability and trust
-2. Readability and UX clarity
-3. Strategic depth
-4. Retention and progression quality
-5. Content expansion
+### Simplify aggressively
 
-When priorities conflict, higher priority wins.
+- Campaign wave identity layering should be reduced.
+- The campaign should not regularly combine too many simultaneous identity layers. A future target should be one primary identity layer plus one secondary accent, not five overlapping systems.
+- Save-system complexity should be deprioritized.
+- Multiple save slots, export/import, undo snapshots, and cloud payload preparation exist in `js/save.js:455`, `js/save.js:540`, `js/save.js:664`, and `js/save.js:704`. These features are not the limiting factor in product quality right now.
+- Any late-tier tower special that cannot be proven fully implemented should be either simplified or removed from the active design surface.
+- New enemy gimmicks added through `js/juiceFeatures.js:776` should be treated as optional candidates, not guaranteed permanent features.
 
----
+### Scope rule
 
-## Master Goals
+No major new gameplay system should be added until bosses, combat correctness, and roster parity are solved.
 
-TowerForge should become:
-
-- easy to read under pressure,
-- deep enough for repeat strategic experimentation,
-- rewarding across short and long sessions,
-- stable under real usage conditions (including focus changes and intense combat load),
-- polished enough that players trust progression and keep returning.
-
----
-
-## Phase 1 - Foundation, Reliability, and Trust
+## Phase I - Bosses and Combat Truth
 
 ### Goal
 
-Eliminate trust-breaking behavior and polish rough edges that reduce confidence in the game.
+Make TowerForge mechanically trustworthy and make bosses feel like authored encounters rather than enlarged standard enemies.
 
-### Phase 1 Scope
+### Why this phase comes first
 
-#### 1) Save/Load Fidelity
+Bosses are currently the clearest gap between promise and payoff.
 
-Ensure restore parity for active-run state.
+- The game already frames bosses as tentpole content through previews, names, and difficulty storytelling.
+- Bosses have archetypes, cast labels, intro abilities, telegraphs, and a dedicated intro sequence.
+- But they still inherit too much from a shared generic boss base and are still too tied to the standard enemy system.
+- At the same time, combat correctness problems undermine both bosses and the wider tower roster.
 
-Includes:
+This phase exists to solve both problems at once: bosses become the headline feature, and combat truth becomes the supporting foundation that makes those encounters reliable.
 
-- towers, tiers, paths, targeting modes,
-- mastery/xp/runtime tower modifiers,
-- wave and progression context,
-- challenge/endless flags,
-- robust fallback for malformed or older saves.
+### Workstream 1 - Rebuild bosses as authored encounters
 
-#### 2) Continue Flow Clarity
+Bosses should move from "profiled enemy type" to "encounter definition."
 
-Continue should clearly communicate what will be resumed:
+Detailed goals:
 
-- map,
-- wave,
-- difficulty,
-- mode (campaign/endless),
-- challenge modifiers,
-- run time,
-- recency.
+- Separate each boss into a fully authored encounter definition rather than relying on one shared `ENEMIES.boss` baseline in `js/config.js:887`.
+- Preserve the current archetype names and themes from `js/enemy.js:46`, but deepen them into proper fight identities.
+- Give each boss:
+  - a persistent passive identity
+  - a clear cast cycle
+  - at least one phase threshold
+  - at least one lane-control mechanic
+  - at least one summoning, shielding, or positional mechanic
+  - an enrage state that changes the texture of the fight, not just the speed number
+- Align boss preview text, difficulty-screen storytelling, and boss-intro UI with the real mechanics.
 
-#### 3) Ability UX Baseline
+Engineering goals:
 
-Abilities must be visible and understandable in the sidebar/HUD with cooldown clarity.
+- Replace or rework `setBossProfile()` in `js/enemy.js:310` so boss configuration is not just a shallow object copy.
+- Rebuild `_updateBossAbilities()` and `_executeBossAbility()` in `js/enemy.js:731` around encounter definitions that support:
+  - phases
+  - threshold-driven behavior shifts
+  - telegraph tuning
+  - minion-spawn policy
+  - unique reward or scoring hooks
+- Route boss summons through the same scaling and modifier pipeline as normal spawns, rather than spawning raw `new Enemy()` objects in `js/enemy.js:829`.
+- Ensure boss adds correctly participate in:
+  - difficulty scaling
+  - map pressure
+  - faction logic where appropriate
+  - scenario logic where appropriate
+  - tactical modifiers where appropriate
+  - wave completion accounting
+  - reward accounting
 
-#### 4) Research Wiring Reliability
+Design goals by boss:
 
-High-impact research effects must be fully implemented, visible, and testable.
+- Grub King should become the clearest swarm-pressure boss, focused on board clutter, lane tempo, and low-cost overwhelm.
+- Stone Colossus should become the clearest durability/control boss, focused on shield windows, anti-burst pressure, and deliberate pacing.
+- Infernal Lord should become the clearest aggression/spike boss, focused on burst tempo, support disruption, and pressure swings.
+- Void Emperor should become the clearest endgame trickster boss, focused on spatial disruption, teleport threats, summon pressure, and phase manipulation that remains fair and readable.
 
-#### 5) New: Background Execution Reliability (Critical)
+### Workstream 2 - Establish a combat truth contract
 
-Issue observed: game appears to stop when window is unfocused.
+The combat layer should move away from scattered one-off flags and toward a single, predictable status model.
 
-Root context:
+Detailed goals:
 
-- no explicit focus pause is intended,
-- but simulation currently relies on `requestAnimationFrame`,
-- browsers throttle/suspend frame scheduling when tab/window is not focused or hidden.
+- Audit every enemy status and every tower-applied status path.
+- Build a single contract for every status effect:
+  - identifier
+  - apply behavior
+  - stack or refresh rules
+  - update tick behavior
+  - expiration behavior
+  - visual indicator behavior
+  - damage interaction rules
+- Fix the current known mismatches and suspicious fields, including:
+  - `frozenTimer` vs `freezeTimer` in `js/tower.js:654`, `js/tower.js:685`, and `js/enemy.js:151`
+  - `vulnerableMult` assignment in `js/tower.js:657` without obvious use in `js/enemy.js:921`
+  - `blinded` / `blindTimer` in `js/tower.js:809`
+  - `energyFieldSlowed` in `js/tower.js:907`
+- Remove any status field that does not have a reliable full lifecycle.
 
-Plan:
+Design goals:
 
-- split rendering and simulation timing responsibilities,
-- implement safe simulation catch-up model on refocus,
-- clamp catch-up delta to avoid one huge unstable update,
-- preserve deterministic progression and avoid reward duplication,
-- verify behavior across blur/focus and hidden-tab return scenarios.
+- Slow, freeze, stun, mark, brittle, poison, burn, shield, stealth, blind, corruption, vulnerability, and boss-only effects should all obey consistent rules.
+- Players should be able to understand why an enemy is moving slowly, why it is taking bonus damage, why a boss is protected, and when that state will end.
+- Bosses may have special resistances or immunities, but those rules must be explicit and readable.
 
-Important note:
+### Workstream 3 - Audit and reduce tower special sprawl
 
-- full guaranteed real-time hidden-tab execution is browser-limited,
-- practical target is: no focus-loss soft-pause + consistent state advancement/recovery.
+The current tower content should be treated as a truth exercise, not a content trophy cabinet.
 
-#### 6) New: SFX Rework / Mix Stability Pass (Critical)
+Detailed goals:
 
-Problem statement:
+- Create a full audit matrix for every late-tier tower special defined in `js/config.js`.
+- For every special, record:
+  - where it is defined
+  - where it is implemented
+  - what UI advertises it
+  - what effects and audio support it
+  - whether it is tested
+  - whether it should be retained, simplified, or removed
+- The outcome of the audit should be decisive. No special survives in a vague "probably works" state.
 
-- current SFX character is good,
-- but high event density causes harsh, nervous, fatiguing sound due to overlap spam.
+Priority focus:
 
-Non-goal:
+- All T5 signature abilities
+- all new-path tower specials
+- special flags added by later expansion work
+- any special that interacts with bosses or crowd-control rules
+- any special that changes economy, cooldowns, or global modifiers
 
-- do not change core tonal identity.
+Important examples that need explicit disposition:
 
-Goal:
+- freeze-related tower specials in `js/tower.js:648`
+- Solar Flare blind logic in `js/tower.js:800`
+- passive field-slow logic in `js/tower.js:902`
+- special-heavy config entries in `js/config.js:668`, `js/config.js:686`, `js/config.js:711`, `js/config.js:726`, `js/config.js:751`, `js/config.js:766`, `js/config.js:791`, `js/config.js:806`, and `js/config.js:846`
 
-- keep current sound feel for normal play,
-- prevent unlistenable stacked transients in dense combat.
+Strategic product rule:
 
-Design approach:
+- A smaller number of fully reliable tower fantasies is better than a larger number of half-supported tower fantasies.
 
-- per-sound cooldown/rate limiting for spam-heavy events,
-- per-category voice caps (polyphony budget),
-- repeat-aware attenuation/filtering,
-- preserve high-priority cues (boss, leak, milestones, alerts),
-- avoid global blanket volume reduction.
+### Workstream 4 - Make all player-facing boss and combat messaging truthful
 
-Success criteria:
+Current UI fiction and actual game behavior must match.
 
-- normal gameplay sounds like current TowerForge,
-- spam scenes remain readable and less fatiguing,
-- important cues still cut through mix.
+Detailed goals:
 
-### Phase 1 Verification
+- Update boss preview, boss-intro, and difficulty-screen language to describe real mechanics.
+- Ensure every threat tag in wave preview corresponds to actual mechanical pressure.
+- Improve pre-wave intel so the player knows what kind of decision they are being asked to make.
+- Ensure visual telegraphs are strong enough to support boss counterplay.
 
-- Playwright regression passes on `http://localhost:3000`,
-- no save corruption on migration paths,
-- no critical console errors in core flows,
-- blur/focus timing checks pass,
-- audio spam stress check subjectively and technically improved.
+Targets:
 
----
+- `js/menu.js:1121`
+- `js/wave.js` wave preview and boss-preview paths
+- `js/uiRendering.js`
+- `js/enemyRendering.js`
+- any boss-intro or preview surfaces tied to `GameState.bossIntro` in `js/gameState.js:152`
 
-## Phase 2 - Combat Depth and Encounter Identity
+### Workstream 5 - Build stronger mechanical regression coverage
+
+The current test suite is strongest on product flow and system presence. It now needs to become stronger on combat truth.
+
+Detailed goals:
+
+- Preserve the current high-value Playwright coverage for meta systems and wave identity.
+- Add dedicated boss tests beyond the current lightweight boss-depth checks in `tests/playwright-skipwave-ui-test.js:442`.
+- Add deterministic combat verification for:
+  - status application
+  - status expiration
+  - boss phase transitions
+  - boss summon accounting
+  - tower special activation
+  - boss resist or immunity rules if added
+- If Playwright alone is too heavy for this, introduce a lightweight deterministic combat harness for local logic validation.
+
+### Deliverables
+
+By the end of Phase I, TowerForge should have:
+
+- four fully authored boss encounters
+- one trustworthy status-effect contract
+- a cleaned T5 ability ecosystem
+- a documented decision on which tower specials are real, which are simplified, and which are gone
+- truthful boss and threat preview UI
+- stronger regression coverage around boss mechanics and combat correctness
+
+### Not in scope
+
+Phase I should not include:
+
+- new towers
+- new boss archetypes beyond the existing four anchors
+- major multiplayer work
+- tier-6 expansion
+- major new research branches
+- more new enemy gimmick types
+- campaign-content expansion purely for map count
+
+### Exit criteria
+
+Phase I is complete only when all of the following are true:
+
+- boss summons use the correct spawn and scaling pipeline
+- all retained status effects have a verified apply, tick, and expire path
+- all retained boss preview text matches real mechanics
+- all retained T5 abilities are implemented, readable, and testable
+- bosses are the strongest-feeling content in the game
+- there are no known "config says yes, gameplay says maybe" mechanics on the critical combat path
+
+## Phase II - Polished Core Campaign
 
 ### Goal
 
-Make each run feel strategically distinct and behaviorally legible.
+Turn a trustworthy combat foundation into a complete, coherent, highly polished single-player campaign.
 
-### Phase 2 Scope
+### Why this phase comes second
 
-#### 1) Boss Identity Program
+Once bosses and combat truth are solved, the next highest-value problem is overall campaign coherence.
 
-Implement multiple boss archetypes with unique behavior cycles, telegraphs, and counters.
+The game already contains substantial content:
+- 20 maps in `js/config.js:1102`
+- doctrines in `js/config.js:47`
+- research in `js/research.js:1`
+- map-select and doctrine-select presentation in `js/menu.js`
+- a large tower roster and progression economy
 
-#### 2) Enemy Intent Telegraph System
+What it does not yet fully guarantee is that the overall campaign feels intentional from beginning to end.
 
-Enemies should communicate dangerous actions before execution.
+### Workstream 1 - Decide and finalize the real tower roster
 
-Examples:
+The game currently behaves like a 12-tower game in input space, but the surrounding UX still shows signs of a smaller, older roster.
 
-- healer pulse windup,
-- shield aura charge,
-- stealth phase prep,
-- disruptor EMP charge,
-- toxic pulse prep.
+Evidence:
 
-#### 3) Scenario Wave Identity
+- tower selection hotkeys support 12 slots in `js/input.js:483`
+- reserved-key logic still only blocks `Digit1-8` in `js/input.js:691`
+- the settings hint still says tower slots are `1-8` in `index.html:179`
+- tower attack sound mapping in `js/tower.js:1106` does not fully reflect the expanded roster
 
-Wave-level scenario tags and behavior shaping:
+This phase must force a final roster decision:
 
-- rush,
-- armored,
-- support convoy,
-- stealth ambush,
-- siege push.
+- Option A: fully support all 12 towers with complete parity
+- Option B: ship a smaller curated roster and shelve weaker additions until later
 
-#### 4) Map Pressure Layer
+Whichever option is chosen, the result must include:
 
-Map themes influence enemy behavior with clear pressure identity.
+- input parity
+- audio parity
+- tooltip parity
+- path identity parity
+- balancing parity
+- upgrade UX parity
+- documentation parity
+- tutorial and onboarding parity
 
-Examples:
+### Workstream 2 - Simplify campaign wave identity and improve readability
 
-- rootsnare grounds,
-- heat haze,
-- black ice lanes,
-- ember front,
-- void drift.
+The campaign should feel legible, not over-layered.
 
-#### 5) Path Readability Rework
+Detailed goals:
 
-Path style should be orthogonal with rounded corners (90-degree logic with smooth turn transitions),
-not full spline curves that reduce lane readability.
+- Reduce the number of overlapping wave-identity systems that are active in the campaign at once.
+- Keep the strongest wave-identity layers, but use them deliberately.
+- Reserve the most complex stacking for endless or high-end mastery content later.
 
-### Phase 2 Verification
+Recommended campaign structure rule:
 
-- Wave preview and HUD show meaningful threat context,
-- no overlap/misalignment regressions,
-- telegraphs trigger before ability resolution,
-- boss behavior and previews remain consistent,
-- full regression passes on localhost.
+- each campaign wave should have one primary identity
+- it may have one secondary accent if needed
+- anything beyond that should be rare, previewed, and heavily justified
 
----
+This workstream should refine the use of:
 
-## Phase 3 - Replayability and Retention
+- base wave composition
+- scenarios in `js/wave.js:43`
+- factions and captains in `js/wave.js:52` and `js/wave.js:110`
+- wave arcs in `js/wave.js:77`
+- map pressures in `js/wave.js:161`
+
+Design goals:
+
+- easy should teach the language of the game cleanly
+- normal should emphasize adaptable play
+- hard should emphasize pressure and execution
+- nightmare should feel like an earned final exam, not simply a noisier stack of modifiers
+
+### Workstream 3 - Rebalance research, doctrines, and progression around the cleaned core game
+
+Meta systems should be reshaped to support the polished core, not complicate it.
+
+Detailed execution spec:
+
+- `PROGRESSION_ROADMAP.md` - hybrid Command Marks plus Tower Licenses plan, band gates, backfill strategy, and regression roadmap
+
+Targets:
+
+- doctrines in `js/config.js:47` and `js/gameState.js:268`
+- research bonuses in `js/gameState.js:241`
+- research presentation and purchase flow in `js/research.js:1`
+- persistent progression data in `js/save.js`
+
+Detailed goals:
+
+- ensure doctrines meaningfully change run strategy without becoming balance patches for weak core design
+- ensure research rewards support mastery and replay without making the base game unclear
+- remove or compress low-impact bonuses
+- reduce bonuses that exist mainly to patch pacing issues that should instead be fixed in the core systems
+
+### Workstream 4 - Polish map, HUD, and between-wave planning UX
+
+The campaign should make players feel informed and in control.
+
+Detailed goals:
+
+- improve map-select clarity and difficulty messaging
+- improve doctrine-selection meaning and legibility
+- improve pre-wave threat preview usefulness
+- improve boss-warning presentation
+- improve post-wave feedback so players understand why a wave was easy or difficult
+- improve failure readability so losses feel fair and learnable
+
+Important design rule:
+
+The game should increasingly answer these questions clearly:
+- what is about to happen
+- why this wave is dangerous
+- what the boss is trying to do
+- what my build is currently good or bad at
+- why I lost
+
+### Deliverables
+
+By the end of Phase II, TowerForge should have:
+
+- a finalized and fully supported tower roster
+- a coherent campaign identity across all difficulty bands
+- cleaner and more intentional wave identity design
+- doctrines and research reshaped around the polished combat core
+- improved UX for planning, anticipation, and post-wave understanding
+
+### Not in scope
+
+Phase II should not include:
+
+- reopening multiplayer as an active product track
+- restoring every frozen feature by default
+- expanding the game via more maps or more towers before parity is finished
+- adding new major progression systems just because the current game already has many menus
+
+### Exit criteria
+
+Phase II is complete only when all of the following are true:
+
+- every retained tower has full parity across gameplay, input, UI, and audio
+- the campaign difficulty bands feel distinct and readable
+- players can understand wave identity without reading code-level rules
+- doctrines and research enhance strategy rather than compensate for weak core design
+- the campaign feels like a curated game, not a feature collection
+
+## Phase III - Aspirational Endgame
 
 ### Goal
 
-Turn repeated play into meaningful progression instead of repetitive score chasing.
+Build a high-replayability mastery layer on top of the polished single-player game.
 
-### Phase 3 Scope
+### Why this phase comes last
 
-#### 1) Endless Progression Ladder
+Endgame systems are only worth deep investment when the core game is already something players want to master repeatedly.
 
-Implement persistent endless depth records and milestone rewards.
+The codebase already contains promising replay scaffolding:
+- tactical events in `js/wave.js:331`
+- endless mutator draft in `js/wave.js:408`
+- weekly challenge flow in `js/menu.js:690`
+- meta progression and weekly records in `js/gameState.js:73` and `js/save.js:75`
 
-Requirements:
+The purpose of Phase III is not to preserve all of that complexity blindly. The purpose is to rebuild the best pieces into a coherent mastery ecosystem.
 
-- one-time milestone claiming per map,
-- visible reward feedback,
-- persistent storage and migration-safe structure.
+### Workstream 1 - Rebuild endless mode around curated escalation
 
-#### 2) Challenge Progression Tracking
+Endless mode should become a mastery format, not a stack of noise.
 
-Track challenge streaks and challenge victories as persistent meta signals.
+Detailed goals:
 
-#### 3) Menu-Level Progress Visibility
+- audit the current endless mutator system
+- reduce low-value mutators
+- organize mutators into cleaner families
+- ensure endless escalation remains readable, even as depth rises
+- tie endless identity back to the polished combat and boss foundations created in earlier phases
 
-Add command/meta summary on main menu:
+Endless should emphasize:
+- informed tradeoffs
+- meaningful mutation picks
+- escalating encounter identity
+- boss remixes that still respect clarity
+- strong run-end storytelling through final depth and final failure
 
-- best endless depth,
-- milestones claimed,
-- challenge streak metrics.
+### Workstream 2 - Rebuild weekly challenges around curation and identity
 
-#### 4) Leaderboard Metadata Expansion
+Weekly challenges should be a showcase mode for the polished single-player game.
 
-Store mode-aware context in leaderboard entries:
+Detailed goals:
 
-- mode,
-- endless depth,
-- challenge count.
+- curate weekly rulesets rather than relying purely on broad system stacking
+- use weekly runs to spotlight strong bosses, meaningful map identity, and fun strategic restrictions
+- ensure weekly challenges feel authored and worth returning to
+- keep weekly runs understandable at a glance from the menu surface
 
-#### 5) Next Retention Step (Planned)
+Weekly mode should answer:
+- what is special this week
+- what decision pattern this run rewards
+- what boss or encounter identity makes this week memorable
 
-Introduce structured challenge progression tiers and seeded challenge cadence:
+### Workstream 3 - Build a true mastery endgame
 
-- daily/weekly challenge tracks,
-- challenge medal tiers,
-- challenge-specific progression rewards.
+Once the core game and replay loops are strong, TowerForge can support a more ambitious mastery layer.
 
-### Phase 3 Verification
+Candidates include:
 
-- milestone rewards are not duplicated,
-- persistent meta remains valid across save/load/export/import,
-- menu summaries match persisted data,
-- regression passes on localhost.
+- apex boss variants
+- advanced campaign acts or challenge chains
+- curated endgame doctrine sets
+- high-end solo challenge ladders
+- special score or mastery medals tied to real strategic excellence
 
----
+Important guardrail:
 
-## Phase 4 - Content Expansion and Advanced Progression
+Endgame should deepen mastery, not replace it with spreadsheet complexity.
 
-### Goal
+### Workstream 4 - Reevaluate deferred systems using strict re-entry criteria
 
-Expand content without diluting identity, readability, or system cohesion.
+Deferred systems should not return automatically.
 
-### Phase 4 Scope
+A deferred system should only re-enter roadmap consideration if it can prove all of the following:
+- it supports the polished single-player identity
+- it does not weaken readability
+- it does not demand a second product's worth of engineering attention
+- it meaningfully improves long-term mastery or delight
+- it can be supported without reopening core-combat instability
 
-#### 1) New Enemy Packs (Behaviorally Distinct)
+### Deliverables
 
-Current additions include disruptive control enemies and corrosion debuff archetypes.
+By the end of Phase III, TowerForge should have:
 
-Principles:
+- a clean and compelling endless mode
+- curated weekly challenges that highlight the game's best design
+- a meaningful mastery endgame
+- a replay ecosystem that feels deep because the game is strong, not because the system count is large
 
-- every new enemy introduces a strategic problem,
-- every dangerous action has telegraph readability,
-- wave preview reflects new threat types.
+### Not in scope
 
-#### 2) Next Expansion Track
+Phase III should not assume:
 
-Planned:
+- multiplayer must return
+- all frozen systems must be restored
+- every existing codepath deserves permanent support
+- endgame complexity is automatically good
 
-- additional enemy micro-factions,
-- one new tower with unique role and non-redundant identity,
-- map-mechanic expansions tied to existing pressure framework,
-- advanced progression hooks connected to content (boss/map/tower-specific unlock paths).
+### Exit criteria
 
-#### 3) Research UI/Tree Readability Stabilization
+Phase III is complete only when all of the following are true:
 
-Ongoing requirement:
+- replay value comes from strategic depth and encounter variety rather than rule confusion
+- bosses remain the emotional and mechanical anchor of the game
+- weekly and endless content feel curated and intentional
+- the game still reads clearly even at high mastery levels
 
-- section labels must never occlude active node/line readability,
-- section label placement should be geometry-aware and viewport-safe,
-- visual hierarchy should favor interactive research content over section decoration.
+## Engineering Strategy
 
-### Phase 4 Verification
+### Architecture cleanup
 
-- new enemy behavior + telegraph tests pass,
-- no readability regressions in research tree,
-- alignment suite remains green,
-- no new render/runtime errors under stress.
+The codebase should be reorganized to support permanent features with permanent architecture.
 
----
+Priority targets:
 
-## Gameplay Expansion Roadmap (Next Major Track)
+- break apart `js/juiceFeatures.js`
+- stop relying on monkey-patching for core permanent systems where possible
+- move permanent enemy behavior into the enemy system
+- move permanent tower progression systems into tower- or progression-owned modules
+- either give ultimates a proper architecture or keep them frozen
 
-### Current Baseline
+`js/juiceFeatures.js:776`, `js/juiceFeatures.js:817`, `js/juiceFeatures.js:948`, and `js/juiceFeatures.js:1089` are the clearest signs that feature spikes have outgrown their original temporary role.
 
-The game now has a solid foundation for deeper gameplay loops:
+### Combat contracts and data ownership
 
-- scenario-tagged waves,
-- boss archetypes,
-- endless milestone persistence,
-- weekly challenge seeding,
-- endless mutator draft foundation,
-- challenge modifier support,
-- research-driven meta hooks.
+Combat behavior should have obvious ownership.
 
-The next roadmap should focus less on raw stat growth and more on meaningful decisions during a run.
+Recommended ownership targets:
 
-### Design Rules For New Gameplay
+- enemy statuses belong to the enemy/status layer
+- boss abilities belong to the boss encounter layer
+- tower specials belong to the tower ability or passive layer
+- wave identity modifiers belong to one consistent wave-processing pipeline
+- preview UI should consume the same data that gameplay uses, not a parallel fantasy description
 
-Every new mechanic should follow these rules:
+### Spawn-pipeline unification
 
-- create a player decision, not just a number increase,
-- be readable in HUD/preview/tooltips,
-- interact with existing wave, tower, and research systems,
-- be testable on localhost with deterministic setup where possible,
-- improve replayability without bloating cognitive load.
+Every enemy that enters the battlefield should go through a unified spawn pipeline unless there is a very strong reason not to.
 
----
+That includes:
+- normal wave enemies
+- boss-spawned adds
+- bonus-wave enemies
+- endless-mode spawns
+- any captain or elite injection path
 
-## Phase 5 - Run Variety and Mid-Run Decisions
+This is necessary because the current code already applies many kinds of transformations at spawn time, and bypassing that pipeline creates inconsistency.
 
-### Goal
+### Testing strategy
 
-Make each run branch based on player choices, not only tower placement order.
+Testing should move from "the feature appears" toward "the mechanic is true."
 
-### Scope
+Keep:
+- flow and UI coverage already present in the current Playwright suite
 
-#### 1) Pre-Run Doctrine System
+Add:
+- deterministic boss behavior tests
+- deterministic status lifecycle tests
+- deterministic tower-special contract tests
+- spawn-pipeline consistency tests
+- regression tests for any combat bug fixed in Phase I
 
-Before a run starts, choose one doctrine with an upside and a tradeoff.
+### Balance process
 
-Examples:
+Balance work should happen after truth work, not before.
 
-- `Fortress` - more lives and stronger defenses, weaker economy,
-- `Tempo` - faster ability cycling, lower starting gold,
-- `Greed` - stronger income and milestone rewards, weaker early combat,
-- `Execution` - stronger boss and elite damage, weaker swarm handling.
+Recommended order:
+- prove the mechanic
+- prove the UI truth
+- prove the counterplay
+- then tune the numbers
 
-#### 2) Between-Wave Tactical Choice Events
+The game should stop trying to balance around features that are not yet mechanically trustworthy.
 
-At key breakpoints, offer one of several choices instead of passive pacing.
+## Quality Gates
 
-Examples:
+A feature or system should only be considered "kept" if it passes all relevant quality gates.
 
-- gain gold now but next wave gains a mutator,
-- gain RP now but lose interest for 2 waves,
-- reinforce one tower class for 3 waves,
-- call a supply drop with random tower/ability bonuses.
+### Mechanical gate
 
-#### 3) Objective-Based Bonus Waves
+- the feature works reliably
+- its runtime behavior matches its config and UI description
+- it has clear ownership in code
+- it has either automated coverage or a short manual verification checklist
 
-Expand bonus waves beyond kill-everything goals.
+### UX gate
 
-Examples:
+- the player can understand what the feature is doing
+- the feature produces readable feedback
+- the feature helps decision-making rather than obscuring it
 
-- survive for a timer,
-- protect a convoy drone,
-- assassinate one marked elite,
-- prevent support enemies from completing casts,
-- destroy a shield relay before the wave ends.
+### Product gate
 
-#### 4) Temporary Tower Augments
+- the feature strengthens single-player TowerForge
+- the feature earns its complexity
+- the feature does not behave like a second product
 
-Introduce mid-run augments that apply to one tower, one tower family, or one path.
+### Boss gate
 
-Examples:
+- the boss has a strong identity
+- the boss has readable telegraphs
+- the boss has counterplay
+- the boss changes the strategic texture of the run
+- the boss is more interesting than a stat spike
 
-- Arrow towers chain one extra target,
-- one selected tower gains boss-break ammo,
-- support towers pulse short haste buffs,
-- a tower can be rebuilt for free once.
+## Deferred / Removed
 
-### Verification
+The following are not part of the active product roadmap unless they pass re-entry criteria later:
 
-- each choice is visible in run UI and save data,
-- no duplicate reward claims,
-- bonus wave objectives are surfaced in preview/HUD,
-- regression coverage includes at least one tactical-choice path.
+- multiplayer as an active development pillar
+- tier-6 ultimate expansion
+- further save/cloud complexity work
+- additional feature-spike enemy gimmicks without strong product proof
+- any campaign-layer complexity that weakens readability
+- any tower special that cannot be verified and supported at full quality
 
----
+## Evidence Anchors
 
-## Phase 6 - Enemy Factions, Captains, and Wave Arcs
+These references are included so the roadmap remains grounded in the current codebase rather than drifting into abstract planning.
 
-### Goal
+### Bosses and combat
 
-Make waves feel authored and learnable instead of only scaled.
+- boss archetypes: `js/enemy.js:46`
+- boss profile assignment: `js/enemy.js:310`
+- boss cast and ability pipeline: `js/enemy.js:731`
+- boss minion spawning: `js/enemy.js:829`
+- generic boss base entry: `js/config.js:887`
+- enemy status state: `js/enemy.js:146`
+- freeze expiration path: `js/enemy.js:364`
+- tower freeze mismatch: `js/tower.js:648`
+- Solar Flare blind path: `js/tower.js:800`
+- passive field slow path: `js/tower.js:902`
 
-### Scope
+### Campaign and progression
 
-#### 1) Enemy Micro-Factions
+- doctrines: `js/config.js:47`
+- game-state doctrine application: `js/gameState.js:86`
+- research bonus computation: `js/gameState.js:241`
+- research UI system: `js/research.js:1`
+- tactical events: `js/wave.js:331`
+- endless mutator draft: `js/wave.js:408`
+- factions and captains: `js/wave.js:52`, `js/wave.js:110`, `js/wave.js:609`
+- maps: `js/config.js:1102`
+- map path and placement logic: `js/map.js:1`
 
-Group enemies into themed sub-factions with shared pressure identity.
+### Scope reduction targets
 
-Examples:
+- multiplayer system: `js/multiplayer.js:1`
+- save slots, export/import, undo, cloud payloads: `js/save.js:455`, `js/save.js:540`, `js/save.js:664`, `js/save.js:704`
+- tier-6 ultimate system and hooks: `js/juiceFeatures.js:948`, `js/tower.js:1194`
+- feature-spike integration hooks: `js/juiceFeatures.js:1089`
 
-- `Siege Foundry` - armored heavies, disruptors, shield escorts,
-- `Veil Swarm` - stealth, ghosts, rush units,
-- `Blight Caravan` - toxic spread, healer chains, attrition pressure,
-- `Storm Cell` - speed, chain damage, cast-heavy units.
+### Roster parity evidence
 
-#### 2) Captain Units
+- 12-slot tower hotkeys: `js/input.js:483`
+- reserved keys still only 1-8: `js/input.js:691`
+- settings hint still says 1-8: `index.html:179`
+- incomplete tower sound map: `js/tower.js:1106`
 
-Some waves include a captain enemy that buffs nearby units until killed.
+### Existing regression coverage to preserve and extend
 
-Examples:
+- factions and captain auras: `tests/playwright-faction-captain-test.js:1`
+- weekly challenge and endless meta flow: `tests/playwright-weekly-endless-meta-test.js:1`
+- doctrine flow: `tests/playwright-doctrine-flow-test.js:1`
+- tactical choice flow: `tests/playwright-tactical-choice-test.js:1`
+- bonus objective flow: `tests/playwright-bonus-objective-test.js:1`
+- current boss presence check baseline: `tests/playwright-skipwave-ui-test.js:442`
 
-- speed captain,
-- armor captain,
-- heal-link captain,
-- death-burst captain.
+## Final Rule
 
-#### 3) Wave Arc Scripting
-
-Every 5-wave block should have a pressure arc:
-
-- opener,
-- stress spike,
-- support wave,
-- mixed test,
-- climax wave.
-
-#### 4) Reinforcement Moments
-
-Allow some waves to add a second pulse after the player believes the wave is stabilizing.
-
-This should be previewed as:
-
-- `REINFORCEMENT WAVE`,
-- `LATE RUSH`,
-- `CAPTAIN ESCORT`,
-- `DOUBLE FRONT`.
-
-### Verification
-
-- faction/captain tags appear in preview and HUD,
-- captain buffs disappear correctly on death,
-- wave arcs are reflected in preview text and threat tags,
-- tests validate reinforcement and captain behavior.
-
----
-
-## Phase 7 - Map Mechanics and Spatial Gameplay
-
-### Goal
-
-Make maps matter beyond path shape and theme color.
-
-### Scope
-
-#### 1) Interactive Map Nodes
-
-Add map-specific interactables players can spend on or trigger.
-
-Examples:
-
-- barricades,
-- artillery switches,
-- coolant vents,
-- signal beacons,
-- corruption seals.
-
-#### 2) Terrain Event Windows
-
-Maps periodically enter a temporary state that changes tactics for a short time.
-
-Examples:
-
-- desert heat shimmer buffs fast enemies,
-- volcanic vents disable build spots temporarily,
-- forest roots slow heavies but block certain placements,
-- shadow fog reduces targeting certainty unless revealed.
-
-#### 3) Zone Control Rewards
-
-Give certain build areas extra meaning.
-
-Examples:
-
-- hold a relay tile to reduce ability cooldowns,
-- build on a focus pad to improve one tower class,
-- secure an extraction zone for extra end-of-wave gold.
-
-### Verification
-
-- map mechanics are readable before and during activation,
-- interactables are not confused with decoration,
-- mechanics remain stable across save/load and viewport sizes,
-- map-specific tests cover at least one event per themed map family.
-
----
-
-## Phase 8 - Tower Identity, Combo Play, and Buildcraft
-
-### Goal
-
-Push towers toward unique strategic roles and stronger cross-tower combos.
-
-### Scope
-
-#### 1) One New Non-Redundant Tower Class
-
-Candidate roles:
-
-- trap/control engineer,
-- beam support/relay tower,
-- summon/drone commander,
-- debuff alchemist.
-
-Rule:
-
-- new tower must solve a different problem than existing DPS towers.
-
-#### 2) Keystone Path Upgrades
-
-At key tiers, path choices should unlock new play patterns, not only stronger stats.
-
-Examples:
-
-- convert attacks into burst windows,
-- mark targets for ally focus fire,
-- create temporary denial zones,
-- build around delayed payoff mechanics.
-
-#### 3) Formation Combos
-
-Expand synergy beyond simple same-type triangles.
-
-Examples:
-
-- sniper + slow tower execution combo,
-- cannon + mark combo,
-- relay + laser beam amplification,
-- support ring around one anchor tower.
-
-#### 4) Mastery Active Perks
-
-High-mastery towers should unlock one active or passive specialization choice.
-
-This gives long-run tower attachment more meaning.
-
-### Verification
-
-- each new combo/mechanic is visible in tower info and path preview,
-- mastery choices persist correctly,
-- build diversity increases instead of collapsing into one dominant tower.
-
----
-
-## Phase 9 - Endgame Loops and Competitive Retention
-
-### Goal
-
-Turn endless + weekly into durable long-term goals.
-
-### Scope
-
-#### 1) Mutator Families and Draft Branching
-
-Organize endless mutators into categories so players can steer their run.
-
-Examples:
-
-- `Swarm`,
-- `Elite`,
-- `Economy Pressure`,
-- `Boss Pressure`,
-- `Map Instability`.
-
-#### 2) Endless Boss Contracts
-
-At major depths, choose a contract boss modifier for extra rewards.
-
-Examples:
-
-- boss gains more shields but drops relic currency,
-- boss spawns escorts but milestone rewards improve,
-- boss enrages faster but tower cooldowns refresh on kill.
-
-#### 3) Weekly Challenge Reward Ladder
-
-Weekly should support:
-
-- first-clear reward,
-- score medal tiers,
-- endless extension reward thresholds,
-- weekly leaderboard visibility.
-
-#### 4) Post-Run Build Analysis
-
-Give players actionable feedback after losses or wins.
-
-Examples:
-
-- most effective tower,
-- weak matchup tags,
-- leak cause summary,
-- boss danger recap,
-- mutator pressure recap.
-
-### Verification
-
-- weekly rewards cannot be duplicated,
-- mutator family choices persist through saves,
-- endless bosses and contracts remain readable,
-- post-run analysis reflects real run data.
-
----
-
-## Tooling and Test Strategy
-
-### Local Server Baseline
-
-Use:
-
-- `http://localhost:3000`
-
-### Regression Baseline
-
-Core suites:
-
-- gameplay regression,
-- UI alignment regression,
-- targeted smoke checks for newly introduced systems.
-
-### Playwright Principles (Context7-Aligned)
-
-- Prefer web-first assertions and auto-wait behavior.
-- Avoid hardcoded sleeps where state assertions can be used.
-- Keep tests deterministic and resistant to frame timing jitter.
-- Validate both behavior and layout when UI is touched.
-
-### Quality Gate for Each Change
-
-No feature is considered complete unless:
-
-- behavior works,
-- readability is preserved,
-- regression suite passes on localhost,
-- no critical console/runtime errors are introduced.
-
----
-
-## Execution Backlog (Next)
-
-Ordered next actions:
-
-1. Build pre-run doctrine system with save/load + menu UI integration (Phase 5).
-2. Expand bonus waves into objective-based encounters with HUD/preview support (Phase 5).
-3. Add first enemy micro-faction + captain system with threat tags and tests (Phase 6).
-4. Add one map-interactable mechanic to validate spatial gameplay pattern (Phase 7).
-5. Prototype one non-redundant tower class and one formation combo package (Phase 8).
-6. Expand endless mutator draft into family-based branching choices (Phase 9).
-7. Add weekly reward ladder + score medal tiers + weekly leaderboard panel (Phase 9).
-
----
-
-## Definition of Success
-
-TowerForge succeeds when:
-
-- it remains readable under chaos,
-- it retains strategic identity as content grows,
-- progression meaningfully rewards repeat play,
-- audio remains pleasant and informative under load,
-- simulation behavior is consistent across focus changes,
-- and every major change is validated through local-server Playwright regression.
+TowerForge will not add major new systems until bosses, combat correctness, and roster parity are solved.

@@ -289,9 +289,6 @@ const MapSystem = {
         // Draw rounded-corner orthogonal road
         this._drawSmoothPath(ctx, mapDef, ts);
 
-        // Active map-pressure telegraph overlay
-        this._drawMapPressureOverlay(ctx);
-
         // Draw decorations
         this._drawDecorations(ctx, mapDef, ts);
 

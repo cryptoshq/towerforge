@@ -4,8 +4,8 @@
     {
       "name": "dev",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/serve/build/main.js", "-p", "3000"],
-      "port": 3000
+      "runtimeArgs": ["node_modules/serve/build/main.js", "-l", "3001"],
+      "port": 3001
     }
   ]
 }

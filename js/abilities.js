@@ -74,6 +74,7 @@ const AbilitySystem = {
             cd *= (1 - GameState.researchBonuses.emergencyCdr);
         }
         ab.cooldownTimer = cd;
+        GameState.stats.abilitiesUsed = (GameState.stats.abilitiesUsed || 0) + 1;
 
         Audio.play('ability');
 

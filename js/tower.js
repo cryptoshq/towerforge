@@ -134,7 +134,7 @@ class Tower {
         // XP system
         this.xp = 0;
         this.xpLevel = 0;
-        this.xpToNextLevel = 100;
+        this.xpToNextLevel = CONFIG.MASTERY_XP_PER_SCORE;
         this.xpBonusDmg = 0;
         this.xpBonusRate = 0;
         this.xpBonusRange = 0;
@@ -152,6 +152,8 @@ class Tower {
 
         // Linking
         this.links = [];
+        this.linkMode = false;
+        this.linkPreviewTargetId = null;
 
         // Beam tracking (for laser tower)
         this.beamTarget = null;
@@ -198,6 +200,9 @@ class Tower {
 
         // Necro tower soul tracking
         this.souls = 0;
+        this.specialTimers = {};
+        this.quakeZones = [];
+        this.deathPactTimer = 0;
 
         // ID
         this.id = Tower._nextId++;
@@ -227,38 +232,65 @@ class Tower {
 
     // ===== XP SYSTEM =====
     addXP(amount) {
+        if (!Number.isFinite(amount) || amount <= 0) return;
+
+        const beforeContribution = this.getXPScoreContribution();
+        const beforeMastery = this.getMasteryData();
         this.xp += amount;
 
-        // Check level up
-        while (this.xp >= this.xpToNextLevel) {
-            this.xp -= this.xpToNextLevel;
-            this.xpLevel++;
-            this.xpToNextLevel = Math.floor(100 * Math.pow(1.15, this.xpLevel));
+        const afterContribution = this.getXPScoreContribution();
+        this.xpLevel = afterContribution;
+        this.xpToNextLevel = CONFIG.MASTERY_XP_PER_SCORE;
+        this.xpBonusDmg = 0;
+        this.xpBonusRate = 0;
+        this.xpBonusRange = 0;
 
-            // Apply XP bonuses (granular increments)
-            this.xpBonusDmg += 0.01; // +1% damage per XP level
-            this.xpBonusRate += 0.005; // +0.5% fire rate per XP level
-            this.xpBonusRange += 0.003; // +0.3% range per XP level
-
-            // Visual feedback
-            Effects.addFloatingText(
-                this.x, this.y - 25,
-                `XP Lv ${this.xpLevel}!`,
-                '#a0a0ff', 10
-            );
-            Effects.spawnExplosion(this.x, this.y, '#a0a0ff', 6, { speed: 0.6, life: 0.3 });
+        const afterMastery = this.getMasteryData();
+        if (afterMastery && (!beforeMastery || beforeMastery.title !== afterMastery.title)) {
+            Effects.addFloatingText(this.x, this.y - 25, `${afterMastery.title.toUpperCase()}!`, afterMastery.color, 11);
+            Effects.spawnExplosion(this.x, this.y, afterMastery.color, 7, { speed: 0.7, life: 0.35 });
+        } else if (afterContribution > beforeContribution) {
+            Effects.addFloatingText(this.x, this.y - 22, 'SYNC +1', '#80d0ff', 9);
         }
     }
 
     getXPProgress() {
+        const current = this.xp % CONFIG.MASTERY_XP_PER_SCORE;
         return {
             level: this.xpLevel,
-            current: this.xp,
-            needed: this.xpToNextLevel,
-            percent: this.xp / this.xpToNextLevel,
-            bonusDmg: this.xpBonusDmg,
-            bonusRate: this.xpBonusRate,
-            bonusRange: this.xpBonusRange,
+            current,
+            needed: CONFIG.MASTERY_XP_PER_SCORE,
+            percent: current / CONFIG.MASTERY_XP_PER_SCORE,
+            scoreContribution: this.getXPScoreContribution(),
+        };
+    }
+
+    getXPScoreContribution() {
+        return Math.floor((this.xp || 0) / CONFIG.MASTERY_XP_PER_SCORE);
+    }
+
+    getProgressionScore() {
+        return this.kills + this.getXPScoreContribution() + (GameState.researchBonuses.masteryBonus || 0);
+    }
+
+    getProgressionData() {
+        const score = this.getProgressionScore();
+        const mastery = this.getMasteryData();
+        const nextMastery = CONFIG.MASTERY.find(m => m.kills > score) || null;
+        const prevThreshold = mastery ? mastery.kills : 0;
+        const nextThreshold = nextMastery ? nextMastery.kills : (CONFIG.MASTERY[CONFIG.MASTERY.length - 1].kills || score || 1);
+        const normalizedCurrent = Math.max(0, score - prevThreshold);
+        const normalizedNeeded = Math.max(1, nextThreshold - prevThreshold);
+
+        return {
+            score,
+            kills: this.kills,
+            xpContribution: this.getXPScoreContribution(),
+            mastery,
+            nextMastery,
+            percent: Math.min(1, normalizedCurrent / normalizedNeeded),
+            scoreToNext: nextMastery ? Math.max(0, nextThreshold - score) : 0,
+            xpToNextScore: CONFIG.MASTERY_XP_PER_SCORE - (this.xp % CONFIG.MASTERY_XP_PER_SCORE || 0),
         };
     }
 
@@ -325,12 +357,9 @@ class Tower {
             dmg *= (1 + mult);
         }
 
-        // XP bonus
-        dmg *= (1 + this.xpBonusDmg);
-
-        // Combo bonus
-        const combo = this.getComboBonus();
-        dmg *= (1 + combo.dmg);
+        // Formation bonus
+        const formation = this.getFormationBonus();
+        dmg *= (1 + formation.dmg);
 
         // Boost tower buffs
         const boost = this.getBoostBuff();
@@ -338,6 +367,10 @@ class Tower {
 
         // Synergy bonus
         dmg *= (1 + this.synergyBonuses.dmg);
+
+        // Link network bonus
+        const linkBonuses = this.getLinkBonuses();
+        dmg *= (1 + linkBonuses.dmg);
 
         // Overclock
         if (this.overclocked) {
@@ -366,6 +399,10 @@ class Tower {
         // Debuffs from enemy specialists (e.g. Toxic Carrier)
         dmg *= this.damageDebuffMult || 1;
 
+        if (this.deathPactTimer > 0 && this.special && this.special.pactDmgMult) {
+            dmg *= this.special.pactDmgMult;
+        }
+
         // Necro tower: soul damage bonus
         if (this.type === 'necro' && this.special && this.special.soulDmgBonus && this.souls > 0) {
             dmg *= (1 + this.souls * this.special.soulDmgBonus);
@@ -389,14 +426,14 @@ class Tower {
             r *= (1 + mult);
         }
 
-        // XP bonus
-        r *= (1 + this.xpBonusRange);
-
         const boost = this.getBoostBuff();
         r *= (1 + boost.range);
 
         // Synergy bonus
         r *= (1 + this.synergyBonuses.range);
+
+        const linkBonuses = this.getLinkBonuses();
+        r *= (1 + linkBonuses.range);
 
         return r;
     }
@@ -415,17 +452,17 @@ class Tower {
             rate *= (1 - Math.min(mult, 0.5));
         }
 
-        // XP bonus
-        rate *= (1 - Math.min(this.xpBonusRate, 0.3));
-
-        const combo = this.getComboBonus();
-        rate *= (1 - Math.min(combo.rate, 0.3));
+        const formation = this.getFormationBonus();
+        rate *= (1 - Math.min(formation.rate, 0.3));
 
         const boost = this.getBoostBuff();
         rate *= (1 - Math.min(boost.rate, 0.3));
 
         // Synergy bonus
         rate *= (1 - Math.min(this.synergyBonuses.rate, 0.3));
+
+        const linkBonuses = this.getLinkBonuses();
+        rate *= (1 - Math.min(linkBonuses.rate, 0.3));
 
         if (this.overclocked) rate /= CONFIG.OVERCLOCK_BOOST;
 
@@ -442,7 +479,7 @@ class Tower {
     }
 
     getMasteryData() {
-        const kills = this.kills + (GameState.researchBonuses.masteryBonus || 0);
+        const kills = this.getProgressionScore();
         let best = null;
         for (const m of CONFIG.MASTERY) {
             if (kills >= m.kills) best = m;
@@ -451,13 +488,139 @@ class Tower {
     }
 
     getComboBonus() {
-        const sameType = GameState.towers.filter(t => t.type === this.type);
-        let best = { dmg: 0, rate: 0 };
+        return this.getFormationBonus();
+    }
+
+    getFormationClusterTowers() {
+        const visited = new Set();
+        const queue = [this];
+        const cluster = [];
+        const range = CONFIG.FORMATION_RANGE || 125;
+
+        while (queue.length > 0) {
+            const current = queue.shift();
+            if (!current || visited.has(current.id)) continue;
+            visited.add(current.id);
+            cluster.push(current);
+
+            for (const other of GameState.towers) {
+                if (other.type !== this.type) continue;
+                if (visited.has(other.id)) continue;
+                if (dist(current, other) <= range) {
+                    queue.push(other);
+                }
+            }
+        }
+
+        return cluster;
+    }
+
+    getFormationBonus() {
+        const clusterSize = this.getFormationClusterTowers().length;
+        let best = { dmg: 0, rate: 0, count: clusterSize };
         for (const cb of CONFIG.COMBO_BONUSES) {
-            if (sameType.length >= cb.count) best = cb;
+            if (clusterSize >= cb.count) best = { ...cb, count: clusterSize };
         }
         const synMult = 1 + (GameState.researchBonuses.synergyMult || 0);
-        return { dmg: best.dmg * synMult, rate: best.rate * synMult };
+        return { dmg: best.dmg * synMult, rate: best.rate * synMult, count: clusterSize };
+    }
+
+    getLinkedTowers() {
+        const linked = [];
+        const seen = new Set();
+        for (const linkId of this.links) {
+            if (seen.has(linkId)) continue;
+            seen.add(linkId);
+            const other = GameState.towers.find(tower => tower.id === linkId);
+            if (!other || other === this) continue;
+            if (dist(this, other) > (CONFIG.LINK_RANGE || 190)) continue;
+            if (!other.links.includes(this.id)) continue;
+            linked.push(other);
+        }
+        return linked;
+    }
+
+    hasLinkTo(other) {
+        return !!other && this.links.includes(other.id) && other.links.includes(this.id);
+    }
+
+    clearBrokenLinks() {
+        const validIds = new Set(this.getLinkedTowers().map(t => t.id));
+        for (const linkId of [...this.links]) {
+            if (validIds.has(linkId)) continue;
+            const other = GameState.towers.find(tower => tower.id === linkId);
+            if (other) {
+                other.links = other.links.filter(id => id !== this.id);
+            }
+        }
+        this.links = [...validIds].slice(0, CONFIG.MAX_LINKS_PER_TOWER || 2);
+    }
+
+    canLinkTo(other) {
+        if (!other || other === this) return false;
+        if (dist(this, other) > (CONFIG.LINK_RANGE || 190)) return false;
+        if (this.hasLinkTo(other)) return true;
+        if (this.links.length >= (CONFIG.MAX_LINKS_PER_TOWER || 2)) return false;
+        if (other.links.length >= (CONFIG.MAX_LINKS_PER_TOWER || 2)) return false;
+        return true;
+    }
+
+    addLink(other) {
+        if (!this.canLinkTo(other) || this.hasLinkTo(other)) return false;
+        this.links.push(other.id);
+        other.links.push(this.id);
+        this.links = [...new Set(this.links)];
+        other.links = [...new Set(other.links)];
+        return true;
+    }
+
+    removeLink(other) {
+        if (!other) return false;
+        const hadLink = this.links.includes(other.id) || other.links.includes(this.id);
+        this.links = this.links.filter(id => id !== other.id);
+        other.links = other.links.filter(id => id !== this.id);
+        return hadLink;
+    }
+
+    clearAllLinks() {
+        for (const other of this.getLinkedTowers()) {
+            other.links = other.links.filter(id => id !== this.id);
+        }
+        this.links = [];
+    }
+
+    beginLinkMode() {
+        this.cancelSellConfirmation();
+        this.cancelMove();
+        this.linkMode = true;
+        this.linkPreviewTargetId = null;
+    }
+
+    cancelLinkMode() {
+        this.linkMode = false;
+        this.linkPreviewTargetId = null;
+    }
+
+    getLinkBonuses() {
+        const linked = this.getLinkedTowers();
+        const bonuses = { dmg: 0, rate: 0, range: 0, crit: 0, count: linked.length, linkedNames: linked.map(t => TOWERS[t.type]?.nickname || TOWERS[t.type]?.name || t.type) };
+        const linkedTypes = new Set();
+
+        for (const other of linked) {
+            linkedTypes.add(other.type);
+            bonuses.dmg += CONFIG.LINK_DAMAGE_BONUS || 0;
+            if (other.type === this.type) {
+                bonuses.rate += CONFIG.LINK_SAME_TYPE_RATE_BONUS || 0;
+            } else {
+                bonuses.range += CONFIG.LINK_CROSS_TYPE_RANGE_BONUS || 0;
+            }
+        }
+
+        if (linked.length >= 2 && linkedTypes.size >= 2) {
+            bonuses.crit += CONFIG.LINK_DIVERSITY_CRIT_BONUS || 0;
+        }
+
+        return bonuses;
     }
 
     getBoostBuff() {
@@ -481,11 +644,13 @@ class Tower {
     update(dt) {
         this.animTimer += dt;
         this.stats.timeAlive += dt;
+        if (this.deathPactTimer > 0) this.deathPactTimer = Math.max(0, this.deathPactTimer - dt);
 
         // Update synergies periodically (every 2 seconds)
         this.synergyUpdateTimer -= dt;
         if (this.synergyUpdateTimer <= 0) {
             this.synergyUpdateTimer = 2.0;
+            this.clearBrokenLinks();
             this._detectSynergies();
         }
 
@@ -569,10 +734,15 @@ class Tower {
 
     // ===== TIER 5 AUTO-TRIGGER ABILITIES =====
     _updateAbilities(dt) {
-        if (this.tier < 5 || !this.special || !this.abilityReady) return;
+        if (this.tier < 5 || !this.special) return;
         const s = this.special;
         const enemies = GameState.enemies;
         const range = this.getEffectiveRange();
+
+        for (const key of Object.keys(this.specialTimers)) {
+            if (key === 'soulBolt') continue;
+            this.specialTimers[key] = Math.max(0, this.specialTimers[key] - dt);
+        }
 
         // --- Arrow Volley: "Volley Storm" — rain 20 arrows in an area ---
         if (s.volleyStorm && this.abilityReady) {
@@ -650,11 +820,13 @@ class Tower {
             const targets = enemies.filter(e => e.alive && dist(this, e) <= range);
             if (targets.length >= 4) {
                 this.useAbility();
+                const freezeDuration = s.azDuration || 3;
+                const canFreezeBoss = !!s.canFreezeBoss;
                 for (const e of targets) {
-                    e.frozen = true;
-                    e.frozenTimer = (s.azDuration || 3);
-                    e.speed = 0;
-                    if (s.freezeVulnerable) e.vulnerableMult = 1 + s.freezeVulnerable;
+                    e.applyFreeze(freezeDuration, { ignoreBossImmunity: canFreezeBoss });
+                    if (s.freezeVulnerable) {
+                        e.applyVulnerability(1 + s.freezeVulnerable, freezeDuration);
+                    }
                 }
                 Effects.spawnExplosion(this.x, this.y, '#80e0ff', 25, { speed: 1.5, life: 0.6 });
                 Effects.addFloatingText(this.x, this.y - 30, 'ABSOLUTE ZERO!', '#80e0ff', 16);
@@ -681,9 +853,7 @@ class Tower {
                     const perp = Math.abs(-dx * Math.sin(angle) + dy * Math.cos(angle));
                     if (perp < 25) {
                         e.takeDamage(lanceDmg, this);
-                        e.frozen = true;
-                        e.frozenTimer = 2;
-                        e.speed = 0;
+                        e.applyFreeze(2, { ignoreBossImmunity: !!s.canFreezeBoss });
                     }
                 }
                 const endX = this.x + Math.cos(angle) * lanceRange;
@@ -789,7 +959,11 @@ class Tower {
                     const tickDmg = drayDPS * (tickInterval / 1000);
                     rayTarget.takeDamage(tickDmg, this);
                     this.stats.totalDamageDealt += tickDmg;
-                    Effects.spawnBeam(this.x, this.y, rayTarget.x, rayTarget.y, '#ffffff', 5 + Math.sin(elapsed / 100) * 2, 0.05);
+                    const phase = clamp(elapsed / drayDuration, 0, 1);
+                    const pulse = 0.5 + 0.5 * Math.sin(elapsed / 80);
+                    const intensity = clamp(0.45 + phase * 0.35 + pulse * 0.2, 0, 1);
+                    const widthScale = 0.92 + Math.sin(elapsed / 90) * 0.12;
+                    this._spawnLaserBeam(rayTarget.x, rayTarget.y, 'deathRay', 0.06, widthScale, intensity);
                 }, tickInterval);
                 Effects.addFloatingText(this.x, this.y - 30, 'DEATH RAY!', '#ffffff', 16);
                 addScreenShake(4);
@@ -806,9 +980,7 @@ class Tower {
                 const flareDmg = s.flareDmg || 200;
                 for (const e of targets) {
                     e.takeDamage(flareDmg, this);
-                    e.blinded = true;
-                    e.blindTimer = s.blindDuration || 3;
-                    e.speed = e.baseSpeed * 0.3; // Blinded enemies slow to 30%
+                    e.applyBlind(s.blindDuration || 3, 0.3);
                 }
                 Effects.spawnExplosion(this.x, this.y, '#ffffff', 30, { speed: 3, life: 0.8, glow: true });
                 GameState.screenFlash = { color: '#ffffff', alpha: 0.4, timer: 0.3 };
@@ -880,6 +1052,156 @@ class Tower {
             }
         }
 
+        if (s.immolate && (this.specialTimers.immolate || 0) <= 0) {
+            const immolateRadius = s.immolateRadius || 60;
+            const victims = enemies.filter(e => e.alive && dist(this, e) <= immolateRadius);
+            if (victims.length >= 2) {
+                this.specialTimers.immolate = Math.max(0.1, s.immolateCd || 10);
+                const dmg = s.immolateDmg || 500;
+                for (const e of victims) {
+                    e.takeDamage(dmg, this);
+                    e.applyBurn((s.burnDPS || 20) * 0.6, Math.max(1.5, (s.burnDuration || 3) * 0.8), { meltArmor: s.meltArmor || 0 });
+                }
+                Effects.spawnExplosion(this.x, this.y, '#ff5a20', 20, { speed: 1.6, life: 0.5, glow: true });
+                Effects.addFloatingText(this.x, this.y - 24, 'IMMOLATE!', '#ff7040', 14);
+            }
+        }
+
+        if (s.firestorm && (this.specialTimers.firestorm || 0) <= 0) {
+            const stormRadius = s.stormRadius || 120;
+            const stormTargets = enemies.filter(e => e.alive && dist(this, e) <= stormRadius);
+            if (stormTargets.length >= 3) {
+                this.specialTimers.firestorm = Math.max(0.1, s.stormCd || 12);
+                const stormDuration = s.stormDuration || 4;
+                const tickInterval = 0.4;
+                const ticks = Math.max(1, Math.floor(stormDuration / tickInterval));
+                for (let i = 0; i < ticks; i++) {
+                    setTimeout(() => {
+                        const alive = GameState.enemies.filter(e => e.alive && dist(this, e) <= stormRadius);
+                        for (const e of alive) {
+                            e.takeDamage((s.stormDPS || 15) * tickInterval, this);
+                            e.applyBurn(s.burnDPS || 20, 1.6, { meltArmor: s.meltArmor || 0 });
+                        }
+                        Effects.spawnExplosion(this.x + rand(-20, 20), this.y + rand(-20, 20), '#ff8040', 6, { speed: 0.8, life: 0.25 });
+                    }, Math.floor(i * tickInterval * 1000));
+                }
+                Effects.addFloatingText(this.x, this.y - 24, 'FIRESTORM!', '#ff9a40', 14);
+            }
+        }
+
+        if (s.pandemic && (this.specialTimers.pandemic || 0) <= 0) {
+            const alive = enemies.filter(e => e.alive);
+            if (alive.length >= 5) {
+                this.specialTimers.pandemic = Math.max(0.1, s.pandemicCd || 15);
+                for (const e of alive) {
+                    e.applyPoison(s.poisonDPS || 25, s.pandemicDuration || 5, {
+                        maxStacks: s.poisonStacks || e.maxPoisonStacks,
+                        spreadCount: s.plagueSpread || 0,
+                        spreadRadius: s.spreadRadius || 0,
+                        deathCloud: !!s.deathCloud,
+                        cloudDuration: s.cloudDuration || 0,
+                        cloudRadius: s.cloudRadius || 0,
+                        sourceTower: this,
+                    });
+                }
+                Effects.addFloatingText(this.x, this.y - 24, 'PANDEMIC!', '#7ad060', 14);
+                Effects.spawnExplosion(this.x, this.y, '#6cb850', 14, { speed: 1.1, life: 0.4 });
+            }
+        }
+
+        if (s.dissolve && (this.specialTimers.dissolve || 0) <= 0) {
+            const radius = s.dissolveRadius || 80;
+            const targets = enemies.filter(e => e.alive && dist(this, e) <= radius);
+            if (targets.length >= 2) {
+                this.specialTimers.dissolve = Math.max(0.1, s.dissolveCd || 12);
+                const armorRemoveRatio = Math.max(0, Math.min(1, s.dissolveArmorRemove || 1));
+                for (const e of targets) {
+                    const remove = e.armor * armorRemoveRatio;
+                    e.armor = Math.max(0, e.armor - remove);
+                    e.baseArmor = Math.max(0, e.baseArmor - remove);
+                    e.applyVulnerability(1 + (s.weakenVuln || 0.2), 3);
+                }
+                Effects.addFloatingText(this.x, this.y - 24, 'DISSOLVE!', '#9cd95a', 14);
+            }
+        }
+
+        if (s.tectonic && (this.specialTimers.tectonic || 0) <= 0) {
+            const radius = s.tectonicRadius || 180;
+            const targets = enemies.filter(e => e.alive && dist(this, e) <= radius);
+            if (targets.length >= 2) {
+                this.specialTimers.tectonic = Math.max(0.1, s.tectonicCd || 14);
+                const dmg = s.tectonicDmg || 600;
+                const stun = s.tectonicStun || 2;
+                for (const e of targets) {
+                    e.takeDamage(dmg, this);
+                    e.applyStun(stun);
+                }
+                Effects.spawnExplosion(this.x, this.y, '#a08a70', 24, { speed: 1.5, life: 0.55 });
+                Effects.addFloatingText(this.x, this.y - 24, 'TECTONIC SLAM!', '#c8b090', 14);
+                addScreenShake(6);
+            }
+        }
+
+        if (s.clusterBomb && (this.specialTimers.clusterBomb || 0) <= 0) {
+            const alive = enemies.filter(e => e.alive && dist(this, e) <= range);
+            if (alive.length >= 2) {
+                this.specialTimers.clusterBomb = Math.max(0.1, s.clusterCd || 10);
+                const count = s.clusterCount || 5;
+                for (let i = 0; i < count; i++) {
+                    setTimeout(() => {
+                        const current = GameState.enemies.filter(e => e.alive && dist(this, e) <= range);
+                        if (current.length === 0) return;
+                        const t = current[Math.floor(Math.random() * current.length)];
+                        const radius = s.clusterRadius || 70;
+                        for (const e of GameState.enemies) {
+                            if (e.alive && Math.hypot(e.x - t.x, e.y - t.y) <= radius) {
+                                e.takeDamage(s.clusterDmg || 80, this);
+                            }
+                        }
+                        Effects.spawnExplosion(t.x, t.y, '#caa070', 10, { speed: 1.0, life: 0.35 });
+                    }, i * 180);
+                }
+                Effects.addFloatingText(this.x, this.y - 24, 'CLUSTER BOMB!', '#d4b090', 14);
+            }
+        }
+
+        if (s.reaper && (this.specialTimers.reaper || 0) <= 0) {
+            const targets = enemies.filter(e => e.alive && dist(this, e) <= range);
+            if (targets.length >= 2) {
+                this.specialTimers.reaper = Math.max(0.1, s.reaperCd || 12);
+                const hpRatio = Math.max(0.05, Math.min(0.9, s.reaperDmg || 0.25));
+                for (const e of targets) {
+                    e.takeDamage(e.maxHp * hpRatio, this);
+                }
+                Effects.addFloatingText(this.x, this.y - 24, 'REAP!', '#c080ff', 14);
+                Effects.spawnExplosion(this.x, this.y, '#a060ff', 14, { speed: 1.1, life: 0.45 });
+            }
+        }
+
+        if (s.deathPact && (this.specialTimers.deathPact || 0) <= 0) {
+            const alive = enemies.some(e => e.alive && dist(this, e) <= range * 1.2);
+            if (alive) {
+                this.specialTimers.deathPact = Math.max(0.1, s.pactCd || 18);
+                this.deathPactTimer = Math.max(this.deathPactTimer || 0, s.pactDuration || 5);
+                Effects.addFloatingText(this.x, this.y - 24, 'DEATH PACT!', '#ff80d0', 14);
+                Effects.spawnExplosion(this.x, this.y, '#a060ff', 10, { speed: 0.9, life: 0.35 });
+            }
+        }
+
+        if (s.blackMarket && (this.specialTimers.blackMarket || 0) <= 0) {
+            const alive = enemies.filter(e => e.alive);
+            if (alive.length > 0) {
+                this.specialTimers.blackMarket = Math.max(0.1, s.bmCd || 30);
+                const payout = Math.max(10, Math.floor((s.supplyGold || 20) * 1.5));
+                GameState.gold += payout;
+                Effects.addFloatingText(this.x, this.y - 24, `BLACK MARKET +${payout}g`, '#ffd070', 12);
+                for (let i = 0; i < Math.min(3, alive.length); i++) {
+                    const target = alive[i];
+                    target.applyVulnerability(1.15, 2.5);
+                }
+            }
+        }
+
         // --- Boost Armory: "Supply Drop" — free gold every wave ---
         if (s.supplyDrop && !this._supplyDropThisWave && GameState.gamePhase === 'playing') {
             this._supplyDropThisWave = GameState.wave;
@@ -902,12 +1224,11 @@ class Tower {
         // Energy Field (Laser Prism T5) — slow enemies in beam range
         if (s.energyField && s.fieldSlow) {
             const range = this.getEffectiveRange();
+            const slowAmount = Math.max(0, Math.min(s.fieldSlow, 0.8));
+            const auraDuration = Math.max(0.2, dt * 2);
             for (const e of GameState.enemies) {
                 if (e.alive && dist(this, e) <= range) {
-                    if (!e.energyFieldSlowed) {
-                        e.speed = Math.max(e.speed * (1 - s.fieldSlow), e.baseSpeed * 0.3);
-                        e.energyFieldSlowed = true;
-                    }
+                    e.applySlow(slowAmount, auraDuration);
                 }
             }
         }
@@ -919,6 +1240,140 @@ class Tower {
                 GameState.supernovaSource = null;
             }
         }
+
+        if (s.witherAura) {
+            const radius = s.witherRadius || this.getEffectiveRange();
+            const dps = s.witherDPS || 8;
+            for (const e of GameState.enemies) {
+                if (!e.alive || dist(this, e) > radius) continue;
+                e.takeDamage(dps * dt, this);
+                if (s.witherSlow) {
+                    e.applySlow(Math.max(0, Math.min(0.8, s.witherSlow)), Math.max(0.2, dt * 2));
+                }
+            }
+        }
+
+        if (s.soulBolt) {
+            this.specialTimers.soulBolt = Math.max(0, (this.specialTimers.soulBolt || 0) - dt);
+            if ((this.specialTimers.soulBolt || 0) <= 0) {
+                const range = this.getEffectiveRange();
+                const target = GameState.enemies.find(e => e.alive && dist(this, e) <= range);
+                if (target) {
+                    this.specialTimers.soulBolt = Math.max(0.15, s.soulBoltInterval || 2);
+                    target.takeDamage(s.soulBoltDmg || 30, this);
+                    Effects.spawnBeam(this.x, this.y, target.x, target.y, '#a060ff', 2.5, 0.1);
+                    if (s.soulExplosion && s.soulExpRadius) {
+                        for (const e of GameState.enemies) {
+                            if (e !== target && e.alive && dist(target, e) <= s.soulExpRadius) {
+                                e.takeDamage((s.soulBoltDmg || 30) * 0.5, this);
+                            }
+                        }
+                        Effects.spawnExplosion(target.x, target.y, '#b080ff', 8, { speed: 0.9, life: 0.3 });
+                    }
+                }
+            }
+        }
+
+        if (this.quakeZones.length > 0) {
+            for (let i = this.quakeZones.length - 1; i >= 0; i--) {
+                const zone = this.quakeZones[i];
+                zone.remaining -= dt;
+                if (zone.remaining <= 0) {
+                    this.quakeZones.splice(i, 1);
+                    continue;
+                }
+                for (const e of GameState.enemies) {
+                    if (!e.alive || Math.hypot(e.x - zone.x, e.y - zone.y) > zone.radius) continue;
+                    if (zone.slow > 0) {
+                        e.applySlow(zone.slow, Math.max(0.2, dt * 2));
+                    }
+                    if (zone.dps > 0) {
+                        e.takeDamage(zone.dps * dt, this);
+                    }
+                }
+            }
+        }
+    }
+
+    _addQuakeZone(x, y, special) {
+        if (!special || !special.quakeZone) return;
+        this.quakeZones.push({
+            x,
+            y,
+            radius: special.zoneRadius || 80,
+            remaining: special.zoneDuration || 3,
+            slow: special.zoneSlow || 0,
+            dps: special.zoneDPS || 0,
+        });
+        if (this.quakeZones.length > 10) {
+            this.quakeZones.shift();
+        }
+    }
+
+    _getLaserBeamProfile(variant = 'main', intensity = null) {
+        const defs = (typeof LASER_BEAM_VISUALS !== 'undefined' && LASER_BEAM_VISUALS)
+            ? LASER_BEAM_VISUALS
+            : {
+                base: {
+                    colorStart: '#ff4060',
+                    colorEnd: '#ffffff',
+                    coreStart: '#ff9ab0',
+                    coreEnd: '#ffffff',
+                    glowColor: '#ff6080',
+                    widthBase: 2,
+                    widthRamp: 3,
+                    pulseHz: 12,
+                    pulseAmp: 0.08,
+                    jitter: 0.2,
+                    taper: 1,
+                },
+            };
+
+        let profile = { ...(defs.base || {}) };
+        if (this.path === 'A' && defs.focused) {
+            profile = { ...profile, ...defs.focused };
+        } else if (this.path === 'B' && defs.prism) {
+            profile = { ...profile, ...defs.prism };
+        }
+
+        if (variant === 'split' && defs.split) {
+            profile = { ...profile, ...defs.split };
+        }
+        if (variant === 'deathRay' && defs.deathRay) {
+            profile = { ...profile, ...defs.deathRay };
+        }
+
+        const rampMax = this.special && this.special.rampMax ? this.special.rampMax : 1;
+        const rampPct = Number.isFinite(intensity)
+            ? clamp(intensity, 0, 1)
+            : clamp(rampMax > 0 ? this.beamRamp / rampMax : 0, 0, 1);
+
+        const outerColor = colorLerp(profile.colorStart || '#ff4060', profile.colorEnd || '#ffffff', rampPct);
+        const coreColor = colorLerp(profile.coreStart || '#ff9ab0', profile.coreEnd || '#ffffff', rampPct);
+        const width = (profile.widthBase || 2) + (profile.widthRamp || 0) * rampPct;
+
+        return {
+            width,
+            style: {
+                outerColor,
+                coreColor,
+                glowColor: profile.glowColor || outerColor,
+                altColor: profile.altColor || outerColor,
+                dual: !!profile.dual,
+                dualOffset: profile.dualOffset || 0,
+                jitter: profile.jitter || 0,
+                pulseHz: profile.pulseHz || 0,
+                pulseAmp: profile.pulseAmp || 0,
+                taper: profile.taper || 1,
+                dash: profile.dash || null,
+            },
+        };
+    }
+
+    _spawnLaserBeam(targetX, targetY, variant = 'main', life = 0.05, widthScale = 1, intensity = null) {
+        const profile = this._getLaserBeamProfile(variant, intensity);
+        const width = Math.max(0.6, profile.width * (Number.isFinite(widthScale) ? widthScale : 1));
+        Effects.spawnBeam(this.x, this.y, targetX, targetY, profile.style, width, life);
     }
 
     _updateBeam(dt) {
@@ -959,7 +1414,7 @@ class Tower {
                 const dmg = effectiveDps * splitDmg * dt;
                 t.takeDamage(dmg, this);
                 this.stats.totalDamageDealt += dmg;
-                Effects.spawnBeam(this.x, this.y, t.x, t.y, '#ff4060', 2 + this.beamRamp, 0.05);
+                this._spawnLaserBeam(t.x, t.y, 'split', 0.05, 0.9);
 
                 // Meltdown
                 if (this.special.meltdown) {
@@ -970,23 +1425,12 @@ class Tower {
             const dmg = effectiveDps * dt;
             this.beamTarget.takeDamage(dmg, this);
             this.stats.totalDamageDealt += dmg;
-            const beamWidth = 2 + this.beamRamp * 3;
-            const beamColor = this.beamRamp > (this.special.rampMax || 1) * 0.8 ? '#ffffff' : '#ff4060';
-            Effects.spawnBeam(this.x, this.y, this.beamTarget.x, this.beamTarget.y, beamColor, beamWidth, 0.05);
+            this._spawnLaserBeam(this.beamTarget.x, this.beamTarget.y, 'main', 0.05, 1);
         }
 
         // Track kills for mastery and XP
         if (this.beamTarget && !this.beamTarget.alive) {
-            this.kills++;
-            this.stats.totalKills++;
-            this.stats.currentKillStreak++;
-            this.stats.longestKillStreak = Math.max(this.stats.longestKillStreak, this.stats.currentKillStreak);
-            this.stats.totalGoldEarned += this.beamTarget.reward || 0;
-            this.addXP(this._getKillXP(this.beamTarget));
-            // Necro tower: gain souls on kill
-            if (this.type === 'necro' && this.special && this.special.soulGain) {
-                this.souls = Math.min((this.souls || 0) + this.special.soulGain, this.special.maxSouls || 60);
-            }
+            this.recordKill(this.beamTarget);
             this.beamTarget = null;
         }
     }
@@ -1062,9 +1506,11 @@ class Tower {
         // Crit check
         let isCrit = false;
         let critMult = 1;
+        const linkBonuses = this.getLinkBonuses();
         let critChance = (special.critChance || 0) + (this.getBoostBuff().crit || 0) + (GameState.researchBonuses.critChance || 0);
         // Add synergy crit bonus
         critChance += this.synergyBonuses.critBonus;
+        critChance += linkBonuses.crit || 0;
         if (Math.random() < critChance) {
             isCrit = true;
             critMult = (special.critMult || 2) + (GameState.researchBonuses.critDmg || 0);
@@ -1107,6 +1553,7 @@ class Tower {
             arrow: 'arrow', cannon: 'cannon', ice: 'ice',
             lightning: 'lightning', sniper: 'sniper',
             laser: 'laser', missile: 'missile', boost: null,
+            flame: 'cannon', venom: 'arrow', mortar: 'cannon', necro: 'laser',
         };
         if (soundMap[this.type]) Audio.play(soundMap[this.type]);
         if (isCrit) Audio.play('crit');
@@ -1141,6 +1588,7 @@ class Tower {
         this.stats.longestKillStreak = Math.max(this.stats.longestKillStreak, this.stats.currentKillStreak);
         this.stats.totalGoldEarned += enemy.reward || 0;
         this.addXP(this._getKillXP(enemy));
+        GameState.stats.maxMastery = Math.max(GameState.stats.maxMastery || 0, this.getProgressionScore());
 
         // Necro tower: gain souls on kill
         if (this.type === 'necro' && this.special && this.special.soulGain) {
@@ -1191,7 +1639,13 @@ class Tower {
     }
 
     upgrade(path = null) {
-        if (this.tier >= 5) return false;
+        // Tier 6 "Ultimate" upgrade
+        if (this.tier >= 5) {
+            if (typeof TowerUltimates !== 'undefined' && TowerUltimates.canUpgradeToUltimate(this)) {
+                return TowerUltimates.applyUltimate(this);
+            }
+            return false;
+        }
 
         // Challenge: no_upgrade — cannot upgrade past Tier 2
         if (GameState.activeChallenges.includes('no_upgrade') && this.tier >= 2) {
@@ -1228,6 +1682,9 @@ class Tower {
 
         if (GameState.gold < cost) return false;
 
+        // Capture pre-upgrade stats for delta display
+        const statsBefore = { damage: this.damage, range: this.range, fireRate: this.fireRate };
+
         GameState.gold -= cost;
         this.totalCost += cost;
         this.tier = nextTier;
@@ -1235,6 +1692,16 @@ class Tower {
 
         // Stats
         GameState.stats.maxTier = Math.max(GameState.stats.maxTier, this.tier);
+        if (this.tier >= 5) {
+            const tier5Count = GameState.towers.filter((tower) => tower && tower.tier >= 5).length;
+            GameState.stats.tier5CountPeak = Math.max(GameState.stats.tier5CountPeak || 0, tier5Count);
+        }
+
+        // Show stat deltas
+        const statsAfter = { damage: this.damage, range: this.range, fireRate: this.fireRate };
+        if (typeof EconomyVisibility !== 'undefined') {
+            EconomyVisibility.showUpgradeDelta(this, statsBefore, statsAfter);
+        }
 
         // Effects
         Effects.spawnExplosion(this.x, this.y, '#ffd700', 15, { speed: 1.5, glow: true });
@@ -1319,11 +1786,14 @@ class Tower {
         }
         const value = this.getSellValue();
         GameState.gold += value;
+        GameState.stats.towersNeverSold = false;
         Effects.addFloatingText(this.x, this.y - 20, `+${value}`, '#ffd700', 14);
         Effects.spawnGoldCoin(this.x, this.y);
         Audio.play('sell');
 
         this.sellConfirmActive = false;
+        this.cancelLinkMode();
+        this.clearAllLinks();
 
         // Remove from towers array
         const idx = GameState.towers.indexOf(this);
@@ -1333,6 +1803,11 @@ class Tower {
         if (GameState.selectedTower === this) {
             GameState.selectedTower = null;
         }
+        if (typeof Input !== 'undefined' && Array.isArray(Input.multiSelectedTowers)) {
+            Input.multiSelectedTowers = Input.multiSelectedTowers.filter(tower => tower !== this);
+        }
+
+        TowerCommands.refreshTowerSystems();
     }
 
     // ===== MOVE/RELOCATE =====
@@ -1401,6 +1876,7 @@ class Tower {
         this.isBeingMoved = false;
         this.movePreviewCol = -1;
         this.movePreviewRow = -1;
+        this.cancelLinkMode();
 
         // Reset beam target (might be out of range now)
         this.beamTarget = null;
@@ -1409,8 +1885,8 @@ class Tower {
         this.target = null;
         this.lastTargetId = null;
 
-        // Re-detect synergies at new position
-        this._detectSynergies();
+        // Re-detect synergies and clean local networks at new position
+        TowerCommands.refreshTowerSystems();
 
         return true;
     }
@@ -1422,6 +1898,7 @@ class Tower {
         this.overclockTimer = CONFIG.OVERCLOCK_DURATION;
         this.overclockStacks = 1;
         this.stats.overclockUses++;
+        GameState.stats.overclockUses = (GameState.stats.overclockUses || 0) + 1;
     }
 
     // Get overclock status info for display
@@ -1456,14 +1933,16 @@ class Tower {
         // Determine ability cooldown from special data
         let cooldown = 0;
         const s = this.special;
-        if (s.volleyCd) cooldown = s.volleyCd;
-        else if (s.barrageCd) cooldown = s.barrageCd;
-        else if (s.overloadCd) cooldown = s.overloadCd;
-        else if (s.stormCd) cooldown = s.stormCd;
-        else if (s.azCd) cooldown = s.azCd;
-        else if (s.lanceCd) cooldown = s.lanceCd;
-        else if (s.devEvery) cooldown = s.devEvery * this.getEffectiveFireRate();
-        else return false; // No ability
+
+        // Generic support for all cooldown keys that end in "Cd"
+        const directCdKey = Object.keys(s).find(k => k.endsWith('Cd') && Number.isFinite(s[k]) && s[k] > 0);
+        if (directCdKey) {
+            cooldown = s[directCdKey];
+        } else if (s.devEvery) {
+            cooldown = s.devEvery * this.getEffectiveFireRate();
+        } else {
+            return false; // No active ability cooldown found
+        }
 
         const rb = GameState.researchBonuses;
         if (rb.ultimateCdr) {
@@ -1489,6 +1968,7 @@ class Tower {
 
     // ===== STATISTICS =====
     getStatsDisplay() {
+        const progression = this.getProgressionData();
         return {
             totalDamage: formatGold(Math.floor(this.stats.totalDamageDealt)),
             totalKills: this.stats.totalKills,
@@ -1502,34 +1982,36 @@ class Tower {
             timeAlive: formatTime(this.stats.timeAlive),
             overclockUses: this.stats.overclockUses,
             abilitiesUsed: this.stats.abilitiesUsed,
-            xpLevel: this.xpLevel,
+            progressionScore: progression.score,
             masteryTitle: this.getMasteryData() ? this.getMasteryData().title : 'Novice',
             synergies: this.activeSynergies.map(s => s.name),
+            links: this.getLinkedTowers().length,
         };
     }
 
     // Get a summary of all bonuses affecting this tower
     getBonusSummary() {
         const mastery = this.getMasteryData();
-        const combo = this.getComboBonus();
+        const formation = this.getFormationBonus();
         const boost = this.getBoostBuff();
+        const links = this.getLinkBonuses();
 
         const bonuses = [];
 
         if (mastery) {
             bonuses.push({ source: 'Mastery (' + mastery.title + ')', dmg: mastery.dmgBonus, rate: mastery.rateBonus, range: mastery.rangeBonus });
         }
-        if (this.xpBonusDmg > 0 || this.xpBonusRate > 0 || this.xpBonusRange > 0) {
-            bonuses.push({ source: 'XP Lv ' + this.xpLevel, dmg: this.xpBonusDmg, rate: this.xpBonusRate, range: this.xpBonusRange });
-        }
-        if (combo.dmg > 0 || combo.rate > 0) {
-            bonuses.push({ source: 'Combo', dmg: combo.dmg, rate: combo.rate, range: 0 });
+        if (formation.dmg > 0 || formation.rate > 0) {
+            bonuses.push({ source: `Formation (${formation.count})`, dmg: formation.dmg, rate: formation.rate, range: 0 });
         }
         if (boost.dmg > 0 || boost.rate > 0 || boost.range > 0) {
             bonuses.push({ source: 'Boost Aura', dmg: boost.dmg, rate: boost.rate, range: boost.range });
         }
         if (this.synergyBonuses.dmg > 0 || this.synergyBonuses.rate > 0 || this.synergyBonuses.range > 0) {
             bonuses.push({ source: 'Synergy', dmg: this.synergyBonuses.dmg, rate: this.synergyBonuses.rate, range: this.synergyBonuses.range });
+        }
+        if (links.dmg > 0 || links.rate > 0 || links.range > 0 || links.crit > 0) {
+            bonuses.push({ source: `Link Net (${links.count})`, dmg: links.dmg, rate: links.rate, range: links.range, crit: links.crit });
         }
         if (this.overclocked) {
             const oc = CONFIG.OVERCLOCK_BOOST - 1 + (this.overclockStacks - 1) * 0.1;
@@ -1548,8 +2030,214 @@ class Tower {
 
 Tower._nextId = 1;
 
+const TowerCommands = {
+    _getAliveSelection() {
+        const towers = Array.isArray(GameState.towers) ? GameState.towers : [];
+        if (typeof Input === 'undefined' || !Array.isArray(Input.multiSelectedTowers)) return [];
+        return Input.multiSelectedTowers.filter(tower => towers.includes(tower));
+    },
+
+    getTargetingSelection(anchorTower) {
+        const batch = this._getAliveSelection();
+        if (anchorTower && batch.includes(anchorTower) && batch.length > 1) {
+            return batch.filter(tower => tower.type !== 'boost');
+        }
+        return anchorTower && anchorTower.type !== 'boost' ? [anchorTower] : [];
+    },
+
+    setTargetMode(anchorTower, mode) {
+        if (!CONFIG.TARGETING_MODES.includes(mode)) return 0;
+        const targets = this.getTargetingSelection(anchorTower);
+        for (const tower of targets) {
+            tower.targetMode = mode;
+            tower.target = null;
+            tower.lastTargetId = null;
+        }
+        return targets.length;
+    },
+
+    refreshTowerSystems() {
+        let maxFormation = GameState.stats.maxCombo || 0;
+        const activeLinkPairs = new Set();
+        for (const tower of GameState.towers) {
+            tower.clearBrokenLinks();
+        }
+        for (const tower of GameState.towers) {
+            tower._detectSynergies();
+            maxFormation = Math.max(maxFormation, tower.getFormationBonus().count || 0);
+            const linked = tower.getLinkedTowers();
+            for (const other of linked) {
+                const key = tower.id < other.id ? `${tower.id}:${other.id}` : `${other.id}:${tower.id}`;
+                activeLinkPairs.add(key);
+            }
+        }
+        GameState.stats.maxCombo = maxFormation;
+        GameState.stats.maxActiveLinks = Math.max(GameState.stats.maxActiveLinks || 0, activeLinkPairs.size);
+        const tier5Count = GameState.towers.filter((tower) => tower && tower.tier >= 5).length;
+        GameState.stats.tier5CountPeak = Math.max(GameState.stats.tier5CountPeak || 0, tier5Count);
+    },
+
+    upgradeTower(tower) {
+        if (!tower) return { ok: false, reason: 'missing' };
+
+        tower.cancelSellConfirmation();
+
+        const upgInfo = tower.getUpgradeCost();
+        if (!upgInfo) return { ok: false, reason: 'max-tier' };
+
+        if (upgInfo.needsPath) {
+            if (typeof UIRenderer !== 'undefined' && UIRenderer.showPathChoice) {
+                UIRenderer.showPathChoice(tower);
+            }
+            return { ok: false, reason: 'needs-path' };
+        }
+
+        if (GameState.gold < upgInfo.cost) return { ok: false, reason: 'gold' };
+        return { ok: !!tower.upgrade(), reason: 'upgrade' };
+    },
+
+    upgradeSelection(towers) {
+        const selection = Array.isArray(towers) ? towers.filter(Boolean) : [];
+        let upgraded = 0;
+        for (const tower of selection) {
+            const result = this.upgradeTower(tower);
+            if (result.ok) upgraded++;
+        }
+        return upgraded;
+    },
+
+    overclockTower(tower) {
+        if (!tower) return false;
+        if (tower.overclocked || tower.disabled || tower.overclockCooldown > 0) return false;
+        tower.cancelSellConfirmation();
+        tower.cancelLinkMode();
+        tower.overclock();
+        return tower.overclocked;
+    },
+
+    requestSellTower(tower) {
+        if (!tower) return { ok: false, sold: false, pending: false, reason: 'missing' };
+        const value = tower.getSellValue();
+        const pending = !tower.requestSellConfirmation();
+        const stillExists = GameState.towers.includes(tower);
+        return {
+            ok: pending || !stillExists,
+            sold: !pending && !stillExists,
+            pending,
+            value,
+        };
+    },
+
+    sellSelection(towers) {
+        const selection = Array.isArray(towers) ? towers.filter(Boolean) : [];
+        let sold = 0;
+        for (const tower of selection) {
+            const before = GameState.towers.includes(tower);
+            tower.sell();
+            if (before && !GameState.towers.includes(tower)) sold++;
+        }
+        return sold;
+    },
+
+    beginMoveTower(tower) {
+        if (!tower) return { ok: false, reason: 'missing' };
+        const moveCost = tower.getMoveCost();
+        if (GameState.gold < moveCost) return { ok: false, reason: 'gold', cost: moveCost };
+
+        for (const other of GameState.towers) {
+            if (other !== tower && other.isBeingMoved) {
+                other.cancelMove();
+            }
+            if (other !== tower && other.linkMode) {
+                other.cancelLinkMode();
+            }
+        }
+
+        tower.cancelSellConfirmation();
+        tower.cancelLinkMode();
+        tower.startMove();
+        return { ok: true, cost: moveCost };
+    },
+
+    cancelMoveTower(tower) {
+        if (!tower || !tower.isBeingMoved) return false;
+        tower.cancelMove();
+        return true;
+    },
+
+    confirmMoveTower(tower, col, row) {
+        if (!tower || !tower.isBeingMoved) return { ok: false, reason: 'inactive' };
+        if (!tower.canMoveTo(col, row)) return { ok: false, reason: 'tile' };
+        if (GameState.gold < tower.getMoveCost()) return { ok: false, reason: 'gold', cost: tower.getMoveCost() };
+        const result = { ok: !!tower.moveTo(col, row), reason: 'move' };
+        if (result.ok) this.refreshTowerSystems();
+        return result;
+    },
+
+    beginLinkMode(tower) {
+        if (!tower) return { ok: false, reason: 'missing' };
+
+        for (const other of GameState.towers) {
+            if (other !== tower && other.linkMode) {
+                other.cancelLinkMode();
+            }
+            if (other !== tower && other.isBeingMoved) {
+                other.cancelMove();
+            }
+        }
+
+        tower.beginLinkMode();
+        return { ok: true };
+    },
+
+    cancelLinkMode(tower) {
+        if (!tower || !tower.linkMode) return false;
+        tower.cancelLinkMode();
+        return true;
+    },
+
+    toggleLink(anchorTower, otherTower) {
+        if (!anchorTower || !otherTower || anchorTower === otherTower) return { ok: false, reason: 'target' };
+
+        anchorTower.cancelSellConfirmation();
+        otherTower.cancelSellConfirmation();
+        anchorTower.clearBrokenLinks();
+        otherTower.clearBrokenLinks();
+
+        if (anchorTower.hasLinkTo(otherTower)) {
+            anchorTower.removeLink(otherTower);
+            this.refreshTowerSystems();
+            return { ok: true, linked: false, unlinked: true };
+        }
+
+        if (dist(anchorTower, otherTower) > (CONFIG.LINK_RANGE || 190)) {
+            return { ok: false, reason: 'range' };
+        }
+        if (anchorTower.links.length >= (CONFIG.MAX_LINKS_PER_TOWER || 2)) {
+            return { ok: false, reason: 'capacity-anchor' };
+        }
+        if (otherTower.links.length >= (CONFIG.MAX_LINKS_PER_TOWER || 2)) {
+            return { ok: false, reason: 'capacity-target' };
+        }
+        if (GameState.gold < CONFIG.LINK_COST) {
+            return { ok: false, reason: 'gold', cost: CONFIG.LINK_COST };
+        }
+
+        GameState.gold -= CONFIG.LINK_COST;
+        anchorTower.addLink(otherTower);
+        this.refreshTowerSystems();
+        return { ok: true, linked: true, unlinked: false, cost: CONFIG.LINK_COST };
+    },
+};
+
 function placeTower(type, worldX, worldY) {
     if (!MapSystem.canBuildAt(worldX, worldY)) return null;
+
+    if (typeof ProgressionSystem !== 'undefined' && !ProgressionSystem.isTowerUnlocked(type)) {
+        Effects.addFloatingText(worldX, worldY - 20, 'TOWER LICENSE LOCKED', '#ff7070', 12);
+        Audio.play('error');
+        return null;
+    }
 
     // Tower cap: maximum 50 towers
     if (GameState.towers.length >= CONFIG.MAX_TOWERS) {
@@ -1597,18 +2285,10 @@ function placeTower(type, worldX, worldY) {
     // Track tower types for achievements
     GameState.stats.towerTypesSet.add(type);
     GameState.stats.towerTypesBuilt = GameState.stats.towerTypesSet.size;
+    GameState.stats.towersPlacedThisRun = (GameState.stats.towersPlacedThisRun || 0) + 1;
 
-    // Track combo
-    const sameType = GameState.towers.filter(t => t.type === type).length;
-    GameState.stats.maxCombo = Math.max(GameState.stats.maxCombo, sameType);
-
-    // Detect synergies for the new tower and affected neighbors
-    tower._detectSynergies();
-    for (const t of GameState.towers) {
-        if (t !== tower && dist(tower, t) <= 200) {
-            t._detectSynergies();
-        }
-    }
+    // Track local formation rather than global spam count.
+    TowerCommands.refreshTowerSystems();
 
     Effects.spawnExplosion(tower.x, tower.y, def.iconColor, 10, { speed: 0.8 });
     Audio.play('place');

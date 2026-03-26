@@ -15,6 +15,10 @@ const WaveSystem = {
     currentFaction: null,
     currentWaveArc: null,
     currentMapPressure: null,
+    activeMapPressure: null,
+    currentPrimaryIdentity: '',
+    currentSecondaryIdentity: '',
+    currentIdentitySources: [],
     availableModifiers: [
         { id: 'double_speed', name: 'Double Speed', desc: 'All enemies move 2x faster', icon: '>>',
             apply(enemy) { enemy.baseSpeed *= 2; enemy.speed = enemy.baseSpeed; } },
@@ -244,9 +248,10 @@ const WaveSystem = {
 
     // Bonus wave definitions (every 10 waves)
     bonusWaveTemplates: [
-        { name: 'Gold Rush', desc: 'Hold out until extraction and claim the convoy payout.',
+        { name: 'Gold Rush', desc: 'Hold out until extraction while a prime target forces lane pressure.',
             composition: (w, hp) => [
-                { type: 'swarm', count: 40, hpMult: hp * 0.4, delay: 0.12 },
+                { type: 'swarm', count: 28, hpMult: hp * 0.45, delay: 0.12 },
+                { type: 'boss', count: 1, hpMult: hp * 0.75, delay: 2.8 },
             ],
             bonusGold: 150, timeLimit: 20,
             objective: {
@@ -257,15 +262,16 @@ const WaveSystem = {
                 failText: 'Defense collapsed',
             },
         },
-        { name: 'Elite Gauntlet', desc: 'Eliminate marked elite targets before the window closes.',
+        { name: 'Elite Gauntlet', desc: 'Eliminate marked elite targets, including a command boss, before the window closes.',
             composition: (w, hp) => [
-                { type: 'heavy', count: 8, hpMult: hp * 1.5, delay: 1.2, forceElite: true, objectiveTarget: true },
+                { type: 'heavy', count: 6, hpMult: hp * 1.45, delay: 1.1, forceElite: true, objectiveTarget: true },
+                { type: 'boss', count: 1, hpMult: hp * 0.95, delay: 2.6, objectiveTarget: true },
             ],
             bonusGold: 200, timeLimit: 30,
             objective: {
                 type: 'priority_target',
                 title: 'Priority Elimination',
-                goalText: 'Kill all marked elites before they escape.',
+                goalText: 'Kill all marked elites and the command boss before they escape.',
                 successText: 'All marked elites destroyed',
                 failText: 'Priority targets escaped',
             },
@@ -334,67 +340,73 @@ const WaveSystem = {
             id: 'supply_cache',
             name: 'Supply Cache',
             icon: '\u{1F4E6}',
-            desc: 'Open reserve crates for immediate funding, but enemy outriders move faster next wave.',
-            rewardText: '+120 gold now',
-            riskText: 'Next wave enemies gain +12% speed',
-            immediate: { gold: 120 },
-            timed: { enemySpeedMult: 1.12 },
+            tags: ['tempo', 'economy'],
+            desc: 'Open reserve crates and accelerate deployment tempo, but enemy outriders surge harder.',
+            rewardText: '+150 gold now, next wave spawns faster',
+            riskText: 'Next wave enemies gain +9% speed',
+            immediate: { gold: 150 },
+            timed: { spawnDelayMult: 0.82, enemySpeedMult: 1.09 },
             duration: 1,
         },
         {
             id: 'field_repairs',
             name: 'Field Repairs',
             icon: '\u{1FA79}',
-            desc: 'Patch your base integrity, but near-term banking efficiency drops.',
-            rewardText: 'Restore +3 lives',
-            riskText: '-2% interest for 2 waves',
-            immediate: { lives: 3 },
-            timed: { interestRateDelta: -0.02 },
+            tags: ['defense'],
+            desc: 'Patch base integrity and push combat efficiency, but near-term banking softens.',
+            rewardText: 'Restore +2 lives, +12% tower damage for 2 waves',
+            riskText: '-1% interest for 2 waves',
+            immediate: { lives: 2 },
+            timed: { towerDamageMult: 1.12, interestRateDelta: -0.01 },
             duration: 2,
         },
         {
             id: 'volatile_payloads',
             name: 'Volatile Payloads',
             icon: '\u{1F4A3}',
-            desc: 'Empower your firepower, but enemies arrive with reinforced durability.',
-            rewardText: '+18% tower damage for 2 waves',
-            riskText: 'Enemies gain +10% HP for 2 waves',
+            tags: ['tempo', 'combat'],
+            desc: 'Empower your firepower for an aggressive push, but enemies arrive reinforced.',
+            rewardText: '+24% tower damage next wave',
+            riskText: 'Enemies gain +14% HP next wave',
             immediate: {},
-            timed: { towerDamageMult: 1.18, enemyHpMult: 1.1 },
-            duration: 2,
+            timed: { towerDamageMult: 1.24, enemyHpMult: 1.14 },
+            duration: 1,
         },
         {
             id: 'cooldown_protocol',
             name: 'Cooldown Protocol',
             icon: '\u{23F1}',
-            desc: 'Lower ability cooldown pressure now, at the cost of reduced wave stipend.',
-            rewardText: '-22% ability cooldown for 2 waves',
-            riskText: '-10 wave bonus gold for 2 waves',
+            tags: ['tempo', 'ability'],
+            desc: 'Slash ability downtime and increase wave pace, at the cost of reduced stipends.',
+            rewardText: '-30% ability cooldown and faster spawns next wave',
+            riskText: '-15 wave bonus gold next wave',
             immediate: {},
-            timed: { abilityCooldownMult: 0.78, waveBonusFlat: -10 },
-            duration: 2,
+            timed: { abilityCooldownMult: 0.7, spawnDelayMult: 0.88, waveBonusFlat: -15 },
+            duration: 1,
         },
         {
             id: 'bounty_contracts',
             name: 'Bounty Contracts',
             icon: '\u{1F4DC}',
-            desc: 'Issue premium bounties to improve enemy payouts, but targets become tougher.',
-            rewardText: '+25% kill gold for 2 waves',
-            riskText: 'Enemies gain +8% HP for 2 waves',
+            tags: ['economy', 'combat'],
+            desc: 'Issue premium bounties for richer kills and stronger offense, but targets toughen.',
+            rewardText: '+35% kill gold and +10% tower damage for 2 waves',
+            riskText: 'Enemies gain +10% HP for 2 waves',
             immediate: {},
-            timed: { killGoldMult: 1.25, enemyHpMult: 1.08 },
+            timed: { killGoldMult: 1.35, towerDamageMult: 1.1, enemyHpMult: 1.1 },
             duration: 2,
         },
         {
             id: 'reserve_drills',
             name: 'Reserve Drills',
             icon: '\u2699',
-            desc: 'Drill support crews for better wave stipends at the cost of increased lane pressure.',
-            rewardText: '+20 wave bonus gold for 2 waves',
-            riskText: 'Enemies gain +6% speed for 2 waves',
-            immediate: { gold: 60 },
-            timed: { waveBonusFlat: 20, enemySpeedMult: 1.06 },
-            duration: 2,
+            tags: ['tempo', 'economy'],
+            desc: 'Drill support crews to accelerate lane tempo and stipends, but lane pressure climbs.',
+            rewardText: '+80 gold now, +30 wave bonus and faster spawns next wave',
+            riskText: 'Enemies gain +7% speed next wave',
+            immediate: { gold: 80 },
+            timed: { waveBonusFlat: 30, spawnDelayMult: 0.85, enemySpeedMult: 1.07 },
+            duration: 1,
         },
     ],
     activeTacticalEffects: [],
@@ -433,6 +445,10 @@ const WaveSystem = {
         this.currentFaction = null;
         this.currentWaveArc = null;
         this.currentMapPressure = null;
+        this.activeMapPressure = null;
+        this.currentPrimaryIdentity = '';
+        this.currentSecondaryIdentity = '';
+        this.currentIdentitySources = [];
         this.skipReadyShown = false;
         this.countdownTimer = 0;
         this.countdownActive = false;
@@ -923,6 +939,7 @@ const WaveSystem = {
             towerDamageMult: 1,
             abilityCooldownMult: 1,
             killGoldMult: 1,
+            spawnDelayMult: 1,
             interestRateDelta: 0,
             interestCapDelta: 0,
             waveBonusFlat: 0,
@@ -949,6 +966,7 @@ const WaveSystem = {
         applyMult('towerDamageMult');
         applyMult('abilityCooldownMult');
         applyMult('killGoldMult');
+        applyMult('spawnDelayMult');
 
         applyAdd('interestRateDelta');
         applyAdd('interestCapDelta');
@@ -1013,7 +1031,18 @@ const WaveSystem = {
     _rollTacticalChoices() {
         const pool = [...this.tacticalEventTemplates];
         const choices = [];
-        const count = Math.min(3, pool.length);
+
+        // Always present at least one tempo-oriented directive so fast runs have
+        // a meaningful high-pacing option every tactical event.
+        const tempoPool = pool.filter(choice => Array.isArray(choice.tags) && choice.tags.includes('tempo'));
+        if (tempoPool.length > 0) {
+            const tempoPick = tempoPool[Math.floor(Math.random() * tempoPool.length)];
+            choices.push(tempoPick);
+            const idx = pool.findIndex(choice => choice.id === tempoPick.id);
+            if (idx >= 0) pool.splice(idx, 1);
+        }
+
+        const count = Math.min(3, this.tacticalEventTemplates.length);
         while (choices.length < count && pool.length > 0) {
             const idx = Math.floor(Math.random() * pool.length);
             choices.push(pool.splice(idx, 1)[0]);
@@ -1493,6 +1522,46 @@ const WaveSystem = {
         return this.scenarioTemplates[idx];
     },
 
+    _formatEncounterIdentityLabel(kind, value) {
+        if (!value) return '';
+        switch (kind) {
+            case 'faction': return `Faction: ${value.name}`;
+            case 'scenario': return `Scenario: ${value.name}`;
+            case 'arc': return `Arc: ${value.name}`;
+            case 'mapPressure': return '';
+            default: return value.name || '';
+        }
+    },
+
+    // Campaign readability rule: compose encounter identity from one primary + one secondary layer.
+    _resolveEncounterLayers(waveNum, options = {}) {
+        const scenario = options.scenario || null;
+        const faction = options.faction || null;
+        const arc = options.arc || null;
+
+        const candidates = [];
+        if (faction) candidates.push({ kind: 'faction', value: faction, priority: 0 });
+        if (scenario) candidates.push({ kind: 'scenario', value: scenario, priority: 1 });
+        if (arc) candidates.push({ kind: 'arc', value: arc, priority: 2 });
+
+        candidates.sort((a, b) => a.priority - b.priority);
+        const chosen = candidates.slice(0, 2);
+        const chosenKinds = new Set(chosen.map(c => c.kind));
+
+        const primary = chosen[0] || null;
+        const secondary = chosen[1] || null;
+
+        return {
+            scenario: chosenKinds.has('scenario') ? scenario : null,
+            faction: chosenKinds.has('faction') ? faction : null,
+            arc: chosenKinds.has('arc') ? arc : null,
+            mapPressure: null,
+            primaryIdentity: primary ? this._formatEncounterIdentityLabel(primary.kind, primary.value) : '',
+            secondaryIdentity: secondary ? this._formatEncounterIdentityLabel(secondary.kind, secondary.value) : '',
+            identitySources: chosen.map(c => c.kind),
+        };
+    },
+
     _applyScenarioToEntry(entry) {
         if (!this.currentScenario || !entry) return;
 
@@ -1596,21 +1665,40 @@ const WaveSystem = {
         GameState.gamePhase = 'playing';
         GameState.stats.wavesCompleted = GameState.wave;
 
+        // Notify juice features of wave start
+        if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.onWaveStart(GameState.wave);
+
         // Update difficulty scaling
         this.difficultyScale = this._calculateDifficultyScale(GameState.wave);
 
         // Determine wave modifiers (every 5 waves, or more frequently in endless)
         this.activeModifiers = [];
-        this.currentScenario = this._getScenarioForWave(GameState.wave);
-        this.currentFaction = this._getFactionForWave(GameState.wave);
-        this.currentWaveArc = this._getWaveArcForWave(GameState.wave);
-        this.currentMapPressure = this._getMapPressureForCurrentMap();
+        const isBonusWaveNumber = (GameState.wave % 10 === 0);
+        const rawScenario = this._getScenarioForWave(GameState.wave);
+        const rawFaction = this._getFactionForWave(GameState.wave);
+        const rawWaveArc = this._getWaveArcForWave(GameState.wave);
+        const rawMapPressure = this._getMapPressureForCurrentMap();
+        const encounterLayers = this._resolveEncounterLayers(GameState.wave, {
+            scenario: rawScenario,
+            faction: rawFaction,
+            arc: rawWaveArc,
+            mapPressure: rawMapPressure,
+        });
+        this.currentScenario = encounterLayers.scenario;
+        this.currentFaction = encounterLayers.faction;
+        this.currentWaveArc = encounterLayers.arc;
+        this.currentMapPressure = null;
+        this.activeMapPressure = (encounterLayers.identitySources && encounterLayers.identitySources.length < 2)
+            ? rawMapPressure
+            : null;
+        this.currentPrimaryIdentity = encounterLayers.primaryIdentity;
+        this.currentSecondaryIdentity = encounterLayers.secondaryIdentity;
+        this.currentIdentitySources = encounterLayers.identitySources || [];
         if (this.endlessMode) {
             const drafted = this._getEndlessDraftModifiers();
             this.activeModifiers = drafted;
 
             const endlessWaveNum = GameState.wave - GameState.maxWave;
-            const isBonusWaveNumber = (GameState.wave % 10 === 0);
             if (endlessWaveNum > 0 && this.activeModifiers.length > 0 && !isBonusWaveNumber) {
                 const modNames = this.activeModifiers.map(m => m.name.toUpperCase()).join(' + ');
                 showWaveBanner(`ENDLESS WAVE ${GameState.wave} — ${modNames}`);
@@ -1725,6 +1813,7 @@ const WaveSystem = {
             }
         }
 
+        this._ensureFinalWaveBossQueuedEntries(GameState.waveEnemies, GameState.wave);
         this._injectFactionCaptainEntry(GameState.waveEnemies);
 
         if (this.isBonusWave && this.currentBonusWave) {
@@ -1749,7 +1838,11 @@ const WaveSystem = {
         GameState.totalEnemiesInWave = GameState.waveEnemies.length + carryOverAlive;
         GameState.enemiesSpawned = carryOverAlive;
         GameState.enemiesAlive = carryOverAlive;
-        GameState.spawnTimer = 0.5; // Initial delay
+        const tacticalMods = this.getCurrentTacticalModifiers();
+        const initialSpawnDelayMult = Number.isFinite(tacticalMods.spawnDelayMult) && tacticalMods.spawnDelayMult > 0
+            ? tacticalMods.spawnDelayMult
+            : 1;
+        GameState.spawnTimer = Math.max(0.04, 0.5 * initialSpawnDelayMult); // Initial delay
         this.skipReadyShown = false;
 
         // Show wave banner
@@ -1767,29 +1860,17 @@ const WaveSystem = {
         } else if (this.activeModifiers.length === 0) {
             showWaveBanner(`WAVE ${GameState.wave}`);
         }
-        if (this.currentScenario && !this.isBonusWave) {
-            Effects.addFloatingText(logicalWidth / 2, 100, `Scenario: ${this.currentScenario.name}`, '#90b0ff', 12);
-            Effects.addFloatingText(logicalWidth / 2, 116, this.currentScenario.desc, '#7f96c8', 10);
+        if (!this.isBonusWave && this.currentPrimaryIdentity) {
+            Effects.addFloatingText(logicalWidth / 2, 100, this.currentPrimaryIdentity, '#90b0ff', 12);
         }
-        if (this.currentFaction && !this.isBonusWave) {
-            Effects.addFloatingText(logicalWidth / 2, 132, `Faction: ${this.currentFaction.name}`, '#ffc990', 11);
-        }
-        const arcY = (this.currentFaction && !this.isBonusWave) ? 148 : 132;
-        if (this.currentWaveArc && !this.isBonusWave) {
-            Effects.addFloatingText(logicalWidth / 2, arcY, `Arc: ${this.currentWaveArc.name}`, '#9ed0ff', 10);
-            Effects.addFloatingText(logicalWidth / 2, arcY + 14, this.currentWaveArc.desc, '#7ea6d2', 9);
-        }
-        if (this.currentMapPressure && !this.isBonusWave) {
-            const mapPressureY = (this.currentFaction && !this.isBonusWave)
-                ? (this.currentWaveArc ? 170 : 148)
-                : (this.currentWaveArc ? 156 : 132);
-            Effects.addFloatingText(logicalWidth / 2, mapPressureY, `Map Pressure: ${this.currentMapPressure.name}`, '#b090ff', 10);
+        if (!this.isBonusWave && this.currentSecondaryIdentity) {
+            Effects.addFloatingText(logicalWidth / 2, 116, `Accent: ${this.currentSecondaryIdentity}`, '#8fd8ff', 10);
         }
         if (this.currentTacticalWaveEffectNames.length > 0) {
             const tacticalText = this.currentTacticalWaveEffectNames.slice(0, 2).join(' + ');
-            const tacticalY = this.currentMapPressure
-                ? ((this.currentFaction && !this.isBonusWave) ? (this.currentWaveArc ? 186 : 164) : (this.currentWaveArc ? 172 : 148))
-                : ((this.currentFaction && !this.isBonusWave) ? (this.currentWaveArc ? 170 : 148) : (this.currentWaveArc ? 156 : 132));
+            let tacticalY = 132;
+            if (!this.isBonusWave && this.currentPrimaryIdentity) tacticalY += 16;
+            if (!this.isBonusWave && this.currentSecondaryIdentity) tacticalY += 16;
             Effects.addFloatingText(logicalWidth / 2, tacticalY, `Tactical: ${tacticalText}`, '#8fd8ff', 10);
         }
         // (modifier banner already shown above)
@@ -1833,6 +1914,7 @@ const WaveSystem = {
             GameState.gold += interest;
             if (interest > 0) {
                 Effects.addFloatingText(logicalWidth / 2, 80, `Interest: +${interest}`, '#ffd700', 12);
+                if (typeof EconomyVisibility !== 'undefined') EconomyVisibility.showInterestGain(interest);
             }
 
             // Compound interest
@@ -1909,53 +1991,15 @@ const WaveSystem = {
             GameState.spawnTimer -= dt;
             if (GameState.spawnTimer <= 0) {
                 const next = GameState.waveEnemies.shift();
-                const enemy = new Enemy(next.type, next.hpMult);
+                this.spawnEnemyFromEntry(next, {
+                    includeInWaveTotal: false,
+                });
+
                 const tacticalMods = this.getCurrentTacticalModifiers();
-                enemy.isObjectiveTarget = !!next.isObjectiveTarget;
-
-                // Apply difficulty scaling (wave progression + difficulty preset)
-                const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
-                enemy.baseSpeed *= this.difficultyScale.speedMult * diffPreset.enemySpeedMult;
-                enemy.speed = enemy.baseSpeed;
-                enemy.maxHp *= diffPreset.enemyHpMult;
-                enemy.hp = enemy.maxHp;
-                enemy.maxHp *= tacticalMods.enemyHpMult;
-                enemy.hp = enemy.maxHp;
-                enemy.armor *= this.difficultyScale.armorMult * diffPreset.enemyArmorMult;
-                enemy.baseArmor = enemy.armor;
-                if (enemy.isBoss) {
-                    const bossProfile = this._getBossProfileForWave(GameState.wave);
-                    if (enemy.setBossProfile) enemy.setBossProfile(bossProfile);
-                    enemy.maxHp *= diffPreset.bossHpMult;
-                    enemy.hp = enemy.maxHp;
-                }
-                enemy.reward = Math.floor(enemy.reward * diffPreset.goldIncomeMult);
-                enemy.baseSpeed *= tacticalMods.enemySpeedMult;
-                enemy.speed = enemy.baseSpeed;
-
-                // Apply elite variant if applicable
-                if (next.isElite && next.eliteVariant) {
-                    this._applyEliteVariant(enemy, next.eliteVariant);
-                }
-
-                // Apply active wave modifiers
-                for (const mod of this.activeModifiers) {
-                    mod.apply(enemy);
-                }
-
-                this._applyScenarioToEnemy(enemy);
-                this._applyFactionToEnemy(enemy);
-                this._applyWaveArcToEnemy(enemy);
-                this._applyMapPressure(enemy);
-                if (next.isCaptain && next.captainProfileId) {
-                    this._applyCaptainProfile(enemy, next.captainProfileId);
-                }
-                enemy.reward = Math.max(1, Math.floor(enemy.reward * tacticalMods.killGoldMult));
-
-                GameState.enemies.push(enemy);
-                GameState.enemiesSpawned++;
-                GameState.enemiesAlive++;
-                GameState.spawnTimer = next.delay;
+                const spawnDelayMult = Number.isFinite(tacticalMods.spawnDelayMult) && tacticalMods.spawnDelayMult > 0
+                    ? tacticalMods.spawnDelayMult
+                    : 1;
+                GameState.spawnTimer = Math.max(0.04, (Number.isFinite(next.delay) ? next.delay : 0.5) * spawnDelayMult);
 
                 // Skip is only available after the final spawn of the current wave.
                 if (GameState.waveEnemies.length === 0) {
@@ -1975,6 +2019,98 @@ const WaveSystem = {
         }
 
         this._applyCaptainAuras();
+    },
+
+    // Spawn an enemy using the same runtime modifier pipeline used by wave queues.
+    // This is used by queued spawns as well as dynamic summons (boss/miniboss behaviors).
+    spawnEnemyFromEntry(entry, options = {}) {
+        if (!entry || !entry.type) return null;
+
+        const enemy = new Enemy(entry.type, entry.hpMult);
+        const tacticalMods = options.tacticalMods || this.getCurrentTacticalModifiers();
+        enemy.isObjectiveTarget = !!entry.isObjectiveTarget;
+
+        // Apply difficulty scaling (wave progression + difficulty preset).
+        const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
+        enemy.baseSpeed *= this.difficultyScale.speedMult * diffPreset.enemySpeedMult;
+        enemy.speed = enemy.baseSpeed;
+        enemy.maxHp *= diffPreset.enemyHpMult;
+        enemy.hp = enemy.maxHp;
+        enemy.maxHp *= tacticalMods.enemyHpMult;
+        enemy.hp = enemy.maxHp;
+        enemy.armor *= this.difficultyScale.armorMult * diffPreset.enemyArmorMult;
+        enemy.baseArmor = enemy.armor;
+        if (enemy.isBoss) {
+            const bossProfile = this._getBossProfileForWave(GameState.wave);
+            if (enemy.setBossProfile) enemy.setBossProfile(bossProfile);
+            enemy.maxHp *= diffPreset.bossHpMult;
+            enemy.hp = enemy.maxHp;
+        }
+        enemy.reward = Math.floor(enemy.reward * diffPreset.goldIncomeMult);
+        enemy.baseSpeed *= tacticalMods.enemySpeedMult;
+        enemy.speed = enemy.baseSpeed;
+
+        // Apply elite variant if applicable.
+        if (entry.isElite && entry.eliteVariant) {
+            this._applyEliteVariant(enemy, entry.eliteVariant);
+        }
+
+        // Apply active wave modifiers and contextual encounter layers.
+        for (const mod of this.activeModifiers) {
+            mod.apply(enemy);
+        }
+        this._applyScenarioToEnemy(enemy);
+        this._applyFactionToEnemy(enemy);
+        this._applyWaveArcToEnemy(enemy);
+        this._applyMapPressure(enemy);
+        if (entry.isCaptain && entry.captainProfileId) {
+            this._applyCaptainProfile(enemy, entry.captainProfileId);
+        }
+        enemy.reward = Math.max(1, Math.floor(enemy.reward * tacticalMods.killGoldMult));
+
+        if (Number.isFinite(options.pathIndex)) {
+            const maxIdx = Math.max(0, (GameState.detailedPath?.length || 1) - 2);
+            enemy.pathIndex = Math.max(0, Math.min(Math.floor(options.pathIndex), maxIdx));
+        }
+        if (Number.isFinite(options.progress)) {
+            enemy.progress = Math.max(0, Math.min(1, options.progress));
+        }
+
+        const path = GameState.detailedPath || [];
+        if (path.length > 0) {
+            const from = path[Math.max(0, Math.min(enemy.pathIndex, path.length - 1))];
+            const to = path[Math.max(0, Math.min(enemy.pathIndex + 1, path.length - 1))] || from;
+            const px = lerp(from.x, to.x, enemy.progress || 0);
+            const py = lerp(from.y, to.y, enemy.progress || 0);
+            enemy.x = px;
+            enemy.y = py;
+            enemy.renderX = px;
+            enemy.renderY = py;
+            enemy.prevX = px;
+            enemy.prevY = py;
+        }
+
+        if (options.position && Number.isFinite(options.position.x) && Number.isFinite(options.position.y)) {
+            enemy.x = options.position.x;
+            enemy.y = options.position.y;
+            enemy.renderX = enemy.x;
+            enemy.renderY = enemy.y;
+            enemy.prevX = enemy.x;
+            enemy.prevY = enemy.y;
+        }
+
+        GameState.enemies.push(enemy);
+
+        const trackCounters = options.trackCounters !== false;
+        if (trackCounters) {
+            GameState.enemiesSpawned++;
+            GameState.enemiesAlive++;
+            if (options.includeInWaveTotal) {
+                GameState.totalEnemiesInWave++;
+            }
+        }
+
+        return enemy;
     },
 
     // Apply elite variant properties to an enemy
@@ -2208,6 +2344,9 @@ const WaveSystem = {
     waveComplete() {
         GameState.gamePhase = 'idle';
 
+        // Notify juice features of wave completion
+        if (typeof JuiceFeatures !== 'undefined') JuiceFeatures.onWaveComplete(GameState.wave);
+
         // Record wave statistics
         const waveTime = GameState.time - this.waveStats.currentWaveStartTime;
         const isPerfect = this.waveStats.enemiesLeakedThisWave === 0;
@@ -2395,22 +2534,35 @@ const WaveSystem = {
             const mutatorNames = activeMutators.map(m => m.name);
             const draftDepth = Math.max(1, endlessNum - 1);
             const draftPending = this._isEndlessDraftDepth(draftDepth) && !this.endlessDraftedDepths.includes(draftDepth);
-            const faction = this._getFactionForWave(wave);
-            const arc = this._getWaveArcForWave(wave);
+            const rawScenario = this._getScenarioForWave(wave);
+            const rawFaction = this._getFactionForWave(wave);
+            const rawArc = this._getWaveArcForWave(wave);
+            const rawMapPressure = this._getMapPressureForCurrentMap();
+            const layers = this._resolveEncounterLayers(wave, {
+                scenario: rawScenario,
+                faction: rawFaction,
+                arc: rawArc,
+                mapPressure: rawMapPressure,
+            });
             const endlessThreatTags = draftPending
                 ? ['MUTATOR DRAFT', 'ELITE RISK']
                 : ['UNPREDICTABLE', 'ELITE RISK'];
-            if (arc && Array.isArray(arc.threatTags)) {
-                for (const tag of arc.threatTags) {
+            if (layers.arc && Array.isArray(layers.arc.threatTags)) {
+                for (const tag of layers.arc.threatTags) {
                     if (!endlessThreatTags.includes(tag)) endlessThreatTags.push(tag);
                 }
             }
-            if (faction && Array.isArray(faction.threatTags)) {
-                for (const tag of faction.threatTags) {
+            if (layers.faction && Array.isArray(layers.faction.threatTags)) {
+                for (const tag of layers.faction.threatTags) {
                     if (!endlessThreatTags.includes(tag)) endlessThreatTags.push(tag);
                 }
             }
-            return {
+            if (layers.scenario && Array.isArray(layers.scenario.threatTags)) {
+                for (const tag of layers.scenario.threatTags) {
+                    if (!endlessThreatTags.includes(tag)) endlessThreatTags.push(tag);
+                }
+            }
+            const preview = {
                 enemies: [{ type: 'basic', count: '??', name: 'Endless', color: '#ff80ff', hpMult: 1 }],
                 difficultyScale: scale,
                 hasModifier: activeMutators.length > 0,
@@ -2421,10 +2573,16 @@ const WaveSystem = {
                     : 'Endless mode — draft mutators to shape the run.',
                 bonusInfo: null,
                 isEndless: true,
-                faction,
-                arc,
+                scenario: layers.scenario,
+                faction: layers.faction,
+                arc: layers.arc,
+                mapPressure: layers.mapPressure,
                 threatTags: endlessThreatTags,
+                primaryIdentity: layers.primaryIdentity,
+                secondaryIdentity: layers.secondaryIdentity,
+                identitySources: layers.identitySources,
             };
+            return preview;
         }
 
         if (wave > this.waveDefs.length) return null;
@@ -2436,10 +2594,16 @@ const WaveSystem = {
         // Determine if this wave will have modifiers
         const hasModifier = (wave % 5 === 0 && wave % 10 !== 0);
         const isBonus = (wave % 10 === 0);
-        const scenario = this._getScenarioForWave(wave);
-        const faction = this._getFactionForWave(wave);
-        const arc = this._getWaveArcForWave(wave);
-        const mapPressure = this._getMapPressureForCurrentMap();
+        const rawScenario = this._getScenarioForWave(wave);
+        const rawFaction = this._getFactionForWave(wave);
+        const rawArc = this._getWaveArcForWave(wave);
+        const rawMapPressure = this._getMapPressureForCurrentMap();
+        const layers = this._resolveEncounterLayers(wave, {
+            scenario: rawScenario,
+            faction: rawFaction,
+            arc: rawArc,
+            mapPressure: rawMapPressure,
+        });
 
         // Estimate elite chance
         const eliteChance = Math.min(0.02 + (wave - 1) * 0.008, 0.25);
@@ -2458,16 +2622,14 @@ const WaveSystem = {
             eliteChance: eliteChance,
             modifierHint: hasModifier ? 'Random modifier will be applied!' : null,
             bonusInfo: null,
-            scenario: scenario,
-            faction: faction,
-            arc: arc,
-            mapPressure: mapPressure,
+            scenario: layers.scenario,
+            faction: layers.faction,
+            arc: layers.arc,
+            mapPressure: layers.mapPressure,
+            primaryIdentity: layers.primaryIdentity,
+            secondaryIdentity: layers.secondaryIdentity,
+            identitySources: layers.identitySources,
         };
-
-        if (preview.enemies.some(e => e.type === 'boss')) {
-            const boss = this._getBossProfileForWave(wave);
-            preview.bossName = boss.name;
-        }
 
         if (isBonus) {
             const templateIdx = Math.floor((wave / 10 - 1) % this.bonusWaveTemplates.length);
@@ -2492,7 +2654,30 @@ const WaveSystem = {
             };
         }
 
+        this._ensureFinalWaveBossPreview(preview, wave, scale);
+
+        if (preview.enemies.some(e => e.type === 'boss')) {
+            const boss = this._getBossProfileForWave(wave);
+            preview.bossName = boss.name;
+        } else {
+            delete preview.bossName;
+        }
+
         preview.threatTags = this._deriveThreatTags(preview);
+
+        if (preview.bossName) {
+            const fallbackIdentity = preview.primaryIdentity;
+            preview.primaryIdentity = `Boss: ${preview.bossName}`;
+            if (!preview.secondaryIdentity && fallbackIdentity && fallbackIdentity !== preview.primaryIdentity) {
+                preview.secondaryIdentity = fallbackIdentity;
+            }
+        } else if (preview.isBonus && preview.bonusInfo && preview.bonusInfo.name) {
+            const fallbackIdentity = preview.primaryIdentity;
+            preview.primaryIdentity = `Bonus: ${preview.bonusInfo.name}`;
+            if (!preview.secondaryIdentity && fallbackIdentity && fallbackIdentity !== preview.primaryIdentity) {
+                preview.secondaryIdentity = fallbackIdentity;
+            }
+        }
 
         return preview;
     },
@@ -2532,9 +2717,6 @@ const WaveSystem = {
         if (preview.scenario && Array.isArray(preview.scenario.threatTags)) {
             for (const tag of preview.scenario.threatTags) add(tag);
         }
-        if (preview.mapPressure && preview.mapPressure.threatTag) {
-            add(preview.mapPressure.threatTag);
-        }
 
         return tags.slice(0, 5);
     },
@@ -2546,13 +2728,19 @@ const WaveSystem = {
     },
 
     _applyMapPressure(enemy) {
-        if (!this.currentMapPressure || !enemy) return;
-        if (typeof this.currentMapPressure.apply === 'function') {
-            this.currentMapPressure.apply(enemy);
+        if (!this.activeMapPressure || !enemy) return;
+        if (typeof this.activeMapPressure.apply === 'function') {
+            this.activeMapPressure.apply(enemy);
         }
     },
 
-    _getBossProfileForWave(waveNum) {
+    _isFinalMainBossWave(waveNum) {
+        if (this.endlessMode) return false;
+        if (!Number.isFinite(waveNum) || !Number.isFinite(GameState.maxWave)) return false;
+        return waveNum >= GameState.maxWave && GameState.maxWave > 0;
+    },
+
+    _getBossArchetypeKeyForWave(waveNum) {
         const diffGroup = Math.floor(GameState.mapIndex / 5);
         const baseIdx = Math.min(diffGroup, 3);
 
@@ -2564,16 +2752,97 @@ const WaveSystem = {
         }
 
         const profileKeys = ['brood', 'colossus', 'infernal', 'void'];
-        const key = profileKeys[(baseIdx + variantShift) % profileKeys.length];
-        if (typeof BOSS_ARCHETYPES !== 'undefined' && BOSS_ARCHETYPES[key]) {
-            return BOSS_ARCHETYPES[key];
-        }
+        return profileKeys[(baseIdx + variantShift) % profileKeys.length];
+    },
+
+    _buildMiniBossProfile(baseProfile, archetypeKey, waveNum) {
+        const tierIndex = Math.max(1, Math.floor(waveNum / 10));
+        const miniNamePools = {
+            brood: ['Brood Herald', 'Hatch Tyrant'],
+            colossus: ['Stone Warden', 'Iron Sentinel'],
+            infernal: ['Ember General', 'Hellforge Champion'],
+            void: ['Rift Herald', 'Abyss Regent'],
+        };
+        const namePool = miniNamePools[archetypeKey] || [`${baseProfile.name} Vanguard`, `${baseProfile.name} Captain`];
+        const name = namePool[(tierIndex - 1) % namePool.length];
+
         return {
+            ...baseProfile,
+            id: `${baseProfile.id || archetypeKey}_mini_${(tierIndex - 1) % namePool.length}`,
+            name,
+            introAbilities: Array.isArray(baseProfile.introAbilities)
+                ? baseProfile.introAbilities.slice(0, 2)
+                : [],
+            phasePlan: [],
+            abilityCooldownMult: (baseProfile.abilityCooldownMult || 1) * 1.08,
+            summonCountMin: Math.max(1, (baseProfile.summonCountMin || 2) - 1),
+            summonCountMax: Math.max(1, (baseProfile.summonCountMax || 3) - 1),
+            summonHpMult: Number.isFinite(baseProfile.summonHpMult) ? baseProfile.summonHpMult * 0.9 : baseProfile.summonHpMult,
+            shieldHpMult: Number.isFinite(baseProfile.shieldHpMult) ? baseProfile.shieldHpMult * 0.85 : baseProfile.shieldHpMult,
+            towerDisruptDuration: Number.isFinite(baseProfile.towerDisruptDuration) ? baseProfile.towerDisruptDuration * 0.85 : baseProfile.towerDisruptDuration,
+            enrageThreshold: Number.isFinite(baseProfile.enrageThreshold) ? Math.max(0.22, baseProfile.enrageThreshold) : 0.3,
+            enrageSpeedMult: Number.isFinite(baseProfile.enrageSpeedMult) ? Math.max(1.08, baseProfile.enrageSpeedMult * 0.9) : 1.18,
+            encounterTier: 'mini',
+        };
+    },
+
+    _ensureFinalWaveBossQueuedEntries(queue, waveNum) {
+        if (!Array.isArray(queue) || !this._isFinalMainBossWave(waveNum)) return;
+        if (queue.some(entry => entry && entry.type === 'boss')) return;
+
+        const hpScale = this.difficultyScale && Number.isFinite(this.difficultyScale.hpMult)
+            ? this.difficultyScale.hpMult
+            : 1;
+        const finalBossEntry = {
+            type: 'boss',
+            hpMult: Math.max(1.1, hpScale * 1.05),
+            delay: 1.8,
+            isElite: false,
+            eliteVariant: null,
+            isFinalBoss: true,
+        };
+
+        const insertAt = Math.max(0, Math.floor(queue.length * 0.65));
+        queue.splice(insertAt, 0, finalBossEntry);
+    },
+
+    _ensureFinalWaveBossPreview(preview, waveNum, scale) {
+        if (!preview || !Array.isArray(preview.enemies) || !this._isFinalMainBossWave(waveNum)) return;
+        if (preview.enemies.some(entry => entry && entry.type === 'boss')) return;
+
+        const bossProfile = this._getBossProfileForWave(waveNum);
+        const hpScale = scale && Number.isFinite(scale.hpMult) ? scale.hpMult : 1;
+        preview.enemies.push({
+            type: 'boss',
+            count: 1,
+            name: bossProfile.name || ENEMIES.boss.name,
+            color: ENEMIES.boss.color,
+            hpMult: Math.max(1.1, hpScale * 1.05),
+            isObjectiveTarget: false,
+        });
+        preview.isFinalBossWave = true;
+    },
+
+    _getBossProfileForWave(waveNum) {
+        const key = this._getBossArchetypeKeyForWave(waveNum);
+        const fallback = {
             name: 'Overlord',
             introAbilities: ['Shield', 'Rush', 'Summon'],
             abilityCycle: ['shield', 'speed', 'summon'],
             color: '#ff2020',
         };
+
+        const baseProfile = (typeof BOSS_ARCHETYPES !== 'undefined' && BOSS_ARCHETYPES[key])
+            ? BOSS_ARCHETYPES[key]
+            : fallback;
+
+        // Non-final milestone waves (10/20/...) use miniboss variants.
+        if (!this.endlessMode && waveNum % 10 === 0 && !this._isFinalMainBossWave(waveNum)) {
+            return this._buildMiniBossProfile(baseProfile, key, waveNum);
+        }
+
+        // Final wave always uses the main archetype for the map tier.
+        return baseProfile;
     },
 
     // Get the current wave's active modifiers for display

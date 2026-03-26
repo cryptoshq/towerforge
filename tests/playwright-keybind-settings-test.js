@@ -40,6 +40,24 @@ async function run() {
     });
 
     await page.waitForSelector('#settings-hotkey-grid .hotkey-bind-btn[data-action="startWave"]');
+
+    const reservedKeyPolicy = await page.evaluate(() => ({
+        digit8: Input._isReservedHotkeyCode('Digit8'),
+        digit9: Input._isReservedHotkeyCode('Digit9'),
+        digit0: Input._isReservedHotkeyCode('Digit0'),
+        minus: Input._isReservedHotkeyCode('Minus'),
+        equal: Input._isReservedHotkeyCode('Equal'),
+        keyP: Input._isReservedHotkeyCode('KeyP'),
+        hint: (document.querySelector('.settings-keybinds-hint') || {}).textContent || '',
+    }));
+    assert(reservedKeyPolicy.digit8, 'Digit8 should remain reserved for tower slots');
+    assert(reservedKeyPolicy.digit9, 'Digit9 should be reserved for expanded tower slots');
+    assert(reservedKeyPolicy.digit0, 'Digit0 should be reserved for expanded tower slots');
+    assert(reservedKeyPolicy.minus, 'Minus should be reserved for expanded tower slots');
+    assert(reservedKeyPolicy.equal, 'Equal should be reserved for expanded tower slots');
+    assert(!reservedKeyPolicy.keyP, 'KeyP should remain bindable');
+    assert(/1-0/.test(reservedKeyPolicy.hint), `Settings hint should mention expanded tower slot keys (got: ${reservedKeyPolicy.hint})`);
+
     await page.click('#settings-hotkey-grid .hotkey-bind-btn[data-action="startWave"]');
     await page.keyboard.press('KeyP');
 
@@ -162,12 +180,14 @@ async function run() {
             towerPlaced: !!tower,
             contextVisible: Input.contextMenuVisible,
             contextDisplay: menu ? getComputedStyle(menu).display : 'missing',
+            contextText: menu ? menu.textContent || '' : '',
         };
     });
 
     assert(rightClickState.towerPlaced, 'Expected tower placement for right-click context-menu check');
-    assert(!rightClickState.contextVisible, `Right-click should not open context menu (visible=${rightClickState.contextVisible})`);
-    assert(rightClickState.contextDisplay === 'none' || rightClickState.contextDisplay === 'missing', `Right-click menu display should stay hidden (display=${rightClickState.contextDisplay})`);
+    assert(rightClickState.contextVisible, `Right-click should open tower context menu (visible=${rightClickState.contextVisible})`);
+    assert(rightClickState.contextDisplay === 'block', `Right-click menu should be visible (display=${rightClickState.contextDisplay})`);
+    assert(/Relocate/i.test(rightClickState.contextText), `Tower context menu should include relocate action (text=${rightClickState.contextText})`);
 
     await page.evaluate(() => {
         Input.resetHotkeys();

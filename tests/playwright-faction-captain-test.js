@@ -17,9 +17,12 @@ async function run() {
         GameState.settings.autoStart = false;
 
         const preview = WaveSystem.getWavePreview(6);
+        const preview10 = WaveSystem.getWavePreview(10);
         const preview12 = WaveSystem.getWavePreview(12);
+        const preview20 = WaveSystem.getWavePreview(20);
         const preview18 = WaveSystem.getWavePreview(18);
         const previewArc9 = WaveSystem.getWavePreview(9);
+        const previewFinal = WaveSystem.getWavePreview(GameState.maxWave);
 
         GameState.wave = 5;
         GameState.gamePhase = 'idle';
@@ -30,13 +33,32 @@ async function run() {
         return {
             waveNow: GameState.wave,
             factionId: WaveSystem.currentFaction ? WaveSystem.currentFaction.id : null,
+            activeIdentityCount: [
+                WaveSystem.currentScenario,
+                WaveSystem.currentFaction,
+                WaveSystem.currentWaveArc,
+                WaveSystem.currentMapPressure,
+            ].filter(Boolean).length,
             captainEntryExists: !!captainEntry,
             captainProfileId: captainEntry ? captainEntry.captainProfileId : null,
             previewFactionId: preview && preview.faction ? preview.faction.id : null,
             previewThreatTags: preview && Array.isArray(preview.threatTags) ? preview.threatTags : [],
+            previewPrimaryIdentity: preview && preview.primaryIdentity ? preview.primaryIdentity : null,
+            previewSecondaryIdentity: preview && preview.secondaryIdentity ? preview.secondaryIdentity : null,
+            previewIdentityCount: preview
+                ? [preview.scenario, preview.faction, preview.arc, preview.mapPressure].filter(Boolean).length
+                : 0,
+            previewIdentitySourceCount: preview && Array.isArray(preview.identitySources) ? preview.identitySources.length : 0,
+            preview10BossName: preview10 ? preview10.bossName : null,
+            preview10HasBossGroup: !!(preview10 && Array.isArray(preview10.enemies) && preview10.enemies.some(g => g.type === 'boss')),
             preview12FactionId: preview12 && preview12.faction ? preview12.faction.id : null,
             preview12CaptainTag: !!(preview12 && Array.isArray(preview12.threatTags) && preview12.threatTags.includes('CAPTAIN AURA')),
             preview18FactionId: preview18 && preview18.faction ? preview18.faction.id : null,
+            preview20BossName: preview20 ? preview20.bossName : null,
+            preview20HasBossGroup: !!(preview20 && Array.isArray(preview20.enemies) && preview20.enemies.some(g => g.type === 'boss')),
+            previewFinalWave: GameState.maxWave,
+            previewFinalBossName: previewFinal ? previewFinal.bossName : null,
+            previewFinalHasBossGroup: !!(previewFinal && Array.isArray(previewFinal.enemies) && previewFinal.enemies.some(g => g.type === 'boss')),
             previewArc9Name: previewArc9 && previewArc9.arc ? previewArc9.arc.name : null,
             previewArc9Tags: previewArc9 && Array.isArray(previewArc9.threatTags) ? previewArc9.threatTags : [],
         };
@@ -46,11 +68,22 @@ async function run() {
     assert(factionWave.factionId === 'siege_foundry', `Expected Siege Foundry faction, got ${factionWave.factionId}`);
     assert(factionWave.captainEntryExists, 'Faction wave should inject a captain entry');
     assert(factionWave.captainProfileId === 'siege_foreman', `Expected siege foreman captain profile, got ${factionWave.captainProfileId}`);
+    assert(factionWave.activeIdentityCount <= 2, `Runtime encounter should keep max 2 identity layers (got ${factionWave.activeIdentityCount})`);
     assert(factionWave.previewFactionId === 'siege_foundry', `Wave preview should include faction id siege_foundry, got ${factionWave.previewFactionId}`);
     assert(factionWave.previewThreatTags.includes('CAPTAIN AURA'), 'Wave preview should include CAPTAIN AURA threat tag');
+    assert(!!factionWave.previewPrimaryIdentity, 'Wave preview should expose a primary identity label');
+    assert(factionWave.previewIdentityCount <= 2, `Wave preview should keep max 2 identity layers (got ${factionWave.previewIdentityCount})`);
+    assert(factionWave.previewIdentitySourceCount <= 2, `Wave preview identity source list should keep max 2 entries (got ${factionWave.previewIdentitySourceCount})`);
+    assert(factionWave.preview10HasBossGroup, 'Wave 10 preview should include boss group');
+    assert(!!factionWave.preview10BossName, `Wave 10 preview should expose boss name (got ${factionWave.preview10BossName})`);
     assert(factionWave.preview12FactionId === 'veil_swarm', `Expected wave 12 faction veil_swarm, got ${factionWave.preview12FactionId}`);
     assert(factionWave.preview12CaptainTag, 'Wave 12 preview should include CAPTAIN AURA threat tag');
     assert(factionWave.preview18FactionId === 'blight_caravan', `Expected wave 18 faction blight_caravan, got ${factionWave.preview18FactionId}`);
+    assert(factionWave.preview20HasBossGroup, 'Wave 20 preview should include boss group');
+    assert(!!factionWave.preview20BossName, `Wave 20 preview should expose boss name (got ${factionWave.preview20BossName})`);
+    assert(factionWave.preview10BossName !== factionWave.preview20BossName, `Wave 10 and 20 should show different miniboss names (got ${factionWave.preview10BossName} / ${factionWave.preview20BossName})`);
+    assert(factionWave.previewFinalHasBossGroup, `Final wave ${factionWave.previewFinalWave} preview should include a main boss group`);
+    assert(factionWave.previewFinalBossName === 'Stone Colossus', `Final wave should show main boss Stone Colossus, got ${factionWave.previewFinalBossName}`);
     assert(factionWave.previewArc9Name === 'Mix', `Expected wave 9 arc name Mix, got ${factionWave.previewArc9Name}`);
     assert(factionWave.previewArc9Tags.some(tag => tag.includes('ARC')), 'Wave 9 preview should include wave arc threat tag');
 
@@ -64,6 +97,7 @@ async function run() {
         const easyW8 = WaveSystem.getWavePreview(8);
         const easyW4 = WaveSystem.getWavePreview(4);
         const easyW5 = WaveSystem.getWavePreview(5);
+        const easyFinal = WaveSystem.getWavePreview(GameState.maxWave);
 
         // Hard band (maps 10-14): denser cadence.
         startGame(10);
@@ -83,6 +117,8 @@ async function run() {
             easyW8Faction: easyW8 && easyW8.faction ? easyW8.faction.id : null,
             easyW4Arc: easyW4 && easyW4.arc ? easyW4.arc.id : null,
             easyW5Arc: easyW5 && easyW5.arc ? easyW5.arc.id : null,
+            easyFinalBossName: easyFinal ? easyFinal.bossName : null,
+            easyFinalHasBoss: !!(easyFinal && Array.isArray(easyFinal.enemies) && easyFinal.enemies.some(g => g.type === 'boss')),
 
             hardW5Faction: hardW5 && hardW5.faction ? hardW5.faction.id : null,
             hardW7Arc: hardW7 && hardW7.arc ? hardW7.arc.id : null,
@@ -97,6 +133,8 @@ async function run() {
     assert(cadenceByBand.easyW8Faction === 'siege_foundry', `Easy map wave 8 should begin faction cadence (got ${cadenceByBand.easyW8Faction})`);
     assert(cadenceByBand.easyW4Arc === null, `Easy maps should not run arc scripting every wave (wave 4 arc: ${cadenceByBand.easyW4Arc})`);
     assert(cadenceByBand.easyW5Arc !== null, 'Easy maps should still surface periodic arc scripting on cadence waves');
+    assert(cadenceByBand.easyFinalHasBoss, 'Easy map final wave preview should include a boss group');
+    assert(cadenceByBand.easyFinalBossName === 'Grub King', `Easy map final wave should use main boss Grub King (got ${cadenceByBand.easyFinalBossName})`);
 
     assert(cadenceByBand.hardW5Faction === 'siege_foundry', `Hard maps should trigger denser faction cadence by wave 5 (got ${cadenceByBand.hardW5Faction})`);
     assert(cadenceByBand.hardW7Arc !== null, 'Hard maps should keep arc scripting active each non-bonus wave');

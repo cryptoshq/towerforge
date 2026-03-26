@@ -14,20 +14,53 @@
     <!-- Main Menu -->
     <div id="main-menu" class="screen active">
         <div class="menu-bg"></div>
-        <div class="menu-content">
-            <h1 class="game-title">TOWER<span class="title-accent">FORGE</span></h1>
-            <p class="subtitle">Dual Path Defense</p>
-            <div class="menu-buttons">
-                <button class="menu-btn primary" id="btn-play">PLAY</button>
-                <button class="menu-btn weekly" id="btn-weekly">WEEKLY CHALLENGE</button>
-                <button class="menu-btn" id="btn-continue" style="display:none">CONTINUE</button>
-                <button class="menu-btn" id="btn-research">RESEARCH LAB</button>
-                <button class="menu-btn" id="btn-achievements">ACHIEVEMENTS</button>
-                <button class="menu-btn" id="btn-howtoplay">HOW TO PLAY</button>
-                <button class="menu-btn multiplayer" id="btn-multiplayer">MULTIPLAYER</button>
-                <button class="menu-btn" id="btn-settings">SETTINGS</button>
-            </div>
-            <div class="menu-meta-progress" id="menu-meta-progress"></div>
+        <div class="mm-shell">
+            <section class="mm-hero">
+                <div class="mm-brand">
+                    <div class="mm-brand-decor" aria-hidden="true">
+                        <span class="mm-ring mm-ring-a"></span>
+                        <span class="mm-ring mm-ring-b"></span>
+                        <span class="mm-scanline"></span>
+                    </div>
+                    <p class="mm-kicker">Command Nexus</p>
+                    <h1 class="mm-title">TowerForge</h1>
+                    <p class="mm-subtitle">Build layered defenses, branch each tower path, and push campaign marks to expand your arsenal.</p>
+                </div>
+                <div class="mm-brief">
+                    <div class="mm-brief-title">Profile Briefing</div>
+                    <p class="mm-brief-copy">Track your run record, weekly operation score, and progression before deployment.</p>
+                    <div class="mm-status-strip">
+                        <span>Uplink Stable</span>
+                        <span>Ops Feed Live</span>
+                        <span>Telemetry Online</span>
+                    </div>
+                    <div class="menu-meta-progress" id="menu-meta-progress"></div>
+                </div>
+            </section>
+
+            <section class="mm-command-panels">
+                <div class="mm-panel">
+                    <h2 class="mm-panel-title">Deploy</h2>
+                    <div class="mm-btn-stack mm-btn-stack-primary">
+                        <button class="menu-btn primary" id="btn-play">PLAY CAMPAIGN<span class="btn-subtitle">Launch operation planning and map selection</span></button>
+                        <button class="menu-btn" id="btn-continue" style="display:none">CONTINUE</button>
+                        <button class="menu-btn weekly" id="btn-weekly">WEEKLY CHALLENGE<span class="btn-subtitle">Rotating scenario with global score race</span></button>
+                    </div>
+                </div>
+
+                <div class="mm-panel">
+                    <h2 class="mm-panel-title">Command</h2>
+                    <div class="mm-btn-stack">
+                        <button class="menu-btn" id="btn-research">RESEARCH LAB<span class="btn-subtitle">Spend RP and configure long-term doctrine upgrades</span></button>
+                        <button class="menu-btn" id="btn-achievements">ACHIEVEMENTS<span class="btn-subtitle">Review challenge medals and account milestones</span></button>
+                        <button class="menu-btn" id="btn-towers">TOWER INTEL<span class="btn-subtitle">Inspect role, tier matrix, and unlock protocols</span></button>
+                        <button class="menu-btn" id="btn-howtoplay">HOW TO PLAY<span class="btn-subtitle">Core controls, systems, and tactical fundamentals</span></button>
+                        <button class="menu-btn multiplayer" id="btn-multiplayer">MULTIPLAYER<span class="btn-subtitle">Enter co-op command lobby and squad sessions</span></button>
+                        <button class="menu-btn" id="btn-settings">SETTINGS<span class="btn-subtitle">Audio, visual, controls, and gameplay preferences</span></button>
+                    </div>
+                </div>
+            </section>
+
             <div class="version">v2.0 &mdash; TowerForge</div>
         </div>
     </div>
@@ -118,6 +151,18 @@
         <div class="achievements-grid" id="achievements-grid"></div>
     </div>
 
+    <!-- Tower Codex Screen -->
+    <div id="towers-screen" class="screen">
+        <div class="screen-header">
+            <button class="back-btn" id="btn-back-towers">&larr; BACK</button>
+            <h2>TOWER INTEL</h2>
+        </div>
+        <div class="tower-codex-content">
+            <div class="tower-codex-summary" id="tower-codex-summary"></div>
+            <div class="tower-codex-grid" id="tower-codex-grid"></div>
+        </div>
+    </div>
+
     <!-- How To Play Screen -->
     <div id="howtoplay-screen" class="screen">
         <div class="screen-header">
@@ -176,7 +221,12 @@
                     <button type="button" class="keybind-reset-btn" id="btn-reset-hotkeys">RESET DEFAULTS</button>
                 </div>
                 <div class="settings-hotkey-grid" id="settings-hotkey-grid"></div>
-                <p class="settings-keybinds-hint">Click a bind and press a keyboard key or mouse button. Press Escape to cancel capture. Number keys 1-8 remain reserved for tower slots.</p>
+                <p class="settings-keybinds-hint">Click a bind and press a keyboard key or mouse button. Press Escape to cancel capture. Tower slots reserve 1-0, -, and =.</p>
+            </div>
+            <div class="settings-danger-zone">
+                <div class="settings-danger-title">Data Reset</div>
+                <p class="settings-danger-copy">Delete all progress, unlocks, records, saves, and settings on this device.</p>
+                <button type="button" class="settings-danger-btn" id="btn-reset-all-data">RESET ALL GAME DATA</button>
             </div>
         </div>
     </div>
@@ -202,6 +252,11 @@
                 <span class="hud-label">SCORE</span>
                 <span class="hud-value" id="hud-score-val">0</span>
             </div>
+            <div class="hud-toggles" id="hud-toggles">
+                <button class="hud-toggle" id="tog-ranges" title="Range circles [G]">&#9678;</button>
+                <button class="hud-toggle" id="tog-hpbars" title="Health bars">&#9829;</button>
+                <button class="hud-toggle" id="tog-dmgnum" title="Damage numbers">&#35;</button>
+            </div>
             <div class="hud-controls">
                 <button class="hud-btn" id="btn-speed" title="Game Speed">1x</button>
                 <button class="hud-btn" id="btn-pause" title="Pause">&#10074;&#10074;</button>
@@ -209,6 +264,7 @@
                 <button class="hud-btn" id="btn-menu-ingame" title="Menu">&#9776;</button>
             </div>
         </div>
+        <div class="directive-hud" id="directive-hud" style="display:none"></div>
 
         <!-- Game Canvas -->
         <canvas id="game-canvas"></canvas>
@@ -223,43 +279,53 @@
         </div>
 
         <!-- Tower Info Panel -->
-        <div class="tower-info-panel" id="tower-info" style="display:none">
-            <div class="tower-info-header">
-                <span class="tower-info-name" id="info-name">Arrow Tower</span>
-                <span class="tower-info-tier" id="info-tier">Tier 1</span>
-                <button class="close-btn" id="btn-close-info">&times;</button>
+        <div class="tower-info-panel tip-v2" id="tower-info" style="display:none">
+            <div class="tip2-header">
+                <div class="tip2-title-row">
+                    <span class="tip2-name" id="info-name">Arrow Tower</span>
+                    <span class="tip2-tier" id="info-tier">Tier 1</span>
+                </div>
+                <div class="tip2-path" id="info-path"></div>
+                <button class="tip2-close" id="btn-close-info">&times;</button>
             </div>
-            <div class="tower-info-path" id="info-path"></div>
-            <div class="tower-info-stats" id="info-stats"></div>
-            <div class="tower-info-mastery" id="info-mastery"></div>
-            <div class="tower-targeting" id="info-targeting"></div>
-            <div class="tower-info-actions" id="info-actions"></div>
+            <div class="tip2-stats" id="info-stats"></div>
+            <div class="tip2-mastery" id="info-mastery"></div>
+            <div class="tip2-targeting" id="info-targeting"></div>
+            <div class="tip2-actions" id="info-actions"></div>
         </div>
 
         <!-- Path Choice Modal -->
         <div class="modal-overlay" id="path-choice-modal" style="display:none">
-            <div class="modal path-modal">
-                <div class="permanent-warning">&#9888; PERMANENT CHOICE &#9888;</div>
-                <h2 class="path-modal-title">CHOOSE YOUR PATH</h2>
-                <p class="modal-subtitle" id="path-tower-name"></p>
-                <div class="path-current-stats" id="path-current-stats"></div>
-                <div class="path-choices">
-                    <div class="path-card" id="path-a-card">
-                        <div class="path-card-glow"></div>
-                        <div class="path-hotkey-hint">A</div>
-                        <h3 id="path-a-name">Path A</h3>
-                        <p id="path-a-desc"></p>
-                        <div id="path-a-stats"></div>
-                        <button class="path-btn" id="btn-path-a">CHOOSE</button>
+            <div class="modal path-modal spec-modal">
+                <button class="spec-close" id="btn-close-path-choice" aria-label="Close">&times;</button>
+                <div class="spec-header">
+                    <div class="spec-label">CHOOSE SPECIALIZATION</div>
+                    <div class="spec-tower-name" id="path-tower-name"></div>
+                    <div class="spec-hint">This choice is permanent</div>
+                </div>
+                <div class="spec-cards">
+                    <div class="spec-card" id="path-a-card" data-path="A">
+                        <div class="spec-card-hotkey">A</div>
+                        <div class="spec-card-preview path-tower-preview" id="path-a-preview"></div>
+                        <div class="spec-card-icon" id="path-a-icon"></div>
+                        <div class="spec-card-name" id="path-a-name"></div>
+                        <div class="spec-card-desc" id="path-a-desc"></div>
+                        <div class="spec-card-divider"></div>
+                        <div class="spec-card-stats" id="path-a-stats"></div>
+                        <div class="spec-card-abilities" id="path-a-abilities"></div>
+                        <div class="spec-card-action" id="path-a-action"></div>
                     </div>
-                    <div class="path-divider"><span>OR</span></div>
-                    <div class="path-card" id="path-b-card">
-                        <div class="path-card-glow"></div>
-                        <div class="path-hotkey-hint">B</div>
-                        <h3 id="path-b-name">Path B</h3>
-                        <p id="path-b-desc"></p>
-                        <div id="path-b-stats"></div>
-                        <button class="path-btn" id="btn-path-b">CHOOSE</button>
+                    <div class="spec-or">OR</div>
+                    <div class="spec-card" id="path-b-card" data-path="B">
+                        <div class="spec-card-hotkey">B</div>
+                        <div class="spec-card-preview path-tower-preview" id="path-b-preview"></div>
+                        <div class="spec-card-icon" id="path-b-icon"></div>
+                        <div class="spec-card-name" id="path-b-name"></div>
+                        <div class="spec-card-desc" id="path-b-desc"></div>
+                        <div class="spec-card-divider"></div>
+                        <div class="spec-card-stats" id="path-b-stats"></div>
+                        <div class="spec-card-abilities" id="path-b-abilities"></div>
+                        <div class="spec-card-action" id="path-b-action"></div>
                     </div>
                 </div>
             </div>
@@ -297,7 +363,7 @@
         </button>
 
         <!-- Wave Info Banner -->
-        <div class="wave-banner" id="wave-banner" style="display:none">
+        <div class="wave-banner" id="wave-banner">
             <span id="wave-banner-text">WAVE 1</span>
         </div>
 
@@ -352,6 +418,7 @@
     <div class="modal-overlay" id="pause-menu" style="display:none">
         <div class="modal">
             <h2>PAUSED</h2>
+            <div class="pause-directive-panel" id="pause-directive-panel"></div>
             <div class="pause-buttons">
                 <button class="menu-btn" id="btn-resume">RESUME</button>
                 <button class="menu-btn" id="btn-restart">RESTART</button>
@@ -424,13 +491,10 @@
         </div>
     </div>
 
-    <!-- Achievement Notification -->
-    <div class="achievement-popup" id="achievement-popup" style="display:none">
-        <div class="achievement-icon">&#127942;</div>
-        <div class="achievement-text">
-            <span class="achievement-label">ACHIEVEMENT UNLOCKED</span>
-            <span class="achievement-name" id="achievement-name"></span>
-        </div>
+    <!-- Achievement Toast -->
+    <div class="achieve-toast" id="achievement-popup" style="display:none">
+        <span class="achieve-toast-icon" id="achieve-toast-icon">&#127942;</span>
+        <span class="achieve-toast-name" id="achievement-name"></span>
     </div>
 
     <!-- Floating Combat Text Container -->
@@ -441,6 +505,7 @@
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/gameState.js"></script>
+    <script src="js/progression.js"></script>
     <script src="js/canvas.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/effects.js"></script>
@@ -461,6 +526,8 @@
     <script src="js/vfxRendering.js"></script>
     <script src="js/uiRendering.js"></script>
     <script src="js/input.js"></script>
+    <script src="js/juiceFeatures.js"></script>
+    <script src="js/towerPolish.js"></script>
     <script src="js/multiplayer.js?v=20260325e"></script>
     <script src="js/multiplayerUI.js?v=20260325e"></script>
     <script src="js/menu.js"></script>

@@ -571,8 +571,10 @@ const EnemyRenderer = {
         // === STATUS EFFECT OVERLAYS ===
         this._drawStatusEffects(ctx, enemy, x, y, size, t);
 
-        // HP bar
-        this._drawHPBar(ctx, enemy, x, y, size);
+        // HP bar (toggle-able)
+        if (GameState.settings.showHealthBars !== false) {
+            this._drawHPBar(ctx, enemy, x, y, size);
+        }
 
         ctx.restore();
     },
@@ -913,6 +915,22 @@ const EnemyRenderer = {
                 break;
             case 'swarmfast':
                 this._drawSwarmfast(ctx, enemy, x, y, size, t, anim);
+                break;
+            case 'tunneler':
+                this._drawTunneler(ctx, enemy, x, y, size, t, anim);
+                break;
+            case 'mirror':
+                this._drawMirror(ctx, enemy, x, y, size, t, anim);
+                break;
+            case 'sapper':
+                this._drawSapper(ctx, enemy, x, y, size, t, anim);
+                break;
+            case 'summoner':
+                this._drawSummoner(ctx, enemy, x, y, size, t, anim);
+                break;
+            default:
+                // Fallback: draw as basic
+                this._drawBasic(ctx, enemy, x, y, size, t, anim);
                 break;
         }
     },
@@ -3074,5 +3092,260 @@ const EnemyRenderer = {
             ctx.lineWidth = 0.5;
             ctx.strokeRect(barX, barY, barW, barH);
         }
+    },
+
+    // ============================================================
+    // ===== TUNNELER — Burrowing mole-like creature ============
+    // ============================================================
+    _drawTunneler(ctx, enemy, x, y, size, t, anim) {
+        const bob = Math.sin(t * 4 + enemy.bobOffset) * 2;
+        const s = size;
+        const burrowed = enemy._burrowed;
+
+        ctx.save();
+        ctx.translate(x, y + bob * 0.5);
+
+        if (burrowed) {
+            // Underground — draw dirt mound
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#6B4226';
+            ctx.beginPath();
+            ctx.ellipse(0, 2, s * 1.2, s * 0.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Dirt particles
+            for (let i = 0; i < 3; i++) {
+                const px = Math.sin(t * 5 + i * 2) * s * 0.8;
+                const py = -Math.abs(Math.cos(t * 6 + i * 1.5)) * s * 0.6;
+                ctx.fillStyle = '#8B6914';
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            // Ground shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(0, s * 0.6, s * 0.8, s * 0.25, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Body — oval mole shape
+            ctx.fillStyle = '#8B6914';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, s * 0.8, s * 0.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Claws
+            ctx.fillStyle = '#DAA520';
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.6, s * 0.2);
+            ctx.lineTo(-s * 0.9, s * 0.5);
+            ctx.lineTo(-s * 0.4, s * 0.35);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(s * 0.6, s * 0.2);
+            ctx.lineTo(s * 0.9, s * 0.5);
+            ctx.lineTo(s * 0.4, s * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-s * 0.25, -s * 0.15, s * 0.15, 0, Math.PI * 2);
+            ctx.arc(s * 0.25, -s * 0.15, s * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(-s * 0.25, -s * 0.15, s * 0.08, 0, Math.PI * 2);
+            ctx.arc(s * 0.25, -s * 0.15, s * 0.08, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Snout
+            ctx.fillStyle = '#D2691E';
+            ctx.beginPath();
+            ctx.ellipse(0, s * 0.1, s * 0.2, s * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    },
+
+    // ============================================================
+    // ===== MIRROR — Reflective crystalline enemy ===============
+    // ============================================================
+    _drawMirror(ctx, enemy, x, y, size, t, anim) {
+        const s = size;
+        const shimmer = Math.sin(t * 5 + enemy.bobOffset) * 0.15;
+
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Ground shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.5, s * 0.7, s * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crystal body — diamond shape
+        ctx.fillStyle = '#C0C0FF';
+        ctx.globalAlpha = 0.7 + shimmer;
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.9);
+        ctx.lineTo(s * 0.6, 0);
+        ctx.lineTo(0, s * 0.9);
+        ctx.lineTo(-s * 0.6, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Highlight facets
+        ctx.fillStyle = '#E8E8FF';
+        ctx.globalAlpha = 0.5 + shimmer;
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.9);
+        ctx.lineTo(s * 0.6, 0);
+        ctx.lineTo(0, -s * 0.2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Reflective glow
+        ctx.globalAlpha = 0.2 + shimmer * 0.3;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.9);
+        ctx.lineTo(s * 0.6, 0);
+        ctx.lineTo(0, s * 0.9);
+        ctx.lineTo(-s * 0.6, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Sparkle
+        const sparkAngle = t * 3;
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.6 + Math.sin(sparkAngle) * 0.4;
+        ctx.beginPath();
+        ctx.arc(Math.cos(sparkAngle) * s * 0.3, Math.sin(sparkAngle) * s * 0.3, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    },
+
+    // ============================================================
+    // ===== SAPPER — Sneaky gold thief ========================
+    // ============================================================
+    _drawSapper(ctx, enemy, x, y, size, t, anim) {
+        const bob = Math.sin(t * 8 + enemy.bobOffset) * 1;
+        const s = size;
+
+        ctx.save();
+        ctx.translate(x, y + bob);
+
+        // Ground shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.5, s * 0.6, s * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Body — small hunched figure
+        ctx.fillStyle = '#8B7355';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, s * 0.5, s * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Hood/cloak
+        ctx.fillStyle = '#6B5B45';
+        ctx.beginPath();
+        ctx.arc(0, -s * 0.2, s * 0.45, Math.PI, 0, false);
+        ctx.closePath();
+        ctx.fill();
+
+        // Gold bag
+        ctx.fillStyle = '#DAA520';
+        ctx.beginPath();
+        ctx.ellipse(s * 0.3, s * 0.1, s * 0.25, s * 0.2, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Gold shimmer
+        const sparkle = Math.sin(t * 10) > 0.7;
+        if (sparkle) {
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(s * 0.3, s * 0.05, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Beady eyes
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(-s * 0.15, -s * 0.25, s * 0.08, 0, Math.PI * 2);
+        ctx.arc(s * 0.1, -s * 0.25, s * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    },
+
+    // ============================================================
+    // ===== SUMMONER — Dark magic caster =====================
+    // ============================================================
+    _drawSummoner(ctx, enemy, x, y, size, t, anim) {
+        const float = Math.sin(t * 2.5 + enemy.bobOffset) * 3;
+        const s = size;
+
+        ctx.save();
+        ctx.translate(x, y + float);
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.8 - float, s * 0.7, s * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Magic circle below
+        const circleAlpha = 0.2 + Math.sin(t * 3) * 0.1;
+        ctx.strokeStyle = `rgba(155, 48, 255, ${circleAlpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, s * 1.2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Robe body
+        ctx.fillStyle = '#4B0082';
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.5, -s * 0.3);
+        ctx.lineTo(-s * 0.7, s * 0.8);
+        ctx.lineTo(s * 0.7, s * 0.8);
+        ctx.lineTo(s * 0.5, -s * 0.3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Head/hood
+        ctx.fillStyle = '#3B0062';
+        ctx.beginPath();
+        ctx.arc(0, -s * 0.4, s * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing eyes
+        const eyeGlow = 0.5 + Math.sin(t * 4) * 0.3;
+        ctx.fillStyle = `rgba(200, 100, 255, ${eyeGlow})`;
+        ctx.shadowColor = '#9B30FF';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+        ctx.arc(-s * 0.12, -s * 0.42, s * 0.06, 0, Math.PI * 2);
+        ctx.arc(s * 0.12, -s * 0.42, s * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Floating orbs
+        for (let i = 0; i < 3; i++) {
+            const orbAngle = t * 2 + (Math.PI * 2 / 3) * i;
+            const orbX = Math.cos(orbAngle) * s * 0.8;
+            const orbY = Math.sin(orbAngle) * s * 0.5 - s * 0.3;
+            ctx.fillStyle = `rgba(155, 48, 255, ${0.4 + Math.sin(t * 3 + i) * 0.2})`;
+            ctx.beginPath();
+            ctx.arc(orbX, orbY, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
     },
 };

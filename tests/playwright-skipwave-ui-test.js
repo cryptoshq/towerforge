@@ -157,6 +157,10 @@ async function run() {
     });
 
     await page.waitForFunction(() => document.querySelectorAll('.research-node').length > 0);
+    await page.waitForFunction(() => {
+        const tree = document.getElementById('research-tree');
+        return !!tree && tree.scrollTop > 100;
+    });
 
     const researchOverlap = await page.evaluate(() => {
         const nodes = [...document.querySelectorAll('.research-node')].map(el => {
@@ -232,6 +236,26 @@ async function run() {
     assert(researchLabelAlignment.ok, 'Research branch labels not found for alignment check');
     assert(researchLabelAlignment.overlaps === 0, `Research branch labels overlap nodes (${researchLabelAlignment.overlaps} overlaps)`);
     assert(researchLabelAlignment.minSeparationToNodes >= 4, `Research branch labels too close to nodes (min separation ${researchLabelAlignment.minSeparationToNodes.toFixed(2)}px)`);
+
+    const researchTopLaneVisibility = await page.evaluate(() => {
+        const tree = document.getElementById('research-tree');
+        if (!tree) return { ok: false, reason: 'missing tree container' };
+        const tr = tree.getBoundingClientRect();
+        const ids = ['trade', 'bulk', 'banking'];
+        const rows = ids.map((id) => {
+            const node = document.querySelector(`.research-node[data-node-id="${id}"]`);
+            if (!node) return { id, exists: false, visible: false };
+            const r = node.getBoundingClientRect();
+            const visible = r.top >= tr.top + 2 && r.bottom <= tr.bottom - 2;
+            return { id, exists: true, visible, top: r.top, bottom: r.bottom };
+        });
+        return { ok: true, rows };
+    });
+    assert(researchTopLaneVisibility.ok, `Research top lane visibility check failed (${researchTopLaneVisibility.reason || 'unknown'})`);
+    for (const row of researchTopLaneVisibility.rows) {
+        assert(row.exists, `Research top lane node '${row.id}' is missing`);
+        assert(row.visible, `Research top lane node '${row.id}' should be visible in initial view`);
+    }
 
     await page.evaluate(() => {
         const screens = document.querySelectorAll('.screen');
@@ -317,14 +341,18 @@ async function run() {
             text: el.textContent || '',
             hasScenario: !!(preview && preview.scenario && preview.scenario.name),
             hasScenarioTag: !!(preview && Array.isArray(preview.threatTags) && preview.threatTags.length > 0),
-            hasMapPressure: !!(preview && preview.mapPressure && preview.mapPressure.name),
+            hasPrimaryIdentity: !!(preview && preview.primaryIdentity),
+            identityLayerCount: preview
+                ? [preview.scenario, preview.faction, preview.arc, preview.mapPressure].filter(Boolean).length
+                : 0,
         };
     });
     assert(hudThreatState.exists, 'HUD threat hint element is missing');
     assert(hudThreatState.text.length > 0, 'HUD threat hint should show next-wave warning text');
     assert(hudThreatState.hasScenario, 'Wave preview should include scenario metadata on scenario waves');
     assert(hudThreatState.hasScenarioTag, 'Wave preview should include scenario/encounter threat tags');
-    assert(hudThreatState.hasMapPressure, 'Wave preview should include map pressure metadata');
+    assert(hudThreatState.hasPrimaryIdentity, 'Wave preview should expose a primary identity label');
+    assert(hudThreatState.identityLayerCount <= 2, `Wave preview should cap active identity layers at two (got ${hudThreatState.identityLayerCount})`);
 
     const startButtonAlignment = await page.evaluate(() => {
         const btn = document.getElementById('btn-start-wave');
@@ -348,41 +376,10 @@ async function run() {
         `Start wave button misaligned by ${startButtonAlignment.delta.toFixed(2)}px`
     );
 
-    await page.waitForFunction(() => {
-        return !!(UIRenderer && UIRenderer._lastNextWavePreviewBounds);
-    });
-
-    const previewBoundsCheck = await page.evaluate(() => {
-        const b = UIRenderer._lastNextWavePreviewBounds;
-        const viewTop = (typeof gridOffsetY !== 'undefined' && typeof renderScale !== 'undefined')
-            ? -gridOffsetY / renderScale
-            : 0;
-        return {
-            y: b ? b.y : -1,
-            h: b ? b.height : -1,
-            minY: viewTop + 6,
-        };
-    });
-    assert(
-        previewBoundsCheck.y >= previewBoundsCheck.minY,
-        `Next wave preview is vertically clipped (y=${previewBoundsCheck.y.toFixed(2)}, min=${previewBoundsCheck.minY.toFixed(2)})`
-    );
-
-    const scoutingPreviewCheck = await page.evaluate(async () => {
-        GameState.researchBonuses.scoutingReport = false;
-        await new Promise(resolve => requestAnimationFrame(() => resolve()));
-        const noScoutH = UIRenderer._lastNextWavePreviewBounds ? UIRenderer._lastNextWavePreviewBounds.height : 0;
-
-        GameState.researchBonuses.scoutingReport = true;
-        await new Promise(resolve => requestAnimationFrame(() => resolve()));
-        const scoutH = UIRenderer._lastNextWavePreviewBounds ? UIRenderer._lastNextWavePreviewBounds.height : 0;
-
-        return { noScoutH, scoutH };
-    });
-    assert(
-        scoutingPreviewCheck.scoutH > scoutingPreviewCheck.noScoutH,
-        `Scouting preview should show expanded info panel (base=${scoutingPreviewCheck.noScoutH}, scouting=${scoutingPreviewCheck.scoutH})`
-    );
+    const previewDisabledCheck = await page.evaluate(() => ({
+        bounds: UIRenderer ? UIRenderer._lastNextWavePreviewBounds : 'missing',
+    }));
+    assert(previewDisabledCheck.bounds === null, 'Next-wave preview panel should remain fully disabled');
 
     const researchMechanicsCheck = await page.evaluate(() => {
         const originalBonuses = { ...GameState.researchBonuses };
@@ -755,7 +752,7 @@ async function run() {
         return getComputedStyle(popup).animationName;
     });
     assert(
-        achieveAnimIn.includes('achieveIn'),
+        achieveAnimIn.includes('achieveIn') || achieveAnimIn.includes('toastIn'),
         `Achievement popup missing enter animation (got: ${achieveAnimIn})`
     );
 
@@ -769,7 +766,7 @@ async function run() {
         return getComputedStyle(popup).animationName;
     });
     assert(
-        achieveAnimOut.includes('achieveOut'),
+        achieveAnimOut.includes('achieveOut') || achieveAnimOut.includes('toastOut'),
         `Achievement popup missing exit animation (got: ${achieveAnimOut})`
     );
 
@@ -805,11 +802,13 @@ async function run() {
             skipDisplay: getComputedStyle(skipBtn).display,
             delta: Math.abs(centerX - expectedCenterX),
             width: rect.width,
+            minWidth: parseFloat(getComputedStyle(skipBtn).minWidth) || 0,
         };
     });
 
     assert(preSkipState.skipDisplay !== 'none', 'Skip wave button did not appear when ready');
     assert(preSkipState.delta <= 2, `Skip wave button misaligned by ${preSkipState.delta.toFixed(2)}px`);
+    assert(preSkipState.minWidth >= 250, `Skip wave button min-width regression (min-width: ${preSkipState.minWidth.toFixed(1)}px)`);
     assert(preSkipState.width >= 250, `Skip wave button should be bigger (width: ${preSkipState.width.toFixed(1)}px)`);
 
     await page.click('#btn-skip-wave');

@@ -20,10 +20,18 @@ const MenuSystem = {
     _menuPointerY: 0,
     _menuPointerTargetX: 0,
     _menuPointerTargetY: 0,
+    _towerCodexSelectedType: null,
+    _towerCodexSelectedTab: 'overview',
+    _towerCodexFilter: 'all',
+    _towerCodexKeyBound: false,
+    _hoverSfxBound: false,
+    _hoverSfxPerTarget: null,
+    _hoverSfxLastGlobal: 0,
 
     init() {
         // Create animated menu background canvas
         this._initMenuBackground();
+        this._initHoverButtonSfx();
 
         // Main menu buttons
         document.getElementById('btn-play').addEventListener('click', () => {
@@ -58,6 +66,15 @@ const MenuSystem = {
             AchievementSystem.renderScreen();
             Audio.play('click');
         });
+
+        const towersBtn = document.getElementById('btn-towers');
+        if (towersBtn) {
+            towersBtn.addEventListener('click', () => {
+                this.showScreen('towers');
+                this.renderTowerCodex();
+                Audio.play('click');
+            });
+        }
 
         document.getElementById('btn-howtoplay').addEventListener('click', () => {
             this.showScreen('howtoplay');
@@ -101,6 +118,13 @@ const MenuSystem = {
             this.showScreen('menu');
             Audio.play('click');
         });
+        const backTowersBtn = document.getElementById('btn-back-towers');
+        if (backTowersBtn) {
+            backTowersBtn.addEventListener('click', () => {
+                this.showScreen('menu');
+                Audio.play('click');
+            });
+        }
         document.getElementById('btn-back-howtoplay').addEventListener('click', () => {
             this.showScreen('menu');
             Audio.play('click');
@@ -145,6 +169,9 @@ const MenuSystem = {
             this.openSettingsPanel();
             Audio.play('click');
         });
+
+        // HUD visual toggles
+        this._initHudToggles();
 
         // Settings panel close
         document.getElementById('btn-close-settings').addEventListener('click', () => {
@@ -316,6 +343,28 @@ const MenuSystem = {
                 this._refreshHotkeyDependentUI();
                 SaveSystem.savePersistent();
                 Audio.play('click');
+            });
+        }
+
+        const resetAllDataBtn = document.getElementById('btn-reset-all-data');
+        if (resetAllDataBtn) {
+            resetAllDataBtn.addEventListener('click', () => {
+                if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+                    Audio.play('click');
+                }
+
+                const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
+                    ? window.confirm('This will permanently delete all local progress, unlocks, settings, and saves. Continue?')
+                    : true;
+                if (!confirmed) return;
+
+                if (typeof SaveSystem !== 'undefined' && typeof SaveSystem.clearAllData === 'function') {
+                    SaveSystem.clearAllData();
+                }
+
+                if (typeof window !== 'undefined' && typeof window.location !== 'undefined') {
+                    window.location.reload();
+                }
             });
         }
 
@@ -1019,14 +1068,20 @@ const MenuSystem = {
         const weeklyBest = weekly.record && Number.isFinite(weekly.record.bestScore)
             ? weekly.record.bestScore
             : 0;
+        const compact = typeof window !== 'undefined' && window.innerWidth <= 720;
+
+        const rows = [
+            { label: 'Best Endless Depth', value: `+${bestDepthOverall}` },
+            { label: 'Milestones Claimed', value: `${endlessMilestones}` },
+            { label: `Weekly Best (${weekly.spec.weekId})`, value: `${weeklyBest}` },
+            { label: 'Challenge Streak', value: `${challengeStreak}` },
+            { label: 'Best Challenge Streak', value: `${bestChallengeStreak}` },
+        ];
+        const rowsToRender = compact ? [rows[0], rows[2], rows[4]] : rows;
 
         panel.innerHTML = `
             <div class="mmp-title">COMMAND RECORD</div>
-            <div class="mmp-row"><span>Best Endless Depth</span><span class="mmp-value">+${bestDepthOverall}</span></div>
-            <div class="mmp-row"><span>Milestones Claimed</span><span class="mmp-value">${endlessMilestones}</span></div>
-            <div class="mmp-row"><span>Weekly Best (${weekly.spec.weekId})</span><span class="mmp-value">${weeklyBest}</span></div>
-            <div class="mmp-row"><span>Challenge Streak</span><span class="mmp-value">${challengeStreak}</span></div>
-            <div class="mmp-row"><span>Best Challenge Streak</span><span class="mmp-value">${bestChallengeStreak}</span></div>
+            ${rowsToRender.map((row) => `<div class="mmp-row"><span>${row.label}</span><span class="mmp-value">${row.value}</span></div>`).join('')}
         `;
     },
 
@@ -1078,6 +1133,10 @@ const MenuSystem = {
             case 'achievements':
                 document.getElementById('achievements-screen').classList.add('active');
                 break;
+            case 'towers':
+                document.getElementById('towers-screen').classList.add('active');
+                this.renderTowerCodex();
+                break;
             case 'howtoplay':
                 document.getElementById('howtoplay-screen').classList.add('active');
                 break;
@@ -1100,6 +1159,10 @@ const MenuSystem = {
     renderDifficultySelect() {
         const container = document.getElementById('difficulty-cards');
         container.innerHTML = '';
+
+        if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.refreshUnlockedMaps === 'function') {
+            ProgressionSystem.refreshUnlockedMaps();
+        }
 
         const difficultyScreen = document.getElementById('difficulty-select');
         if (difficultyScreen && !difficultyScreen.dataset.pointerReactiveBound) {
@@ -1126,7 +1189,7 @@ const MenuSystem = {
                 rank: 'TIER I',
                 pressure: 'LOW PRESSURE',
                 boss: 'Grub King',
-                bossAbilities: ['Summon Minions', 'Regenerate', 'Slow'],
+                bossAbilities: ['Brood Call', 'Skitter Rush', 'Quake Slow'],
                 enemyPool: ['Grunt', 'Scout', 'Swarmling', 'Medic'],
                 gradient: 'linear-gradient(135deg, #1a3a1a 0%, #0a2a0a 100%)',
                 border: '#40e080',
@@ -1138,7 +1201,7 @@ const MenuSystem = {
                 rank: 'TIER II',
                 pressure: 'BALANCED FRONTS',
                 boss: 'Stone Colossus',
-                bossAbilities: ['High Armor', 'Stomp', 'Enrage'],
+                bossAbilities: ['Bastion Shield', 'Ground Slam', 'EMP Pulse'],
                 enemyPool: ['Grunt', 'Scout', 'Brute', 'Guardian', 'Medic', 'Splitter'],
                 gradient: 'linear-gradient(135deg, #2a2a1a 0%, #1a1a0a 100%)',
                 border: '#e0c040',
@@ -1150,7 +1213,7 @@ const MenuSystem = {
                 rank: 'TIER III',
                 pressure: 'SPIKE WAVES',
                 boss: 'Infernal Lord',
-                bossAbilities: ['Fire Trail', 'Summon Berserkers', 'Enrage'],
+                bossAbilities: ['Blazing Sprint', 'Hellspawn Call', 'Overheat EMP'],
                 enemyPool: ['Shadow', 'Phantom', 'Berserker', 'Brute', 'Guardian', 'Buzzer'],
                 gradient: 'linear-gradient(135deg, #3a1a0a 0%, #2a0a0a 100%)',
                 border: '#e06040',
@@ -1162,7 +1225,7 @@ const MenuSystem = {
                 rank: 'TIER IV',
                 pressure: 'SUSTAINED OVERLOAD',
                 boss: 'Void Emperor',
-                bossAbilities: ['Teleport', 'Shield', 'Mass Summon', 'Time Warp'],
+                bossAbilities: ['Void Step', 'Aegis Rift', 'Mass Summon'],
                 enemyPool: ['All enemy types', 'Elite variants', 'Double modifiers'],
                 gradient: 'linear-gradient(135deg, #2a0a3a 0%, #0a0a1a 100%)',
                 border: '#c020e0',
@@ -1184,6 +1247,9 @@ const MenuSystem = {
             const p = presets[key];
             const d = diffData[key];
             if (!d) continue;
+            const bandStatus = (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.getBandStatus === 'function')
+                ? ProgressionSystem.getBandStatus(key)
+                : { unlocked: true, lines: [] };
 
             const threatScore = Math.round((p.enemyHpMult * 0.62 + p.enemySpeedMult * 0.38) * 100);
             const economyScore = Math.round((p.startingGold / Math.max(1, baseline.startingGold)) * 100);
@@ -1195,6 +1261,7 @@ const MenuSystem = {
 
             const card = document.createElement('div');
             card.className = `diff-card diff-card-${key}`;
+            if (!bandStatus.unlocked) card.classList.add('locked');
             card.style.background = d.gradient;
             card.style.borderColor = d.border;
             card.style.setProperty('--diff-accent', d.border);
@@ -1249,7 +1316,8 @@ const MenuSystem = {
                         <b>${survivalScore}</b>
                     </div>
                 </div>
-                <div class="diff-card-cta"><span>DEPLOY TO THIS THEATER</span><em>ENTER</em></div>
+                <div class="diff-card-cta"><span>${bandStatus.unlocked ? 'DEPLOY TO THIS THEATER' : 'CAMPAIGN GATE LOCKED'}</span><em>${bandStatus.unlocked ? 'ENTER' : 'LOCKED'}</em></div>
+                ${bandStatus.unlocked ? '' : `<div class="diff-card-locknote">${bandStatus.lines.filter(line => !line.met).map(line => line.text).join(' | ')}</div>`}
             `;
 
             card.addEventListener('mousemove', (event) => {
@@ -1272,6 +1340,13 @@ const MenuSystem = {
             });
 
             card.addEventListener('click', () => {
+                if (!bandStatus.unlocked) {
+                    if (typeof Effects !== 'undefined' && Effects.addFloatingText) {
+                        Effects.addFloatingText(logicalWidth / 2, 54, `${d.title} locked`, '#ff8b8b', 14);
+                    }
+                    Audio.play('error');
+                    return;
+                }
                 GameState.settings.difficulty = key;
                 SaveSystem.savePersistent();
                 this.showScreen('mapselect');
@@ -1286,6 +1361,10 @@ const MenuSystem = {
         const container = document.getElementById('map-cards');
         container.innerHTML = '';
         this._hideMapHoverPreview();
+
+        if (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.refreshUnlockedMaps === 'function') {
+            ProgressionSystem.refreshUnlockedMaps();
+        }
 
         // Determine which maps to show based on selected difficulty
         const diffKey = GameState.settings.difficulty || 'easy';
@@ -1305,27 +1384,27 @@ const MenuSystem = {
         const diffIntel = {
             easy: {
                 boss: 'Grub King',
-                icon: '\u{1F9E0}',
+                icon: '\u{1F41B}',
                 doctrine: 'Training lanes reward clean tower fundamentals.',
-                tags: ['ONBOARDING', 'LOW SWARM', 'ECON BOOST'],
+                tags: ['BROOD CALL', 'SKITTER RUSH', 'QUAKE SLOW'],
             },
             normal: {
                 boss: 'Stone Colossus',
                 icon: '\u{1FAA8}',
                 doctrine: 'Balanced fronts favor adaptive targeting and tempo.',
-                tags: ['STANDARD LINE', 'ARMOR MIX', 'MID SPIKE'],
+                tags: ['BASTION SHIELD', 'GROUND SLAM', 'EMP PULSE'],
             },
             hard: {
                 boss: 'Infernal Lord',
                 icon: '\u{1F525}',
                 doctrine: 'Aggressive waves punish slow setup and weak lanes.',
-                tags: ['BURST ARC', 'STEALTH THREATS', 'MICRO TEST'],
+                tags: ['BLAZING SPRINT', 'HELLSPAWN CALL', 'OVERHEAT EMP'],
             },
             nightmare: {
                 boss: 'Void Emperor',
                 icon: '\u{1F480}',
                 doctrine: 'Endgame doctrine checks with sustained pressure loops.',
-                tags: ['ELITE DENSITY', 'DOUBLE MOD', 'NO MISTAKES'],
+                tags: ['VOID STEP', 'AEGIS RIFT', 'MASS SUMMON'],
             },
         };
 
@@ -1336,7 +1415,7 @@ const MenuSystem = {
                 { name: 'Scout', color: ENEMIES.fast.color },
                 { name: 'Swarmling', color: ENEMIES.swarm.color },
                 { name: 'Medic', color: ENEMIES.healer.color },
-                { name: 'Overlord', color: ENEMIES.boss.color },
+                { name: 'Grub King', color: ENEMIES.boss.color },
             ],
             normal:    [
                 { name: 'Grunt', color: ENEMIES.basic.color },
@@ -1344,7 +1423,7 @@ const MenuSystem = {
                 { name: 'Guardian', color: ENEMIES.shield.color },
                 { name: 'Medic', color: ENEMIES.healer.color },
                 { name: 'Splitter', color: ENEMIES.splitter.color },
-                { name: 'Overlord', color: ENEMIES.boss.color },
+                { name: 'Stone Colossus', color: ENEMIES.boss.color },
             ],
             hard:      [
                 { name: 'Shadow', color: ENEMIES.stealth.color },
@@ -1352,7 +1431,7 @@ const MenuSystem = {
                 { name: 'Berserker', color: ENEMIES.berserker.color },
                 { name: 'Brute', color: ENEMIES.heavy.color },
                 { name: 'Buzzer', color: ENEMIES.swarmfast.color },
-                { name: 'Overlord', color: ENEMIES.boss.color },
+                { name: 'Infernal Lord', color: ENEMIES.boss.color },
             ],
             nightmare: [
                 { name: 'All Types', color: '#ff50ff' },
@@ -1365,6 +1444,12 @@ const MenuSystem = {
         const theme = diffThemes[diffKey] || diffThemes.easy;
         const enemies = diffEnemies[diffKey] || diffEnemies.easy;
         const intel = diffIntel[diffKey] || diffIntel.easy;
+        const bandStatus = (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.getBandStatus === 'function')
+            ? ProgressionSystem.getBandStatus(diffKey)
+            : { unlocked: true, lines: [] };
+        const progressionSummary = (typeof ProgressionSystem !== 'undefined' && typeof ProgressionSystem.getOverviewSummary === 'function')
+            ? ProgressionSystem.getOverviewSummary()
+            : { marks: 0, nextTowerText: '', nextBandText: '' };
         const compactNumber = (value) => {
             if (!Number.isFinite(value) || value <= 0) return '--';
             if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -1398,7 +1483,7 @@ const MenuSystem = {
         }
         const total = Math.min(endIdx, MAPS.length) - startIdx;
         if (progressEl) {
-            progressEl.textContent = `${completed}/${total} COMPLETED`;
+            progressEl.textContent = `${progressionSummary.marks}/60 MARKS`;
         }
 
         const totalMaps = total;
@@ -1436,6 +1521,12 @@ const MenuSystem = {
                         <span>${unlockedCount}/${totalMaps} unlocked</span>
                     </div>
                 </div>
+                <div class="mso-progression-lines">
+                    <div class="mso-progress-line"><span>Command Marks</span><strong>${progressionSummary.marks}</strong></div>
+                    <div class="mso-progress-line"><span>Next Tower</span><strong>${progressionSummary.nextTowerText || 'All tower licenses unlocked'}</strong></div>
+                    <div class="mso-progress-line"><span>Next Band</span><strong>${progressionSummary.nextBandText || 'All difficulty bands unlocked'}</strong></div>
+                    ${bandStatus.unlocked ? '' : `<div class="mso-progress-line gate"><span>This Theater</span><strong>${bandStatus.lines.filter(line => !line.met).map(line => line.text).join(' | ')}</strong></div>`}
+                </div>
             </div>
             <aside class="mso-boss">
                 <div class="mso-boss-emblem">${intel.icon}</div>
@@ -1453,6 +1544,9 @@ const MenuSystem = {
             const map = MAPS[i];
             const unlocked = GameState.unlockedMaps[i];
             const mapNum = i - startIdx + 1;
+            const markBits = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getMapMarkBits(i) : 0;
+            const directive = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getMapDirective(i) : null;
+            const directiveDone = !!(markBits & 4);
 
             const card = document.createElement('div');
             card.className = `map-card ${unlocked ? 'is-ready' : 'locked'}`;
@@ -1486,6 +1580,12 @@ const MenuSystem = {
 
             const bestScore = GameState.mapScores[i];
             const bestWave = GameState.mapWaveRecords[i];
+            const markPips = `
+                <div class="map-mark-pips">
+                    <span class="map-mark-pip ${markBits & 1 ? 'earned' : ''}" title="Clear mark"></span>
+                    <span class="map-mark-pip ${markBits & 2 ? 'earned' : ''}" title="Perfect mark"></span>
+                    <span class="map-mark-pip ${markBits & 4 ? 'earned' : ''}" title="Directive mark"></span>
+                </div>`;
 
             const statusHtml = unlocked
                 ? (bestScore > 0
@@ -1507,7 +1607,7 @@ const MenuSystem = {
             if (bestScore > 0) {
                 bestHTML = `<div class="map-best"><span class="best-score">${compactNumber(bestScore)} pts</span><span class="best-wave">W${bestWave}</span></div>`;
             } else if (!unlocked) {
-                bestHTML = `<div class="map-best locked-note">Clear previous sector</div>`;
+                bestHTML = `<div class="map-best locked-note">${bandStatus.unlocked ? 'Clear previous sector' : 'Meet theater gate'}</div>`;
             } else {
                 bestHTML = `<div class="map-best pending-note">No clear record</div>`;
             }
@@ -1517,7 +1617,13 @@ const MenuSystem = {
                     <div class="map-name">${map.name}</div>
                     <div class="map-difficulty">${starsHTML}</div>
                 </div>
+                ${markPips}
                 <div class="map-desc">${map.desc}</div>
+                <div class="map-directive ${directiveDone ? 'complete' : ''}">
+                    <span class="map-directive-kicker">Directive</span>
+                    <strong>${directive ? directive.name : 'No directive'}</strong>
+                    <span>${directive ? directive.desc : 'No directive assigned.'}</span>
+                </div>
                 <div class="map-card-metrics">
                     <div class="map-metric"><span class="map-metric-label">Waves</span><strong>${map.waves}</strong></div>
                     <div class="map-metric"><span class="map-metric-label">Best Wave</span><strong>${bestWave > 0 ? bestWave : '--'}</strong></div>
@@ -1829,6 +1935,581 @@ const MenuSystem = {
         }
     },
 
+    _initHoverButtonSfx() {
+        if (this._hoverSfxBound || typeof document === 'undefined') return;
+        this._hoverSfxBound = true;
+        this._hoverSfxPerTarget = new WeakMap();
+
+        const hoverSelector = [
+            '.menu-btn',
+            '.back-btn',
+            '.tc-nav-btn',
+            '.tc-tab-btn',
+            '.tc-cycle-btn',
+            '.tc-filter-btn',
+            '.diff-btn',
+            '.doctrine-card',
+            '.hud-btn',
+            '.hud-toggle',
+            '.action-btn',
+            '.keybind-reset-btn',
+            '.map-card',
+            '.map-nav-btn',
+            '.weekly-play-btn',
+        ].join(',');
+
+        document.addEventListener('pointerover', (event) => {
+            if (event.pointerType && event.pointerType !== 'mouse') return;
+            const target = event.target && event.target.closest
+                ? event.target.closest(hoverSelector)
+                : null;
+            if (!target || target.disabled || target.classList.contains('disabled')) return;
+
+            const related = event.relatedTarget;
+            if (related && target.contains(related)) return;
+
+            const now = (typeof performance !== 'undefined' && performance.now)
+                ? performance.now()
+                : Date.now();
+            const lastTargetAt = this._hoverSfxPerTarget.get(target) || 0;
+            if ((now - lastTargetAt) < 140) return;
+            if ((now - this._hoverSfxLastGlobal) < 45) return;
+
+            this._hoverSfxPerTarget.set(target, now);
+            this._hoverSfxLastGlobal = now;
+            if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+                Audio.play('hover', { volume: 0.24 });
+            }
+        }, true);
+    },
+
+    _getTowerCodexEntries() {
+        if (typeof TOWERS === 'undefined') return [];
+        const keyOrder = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+        return Object.entries(TOWERS).sort(([, defA], [, defB]) => {
+            const a = keyOrder.indexOf(defA.key || '');
+            const b = keyOrder.indexOf(defB.key || '');
+            if (a === -1 && b === -1) return 0;
+            if (a === -1) return 1;
+            if (b === -1) return -1;
+            return a - b;
+        });
+    },
+
+    _cycleTowerCodexSelection(step) {
+        const towerEntries = this._getTowerCodexEntries();
+        if (towerEntries.length === 0) return;
+        const typeOrder = towerEntries.map(([type]) => type);
+        const current = typeOrder.includes(this._towerCodexSelectedType)
+            ? this._towerCodexSelectedType
+            : typeOrder[0];
+        const currentIndex = typeOrder.indexOf(current);
+        const delta = Number.isFinite(step) ? Math.trunc(step) : 1;
+        const nextIndex = ((currentIndex + delta) % typeOrder.length + typeOrder.length) % typeOrder.length;
+        const nextType = typeOrder[nextIndex];
+        this._towerCodexSelectedType = nextType;
+        this.renderTowerCodex(nextType);
+        if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+            Audio.play('click');
+        }
+    },
+
+    renderTowerCodex(preferredType = null) {
+        const summaryEl = document.getElementById('tower-codex-summary');
+        const workspaceEl = document.getElementById('tower-codex-grid');
+        if (!summaryEl || !workspaceEl || typeof TOWERS === 'undefined') return;
+
+        const towerEntries = this._getTowerCodexEntries();
+
+        if (towerEntries.length === 0) {
+            summaryEl.innerHTML = '';
+            workspaceEl.innerHTML = '<div class="tower-codex-empty">No tower intel available.</div>';
+            return;
+        }
+
+        const hasProgression = typeof ProgressionSystem !== 'undefined';
+        const licenseOrder = (CONFIG.PROGRESSION && Array.isArray(CONFIG.PROGRESSION.LICENSE_ORDER))
+            ? CONFIG.PROGRESSION.LICENSE_ORDER
+            : [];
+        const unlockedCount = towerEntries.reduce((count, [type]) => {
+            if (!hasProgression) return count + 1;
+            return count + (ProgressionSystem.isTowerUnlocked(type) ? 1 : 0);
+        }, 0);
+        const marks = hasProgression ? ProgressionSystem.getCommandMarks() : 0;
+        const nextTower = hasProgression ? ProgressionSystem.getNextTowerUnlock() : null;
+
+        const typeOrder = towerEntries.map(([type]) => type);
+        const candidateType = typeof preferredType === 'string' && preferredType
+            ? preferredType
+            : this._towerCodexSelectedType;
+        let selectedType = typeOrder.includes(candidateType) ? candidateType : null;
+
+        if (!selectedType) {
+            const firstUnlocked = hasProgression
+                ? towerEntries.find(([type]) => ProgressionSystem.isTowerUnlocked(type))
+                : null;
+            selectedType = firstUnlocked ? firstUnlocked[0] : towerEntries[0][0];
+        }
+
+        const navItems = towerEntries.map(([type, def]) => {
+            const starter = hasProgression ? ProgressionSystem.isStarterTower(type) : true;
+            const unlocked = hasProgression ? ProgressionSystem.isTowerUnlocked(type) : true;
+            const statusClass = starter ? 'starter' : (unlocked ? 'licensed' : 'locked');
+            const statusLabel = starter ? 'Starter' : (unlocked ? 'Licensed' : 'Locked');
+            const reqStatus = hasProgression
+                ? ProgressionSystem.getTowerRequirementStatus(type, null)
+                : { lines: [] };
+            const reqLines = Array.isArray(reqStatus.lines) ? reqStatus.lines : [];
+            const reqTotal = reqLines.length > 0 ? reqLines.length : 1;
+            const reqMet = reqLines.length > 0
+                ? reqLines.filter((line) => line && line.met).length
+                : (starter || unlocked ? 1 : 0);
+            const reqProgress = Math.max(0, Math.min(100, Math.round((reqMet / reqTotal) * 100)));
+            const stageIndex = licenseOrder.indexOf(type);
+            const stageLabel = starter
+                ? 'Starter'
+                : (stageIndex >= 0 ? `Stage ${stageIndex + 1}` : 'Special');
+            const navIcon = def.pathA && def.pathA.icon ? def.pathA.icon : 'O';
+
+            const html = `
+                <button type="button" class="tc-nav-btn ${statusClass}" data-tower-type="${type}">
+                    <span class="tc-nav-top">
+                        <span class="tc-nav-icon" style="color:${def.iconColor || '#dbe5ff'}">${navIcon}</span>
+                        <span class="tc-nav-name">${def.name}</span>
+                        <span class="tc-nav-key">${def.key || '?'}</span>
+                    </span>
+                    <span class="tc-nav-meta">${statusLabel} - ${stageLabel}</span>
+                    <span class="tc-nav-progress"><span>${reqMet}/${reqTotal} checks</span><em>${starter || unlocked ? 'ready' : `${reqProgress}%`}</em></span>
+                    <span class="tc-nav-track"><i style="width:${reqProgress}%"></i></span>
+                </button>
+            `;
+            return {
+                type,
+                starter,
+                unlocked,
+                statusClass,
+                reqProgress,
+                html,
+            };
+        });
+
+        const allowedFilters = ['all', 'ready', 'locked'];
+        const activeFilter = allowedFilters.includes(this._towerCodexFilter)
+            ? this._towerCodexFilter
+            : 'all';
+        this._towerCodexFilter = activeFilter;
+
+        let filteredItems = navItems;
+        if (activeFilter === 'ready') {
+            filteredItems = navItems.filter((item) => item.starter || item.unlocked);
+        } else if (activeFilter === 'locked') {
+            filteredItems = navItems.filter((item) => !item.starter && !item.unlocked);
+        }
+
+        if (filteredItems.length > 0 && !filteredItems.some((item) => item.type === selectedType)) {
+            const fallbackItem = filteredItems[0];
+            selectedType = fallbackItem ? fallbackItem.type : selectedType;
+        }
+        if (filteredItems.length === 0) {
+            selectedType = null;
+        }
+
+        this._towerCodexSelectedType = selectedType;
+        const selectedDef = selectedType ? TOWERS[selectedType] : null;
+        const selectedStatus = selectedType
+            ? (hasProgression
+                ? (ProgressionSystem.isStarterTower(selectedType)
+                    ? 'Starter'
+                    : (ProgressionSystem.isTowerUnlocked(selectedType) ? 'Licensed' : 'Locked'))
+                : 'Open')
+            : 'No Match';
+
+        const readyCount = navItems.filter((item) => item.starter || item.unlocked).length;
+        const lockedCount = Math.max(0, navItems.length - readyCount);
+
+        summaryEl.innerHTML = `
+            <div class="tcs-chip">
+                <span class="tcs-label">Licenses Online</span>
+                <strong>${unlockedCount}/${towerEntries.length}</strong>
+            </div>
+            <div class="tcs-chip">
+                <span class="tcs-label">Command Marks</span>
+                <strong>${marks}</strong>
+            </div>
+            <div class="tcs-chip tcs-chip-wide">
+                <span class="tcs-label">Selected Tower</span>
+                <strong>${selectedDef ? selectedDef.name : 'Unknown'} - ${selectedStatus}</strong>
+                <span class="tcs-subline">${nextTower ? `Next unlock: ${nextTower.label}` : 'All tower licenses unlocked'}</span>
+            </div>
+        `;
+
+        const navHtml = filteredItems
+            .map((item) => item.type === selectedType
+                ? item.html.replace('class="tc-nav-btn ', 'class="tc-nav-btn active ')
+                : item.html)
+            .join('');
+
+        const compact = typeof window !== 'undefined' && window.innerWidth <= 640;
+        const allowedTabs = ['overview', 'tiers', 'unlock'];
+        const activeTab = allowedTabs.includes(this._towerCodexSelectedTab)
+            ? this._towerCodexSelectedTab
+            : 'overview';
+        this._towerCodexSelectedTab = activeTab;
+
+        const cardHtml = selectedDef
+            ? this._buildTowerCodexCard(selectedType, selectedDef, { compact, tab: activeTab })
+            : `
+                <article class="tower-codex-card tower-codex-card-empty">
+                    <div class="tc-empty-title">No towers in this filter</div>
+                    <p class="tc-empty-copy">Switch to <strong>All</strong> or <strong>Ready</strong> to continue browsing tower intel.</p>
+                </article>
+            `;
+
+        const selectedIndex = Math.max(0, filteredItems.findIndex((item) => item.type === selectedType));
+        const filteredCount = filteredItems.length;
+        const currentPos = filteredCount > 0
+            ? `${selectedIndex + 1}/${filteredCount}${filteredCount !== navItems.length ? ` · ${navItems.length} total` : ''}`
+            : `0/0 · ${navItems.length} total`;
+
+        workspaceEl.innerHTML = `
+            <section class="tower-codex-selector" aria-label="Tower selector">
+                <div class="tower-codex-nav">
+                    <div class="tc-nav-header">Select Tower <span>${currentPos}</span></div>
+                    <div class="tc-filter-row" role="group" aria-label="Tower filter">
+                        <button type="button" class="tc-filter-btn${activeFilter === 'all' ? ' active' : ''}" data-filter="all">All <em>${navItems.length}</em></button>
+                        <button type="button" class="tc-filter-btn${activeFilter === 'ready' ? ' active' : ''}" data-filter="ready">Ready <em>${readyCount}</em></button>
+                        <button type="button" class="tc-filter-btn${activeFilter === 'locked' ? ' active' : ''}" data-filter="locked">Locked <em>${lockedCount}</em></button>
+                    </div>
+                    <div class="tower-codex-list" role="listbox" aria-label="Tower list">${navHtml || '<div class="tc-nav-empty">No towers in this filter.</div>'}</div>
+                </div>
+            </section>
+            <section class="tower-codex-detail">${cardHtml}</section>
+        `;
+
+        workspaceEl.querySelectorAll('.tc-nav-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const towerType = btn.dataset.towerType;
+                if (!towerType || towerType === this._towerCodexSelectedType) return;
+                this._towerCodexSelectedType = towerType;
+                this.renderTowerCodex(towerType);
+                if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+                    Audio.play('click');
+                }
+            });
+        });
+
+        workspaceEl.querySelectorAll('.tc-filter-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const filter = btn.dataset.filter;
+                if (!allowedFilters.includes(filter) || filter === this._towerCodexFilter) return;
+                this._towerCodexFilter = filter;
+                this.renderTowerCodex(this._towerCodexSelectedType);
+                if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+                    Audio.play('click');
+                }
+            });
+        });
+
+        const listEl = workspaceEl.querySelector('.tower-codex-list');
+        if (listEl) {
+            const activeBtn = listEl.querySelector('.tc-nav-btn.active');
+            if (activeBtn && typeof activeBtn.scrollIntoView === 'function') {
+                activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        }
+
+        workspaceEl.querySelectorAll('.tc-tab-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                if (!tab || tab === this._towerCodexSelectedTab) return;
+                this._towerCodexSelectedTab = tab;
+
+                workspaceEl.querySelectorAll('.tc-tab-btn').forEach((tabBtn) => {
+                    tabBtn.classList.toggle('active', tabBtn.dataset.tab === tab);
+                });
+                workspaceEl.querySelectorAll('.tc-tab-panel').forEach((panel) => {
+                    panel.classList.toggle('active', panel.dataset.tab === tab);
+                });
+
+                if (typeof Audio !== 'undefined' && typeof Audio.play === 'function') {
+                    Audio.play('click');
+                }
+            });
+        });
+    },
+
+    _buildTowerCodexCard(type, def, options = {}) {
+        if (!def) {
+            return '<article class="tower-codex-card"><p>Tower intel unavailable.</p></article>';
+        }
+
+        const compact = !!options.compact;
+        const activeTab = ['overview', 'tiers', 'unlock'].includes(options.tab)
+            ? options.tab
+            : 'overview';
+        const hasProgression = typeof ProgressionSystem !== 'undefined';
+        const starter = hasProgression ? ProgressionSystem.isStarterTower(type) : true;
+        const unlocked = hasProgression ? ProgressionSystem.isTowerUnlocked(type) : true;
+        const reqStatus = hasProgression
+            ? ProgressionSystem.getTowerRequirementStatus(type, null)
+            : { lines: [] };
+
+        const licenseOrder = (CONFIG.PROGRESSION && Array.isArray(CONFIG.PROGRESSION.LICENSE_ORDER))
+            ? CONFIG.PROGRESSION.LICENSE_ORDER
+            : [];
+        const stageIndex = licenseOrder.indexOf(type);
+        const stageLabel = starter
+            ? 'Starter Arsenal'
+            : (stageIndex >= 0 ? `License Stage ${stageIndex + 1}/${licenseOrder.length}` : 'Special License');
+
+        const statusClass = starter ? 'starter' : (unlocked ? 'licensed' : 'locked');
+        const statusLabel = starter ? 'Starter' : (unlocked ? 'Licensed' : 'Locked');
+
+        const reqRows = !starter && reqStatus.lines.length > 0
+            ? reqStatus.lines
+            : [{ text: 'Starter access - available from campaign start.', met: true }];
+        const reqMetCount = reqRows.filter((line) => line.met).length;
+        const reqUnmetCount = Math.max(0, reqRows.length - reqMetCount);
+        const unmetRows = reqRows.filter((line) => !line.met);
+        const compactRows = compact
+            ? (unmetRows.length > 0 ? unmetRows : reqRows).slice(0, 2)
+            : reqRows;
+        const hiddenReqCount = compact ? Math.max(0, reqRows.length - compactRows.length) : 0;
+        const reqLines = compactRows
+            .map((line) => `<li class="tc-req-item ${line.met ? 'met' : 'unmet'}">${line.met ? 'OK' : '...'} ${line.text}</li>`)
+            .join('');
+        const reqMoreLine = hiddenReqCount > 0
+            ? `<li class="tc-req-item ${unmetRows.length > 0 ? 'unmet' : 'met'}">+${hiddenReqCount} more checkpoints</li>`
+            : '';
+
+        const totalA = typeof getTowerTotalCost === 'function' ? getTowerTotalCost(type, 5, 'A') : null;
+        const totalB = typeof getTowerTotalCost === 'function' ? getTowerTotalCost(type, 5, 'B') : null;
+
+        const coreCol = [
+            this._buildTowerTierCell(1, def.tiers[1], def.baseCost, 'Core platform stats.', { compact }),
+            this._buildTowerTierCell(2, def.tiers[2], def.tiers[2] ? def.tiers[2].cost : null, 'Tier 2 power spike and scaling.', { compact }),
+        ].join('');
+
+        const pathACol = [3, 4, 5]
+            .map((tier) => this._buildTowerTierCell(tier, def.pathA && def.pathA.tiers ? def.pathA.tiers[tier] : null, null, 'Path A specialization tier.', { compact }))
+            .join('');
+
+        const pathBCol = [3, 4, 5]
+            .map((tier) => this._buildTowerTierCell(tier, def.pathB && def.pathB.tiers ? def.pathB.tiers[tier] : null, null, 'Path B specialization tier.', { compact }))
+            .join('');
+
+        const cardDesc = compact ? this._truncateText(def.description, 110) : def.description;
+        const pathADesc = compact
+            ? this._truncateText(def.pathA && def.pathA.desc ? def.pathA.desc : '', 68)
+            : (def.pathA && def.pathA.desc ? def.pathA.desc : '');
+        const pathBDesc = compact
+            ? this._truncateText(def.pathB && def.pathB.desc ? def.pathB.desc : '', 68)
+            : (def.pathB && def.pathB.desc ? def.pathB.desc : '');
+        const stagePill = compact ? '' : `<span class="tc-pill">${stageLabel}</span>`;
+
+        const tier1Facts = this._collectTierFacts(def.tiers[1] || {}).slice(0, 3);
+        const tier2Facts = this._collectTierFacts(def.tiers[2] || {}).slice(0, 3);
+        const overviewFacts = [...new Set([...tier1Facts, ...tier2Facts])].slice(0, compact ? 4 : 6);
+        const unlockSummary = starter
+            ? 'Starter tower. Available from the beginning of campaign mode.'
+            : (unlocked
+                ? 'License complete. This tower is fully available in deployment loadouts.'
+                : (reqUnmetCount > 0
+                    ? `${reqUnmetCount} requirement${reqUnmetCount === 1 ? '' : 's'} remaining before license activation.`
+                    : 'All checks met. Win a qualifying run to confirm unlock.'));
+
+        const overviewChips = [
+            `Base ${Number.isFinite(def.baseCost) ? `${Math.floor(def.baseCost)}g` : '--'}`,
+            `Tier 2 ${def.tiers[2] && Number.isFinite(def.tiers[2].cost) ? `${Math.floor(def.tiers[2].cost)}g` : '--'}`,
+            `Path A ${Number.isFinite(totalA) ? `${Math.floor(totalA)}g` : '--'}`,
+            `Path B ${Number.isFinite(totalB) ? `${Math.floor(totalB)}g` : '--'}`,
+            ...overviewFacts,
+        ].slice(0, compact ? 6 : 9);
+
+        return `
+            <article class="tower-codex-card ${statusClass}${compact ? ' compact' : ''}">
+                <header class="tc-head">
+                    <div class="tc-head-main">
+                        <span class="tc-icon" style="color:${def.iconColor || '#dbe5ff'}">${def.pathA && def.pathA.icon ? def.pathA.icon : 'O'}</span>
+                        <div>
+                            <h3>${def.name}</h3>
+                            <p>${cardDesc}</p>
+                        </div>
+                    </div>
+                    <div class="tc-meta">
+                        <span class="tc-pill tc-pill-${statusClass}">${statusLabel}</span>
+                        <span class="tc-pill">Key ${def.key || '?'}</span>
+                        ${stagePill}
+                        <span class="tc-pill">Path Totals ${Number.isFinite(totalA) ? totalA : '--'}g / ${Number.isFinite(totalB) ? totalB : '--'}g</span>
+                    </div>
+                </header>
+
+                <div class="tc-tabbar" role="tablist" aria-label="Tower intel view">
+                    <button type="button" class="tc-tab-btn${activeTab === 'overview' ? ' active' : ''}" data-tab="overview">Overview</button>
+                    <button type="button" class="tc-tab-btn${activeTab === 'tiers' ? ' active' : ''}" data-tab="tiers">Tier Matrix</button>
+                    <button type="button" class="tc-tab-btn${activeTab === 'unlock' ? ' active' : ''}" data-tab="unlock">Unlock Flow</button>
+                </div>
+
+                <section class="tc-tab-panel${activeTab === 'overview' ? ' active' : ''}" data-tab="overview" role="tabpanel">
+                    <div class="tc-overview-grid">
+                        <article class="tc-overview-block">
+                            <div class="tc-overview-title">Combat Profile</div>
+                            <p class="tc-overview-copy">${cardDesc}</p>
+                            <div class="tc-overview-chips">${overviewChips.map((chip) => `<span>${chip}</span>`).join('')}</div>
+                        </article>
+                        <article class="tc-overview-block">
+                            <div class="tc-overview-title">Path Roles</div>
+                            <div class="tc-path-grid">
+                                <div class="tc-path-card">
+                                    <div class="tc-path-head"><span>Path A</span><strong>${def.pathA && def.pathA.name ? def.pathA.name : 'Alpha'}</strong></div>
+                                    <p>${pathADesc || 'No path notes available.'}</p>
+                                    <div class="tc-path-cost">Full Route: ${Number.isFinite(totalA) ? `${Math.floor(totalA)}g` : '--'}</div>
+                                </div>
+                                <div class="tc-path-card">
+                                    <div class="tc-path-head"><span>Path B</span><strong>${def.pathB && def.pathB.name ? def.pathB.name : 'Beta'}</strong></div>
+                                    <p>${pathBDesc || 'No path notes available.'}</p>
+                                    <div class="tc-path-cost">Full Route: ${Number.isFinite(totalB) ? `${Math.floor(totalB)}g` : '--'}</div>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="tc-tab-panel${activeTab === 'tiers' ? ' active' : ''}" data-tab="tiers" role="tabpanel">
+                    <div class="tc-tier-grid">
+                        <section class="tc-tier-col">
+                            <div class="tc-tier-col-title">Core Tiers</div>
+                            ${coreCol}
+                        </section>
+                        <section class="tc-tier-col">
+                            <div class="tc-tier-col-title">Path A - ${def.pathA && def.pathA.name ? def.pathA.name : 'Alpha'}</div>
+                            <div class="tc-tier-col-sub">${pathADesc}</div>
+                            ${pathACol}
+                        </section>
+                        <section class="tc-tier-col">
+                            <div class="tc-tier-col-title">Path B - ${def.pathB && def.pathB.name ? def.pathB.name : 'Beta'}</div>
+                            <div class="tc-tier-col-sub">${pathBDesc}</div>
+                            ${pathBCol}
+                        </section>
+                    </div>
+                </section>
+
+                <section class="tc-tab-panel${activeTab === 'unlock' ? ' active' : ''}" data-tab="unlock" role="tabpanel">
+                    <div class="tc-unlock-summary">${unlockSummary}</div>
+                    <div class="tc-license-box">
+                        <div class="tc-license-title">Unlock Progression</div>
+                        <div class="tc-unlock-metric">${reqMetCount}/${reqRows.length} checks complete</div>
+                        <ul class="tc-req-list">${reqLines}${reqMoreLine}</ul>
+                    </div>
+                </section>
+            </article>
+        `;
+    },
+
+    _buildTowerTierCell(tier, tierData, fallbackCost, fallbackText, options = {}) {
+        const compact = !!options.compact;
+        if (!tierData) {
+            return `
+                <div class="tc-tier-cell tc-tier-cell-empty">
+                    <div class="tc-tier-row"><span class="tc-tier-label">T${tier}</span><span class="tc-tier-cost">--</span></div>
+                    <p class="tc-tier-desc">No data available.</p>
+                </div>
+            `;
+        }
+
+        const cost = Number.isFinite(tierData.cost) ? tierData.cost : fallbackCost;
+        const facts = this._collectTierFacts(tierData);
+        const desc = tierData.desc || this._summarizeTierSpecial(tierData.special) || fallbackText;
+        const visibleFacts = compact ? facts.slice(0, 3) : facts;
+        const visibleDesc = compact ? this._truncateText(desc, 84) : desc;
+
+        return `
+            <div class="tc-tier-cell">
+                <div class="tc-tier-row">
+                    <span class="tc-tier-label">T${tier}</span>
+                    <span class="tc-tier-cost">${Number.isFinite(cost) ? `${Math.floor(cost)}g` : 'Base'}</span>
+                </div>
+                <div class="tc-tier-facts">${visibleFacts.map((fact) => `<span>${fact}</span>`).join('')}</div>
+                <p class="tc-tier-desc">${visibleDesc}</p>
+            </div>
+        `;
+    },
+
+    _collectTierFacts(tierData) {
+        if (!tierData || typeof tierData !== 'object') return [];
+        const out = [];
+        const special = tierData.special || {};
+
+        if (Number.isFinite(tierData.damage) && tierData.damage > 0) {
+            out.push(`${Math.round(tierData.damage)} dmg`);
+        } else if (Number.isFinite(special.dps)) {
+            out.push(`${Math.round(special.dps)} dps`);
+        }
+
+        if (Number.isFinite(tierData.range)) out.push(`${Math.round(tierData.range)} range`);
+
+        if (Number.isFinite(tierData.fireRate)) {
+            if (tierData.fireRate > 0) out.push(`${tierData.fireRate.toFixed(2)}s atk`);
+            else out.push('beam mode');
+        }
+
+        if (Number.isFinite(tierData.splash) && tierData.splash > 0) {
+            out.push(`${Math.round(tierData.splash)} splash`);
+        }
+
+        if (Number.isFinite(special.critChance)) out.push(`${Math.round(special.critChance * 100)}% crit`);
+        if (Number.isFinite(special.slow)) out.push(`${Math.round(special.slow * 100)}% slow`);
+
+        const multi = special.multishot || special.multiShot || special.multiMissile;
+        if (Number.isFinite(multi)) out.push(`x${Math.floor(multi)} shots`);
+
+        if (Number.isFinite(special.chains)) out.push(`${Math.floor(special.chains)} chains`);
+        if (Number.isFinite(special.burnDPS)) out.push(`${Math.round(special.burnDPS)}/s burn`);
+        if (Number.isFinite(special.poisonDPS)) out.push(`${Math.round(special.poisonDPS)}/s poison`);
+        if (special.homing) out.push('homing');
+        if (special.aura) out.push('aura');
+
+        return out.slice(0, 6);
+    },
+
+    _summarizeTierSpecial(special) {
+        if (!special || typeof special !== 'object') return '';
+
+        const notes = [];
+        if (Number.isFinite(special.critChance)) notes.push(`${Math.round(special.critChance * 100)}% critical chance`);
+        if (Number.isFinite(special.critMult)) notes.push(`${special.critMult}x critical damage`);
+        if (Number.isFinite(special.slow)) notes.push(`${Math.round(special.slow * 100)}% slow`);
+        if (Number.isFinite(special.freezeChance)) notes.push(`${Math.round(special.freezeChance * 100)}% freeze proc`);
+        if (Number.isFinite(special.stunChance)) notes.push(`${Math.round(special.stunChance * 100)}% stun chance`);
+        if (Number.isFinite(special.chains)) notes.push(`hits ${Math.floor(special.chains)} chained targets`);
+        if (special.homing) notes.push('homing projectile tracking');
+        if (special.aura) notes.push('persistent aura support field');
+        if (Number.isFinite(special.burnDPS)) notes.push(`burning for ${Math.round(special.burnDPS)} damage per second`);
+        if (Number.isFinite(special.poisonDPS)) notes.push(`poisoning for ${Math.round(special.poisonDPS)} damage per second`);
+
+        if (notes.length > 0) return notes.slice(0, 3).join(' | ');
+
+        const fallback = Object.entries(special)
+            .slice(0, 3)
+            .map(([key, value]) => `${this._humanizeTierKey(key)} ${typeof value === 'number' ? (Number.isInteger(value) ? value : value.toFixed(2)) : (value === true ? 'enabled' : String(value))}`);
+        return fallback.join(' | ');
+    },
+
+    _humanizeTierKey(key) {
+        return String(key || '')
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/_/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    },
+
+    _truncateText(text, maxLen) {
+        const raw = String(text || '').trim();
+        if (!raw || !Number.isFinite(maxLen) || maxLen < 8 || raw.length <= maxLen) return raw;
+        return `${raw.slice(0, maxLen - 3).trimEnd()}...`;
+    },
+
     renderHowToPlay() {
         const content = document.getElementById('howtoplay-content');
         const hk = (actionId, fallback) => {
@@ -1848,7 +2529,7 @@ const MenuSystem = {
             <p>Enemies march along the path toward your base. Build towers to stop them before they reach the exit. If too many get through, you lose!</p>
 
             <h3>PLACING TOWERS</h3>
-            <p>Click a tower in the sidebar (or press <span class="key">1-8</span>) then click on a buildable tile. Towers cannot be placed on the path or decorations.</p>
+            <p>Click a tower in the sidebar (or press <span class="key">1-0 - =</span>) then click on a buildable tile. Towers cannot be placed on the path or decorations.</p>
 
             <h3>UPGRADING</h3>
             <p>Click a placed tower to see its info panel. Click <span class="key">UPGRADE</span> or press <span class="key">${hk('upgradeTower', 'U')}</span> to upgrade.</p>
@@ -1887,7 +2568,7 @@ const MenuSystem = {
 
             <h3>CONTROLS</h3>
             <p><span class="key">${hk('startWave', 'Space')}</span> Start next wave<br>
-               <span class="key">1-8</span> Select tower type<br>
+               <span class="key">1-0 - =</span> Select tower type<br>
                <span class="key">${hk('sellTower', 'S')}</span> Sell selected tower<br>
                <span class="key">${hk('upgradeTower', 'U')}</span> Upgrade selected tower<br>
                <span class="key">${hk('cycleTower', 'Tab')}</span> Cycle through towers<br>
@@ -1896,6 +2577,31 @@ const MenuSystem = {
                <span class="key">${hk('pause', 'Esc')}</span> Deselect / Pause<br>
                <span class="key">${hk('speedUp', '+')}/${hk('speedReset', '-')}</span> Game speed</p>
         `;
+    },
+
+    // ===== HUD VISUAL TOGGLES =====
+    _initHudToggles() {
+        const sync = () => {
+            const s = GameState.settings;
+            document.getElementById('tog-ranges').classList.toggle('active', !!s.showRanges);
+            document.getElementById('tog-hpbars').classList.toggle('active', s.showHealthBars !== false);
+            document.getElementById('tog-dmgnum').classList.toggle('active', s.showDamageNumbers !== false);
+        };
+        sync();
+        document.getElementById('tog-ranges').addEventListener('click', () => {
+            GameState.settings.showRanges = !GameState.settings.showRanges;
+            sync(); Audio.play('click');
+        });
+        document.getElementById('tog-hpbars').addEventListener('click', () => {
+            GameState.settings.showHealthBars = !GameState.settings.showHealthBars;
+            sync(); Audio.play('click');
+        });
+        document.getElementById('tog-dmgnum').addEventListener('click', () => {
+            GameState.settings.showDamageNumbers = !GameState.settings.showDamageNumbers;
+            sync(); Audio.play('click');
+        });
+        // Keep range toggle in sync with hotkey (G)
+        this._hudToggleSync = sync;
     },
 
     // ===== IN-GAME SETTINGS PANEL =====

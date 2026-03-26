@@ -63,14 +63,24 @@ const GameState = {
     purchasedResearch: new Set(),
     unlockedMaps: [
         true, false, false, false, false,   // easy (0-4)
-        true, false, false, false, false,   // normal (5-9)
-        true, false, false, false, false,   // hard (10-14)
-        true, false, false, false, false,   // nightmare (15-19)
+        false, false, false, false, false,  // normal (5-9)
+        false, false, false, false, false,  // hard (10-14)
+        false, false, false, false, false,  // nightmare (15-19)
     ],
     achievementsUnlocked: new Set(),
     mapScores: [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0],
     mapWaveRecords: [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0],
     metaProgress: {
+        progressionVersion: 1,
+        commandMarks: 0,
+        mapMarkBits: new Array(20).fill(0),
+        towerLicenses: {},
+        legacyProgressionBackfillDone: false,
+        lifetimeMapsCleared: 0,
+        lifetimePerfectClears: 0,
+        lifetimeDirectiveClears: 0,
+        lifetimeBossKills: 0,
+        lifetimeCaptainKills: 0,
         endlessBestDepthByMap: new Array(20).fill(0),
         endlessMilestonesClaimed: {},
         totalEndlessMilestones: 0,
@@ -113,6 +123,16 @@ const GameState = {
         researchCount: 0,
         towerTypesSet: new Set(),
         leaksThisGame: 0,
+        overclockUses: 0,
+        abilitiesUsed: 0,
+        towersNeverSold: true,
+        towersPlacedThisRun: 0,
+        maxActiveLinks: 0,
+        tier5CountPeak: 0,
+        freezeApplications: 0,
+        burnDamageDealt: 0,
+        poisonDamageDealt: 0,
+        captainKillsThisRun: 0,
     },
 
     // Settings
@@ -121,6 +141,8 @@ const GameState = {
         sfxVolume: 0.8,
         shakeIntensity: 1.0,
         showRanges: false,
+        showHealthBars: true,
+        showDamageNumbers: true,
         autoStart: false,
         difficulty: 'normal',
         hotkeys: {
@@ -158,6 +180,7 @@ const GameState = {
 
     // Screen effects
     screenFlash: null,
+    poisonClouds: [],
     pathLength: 0,
 
     // FPS display
@@ -165,6 +188,7 @@ const GameState = {
 
     // Computed research bonuses (cached)
     researchBonuses: {},
+    researchCompressionNotes: [],
 
     reset() {
         this.wave = 0;
@@ -181,6 +205,7 @@ const GameState = {
         this.particles = [];
         this.floatingTexts = [];
         this.beams = [];
+        this.poisonClouds = [];
         this.waveEnemies = [];
         this.spawnTimer = 0;
         this.enemiesAlive = 0;
@@ -215,6 +240,7 @@ const GameState = {
         this.maxLives = this.lives;
 
         // Apply research bonuses
+        this.researchCompressionNotes = [];
         this.computeResearchBonuses();
         const rb = this.researchBonuses;
         this.gold += (rb.bonusGold || 0);
@@ -230,6 +256,11 @@ const GameState = {
             towerTypesBuilt: 0, usedSpeed3: false, maxCombo: 0,
             researchCount: this.purchasedResearch.size,
             towerTypesSet: new Set(), leaksThisGame: 0,
+            overclockUses: 0, abilitiesUsed: 0,
+            towersNeverSold: true, towersPlacedThisRun: 0,
+            maxActiveLinks: 0, tier5CountPeak: 0,
+            freezeApplications: 0, burnDamageDealt: 0,
+            poisonDamageDealt: 0, captainKillsThisRun: 0,
         };
 
         // Init abilities
@@ -256,7 +287,54 @@ const GameState = {
                 }
             }
         }
+
+        this.researchCompressionNotes = this._applyResearchBonusCompression(rb);
         this.researchBonuses = rb;
+    },
+
+    _clampBonusValue(value, min, max) {
+        if (!Number.isFinite(value)) return value;
+        let out = value;
+        if (Number.isFinite(min)) out = Math.max(min, out);
+        if (Number.isFinite(max)) out = Math.min(max, out);
+        return out;
+    },
+
+    _applyResearchBonusCompression(rb) {
+        const rules = CONFIG.RESEARCH_COMPRESSION_RULES || {};
+        const notes = [];
+
+        const clamp = (key, min, max, note) => {
+            if (!Number.isFinite(rb[key])) return;
+            const before = rb[key];
+            const after = this._clampBonusValue(before, min, max);
+            if (Math.abs(after - before) > 0.00001) {
+                rb[key] = after;
+                notes.push(note || key);
+            }
+        };
+
+        clamp('bonusLives', 0, rules.bonusLivesMax, 'Lives cap');
+        clamp('bonusGold', 0, rules.bonusGoldMax, 'Start gold cap');
+        clamp('bonusRP', 0, rules.bonusRpMax, 'RP gain cap');
+
+        clamp('costReduce', 0, rules.costReduceMax, 'Build discount cap');
+        clamp('upgradeDiscount', 0, rules.upgradeDiscountMax, 'Upgrade discount cap');
+        clamp('dmgMult', 0, rules.dmgMultMax, 'Damage stack cap');
+        clamp('rateMult', 0, rules.rateMultMax, 'Rate stack cap');
+        clamp('rangeMult', 0, rules.rangeMultMax, 'Range stack cap');
+        clamp('critChance', 0, rules.critChanceMax, 'Crit chance cap');
+        clamp('critDmg', 0, rules.critDmgMax, 'Crit damage cap');
+
+        clamp('interestRate', 0, rules.interestRateMax, 'Interest rate cap');
+        clamp('interestCap', 0, rules.interestCapMax, 'Interest cap cap');
+        clamp('sellRefund', CONFIG.SELL_REFUND, rules.sellRefundMax, 'Sell refund cap');
+        clamp('killGoldBonus', 0, rules.killGoldBonusMax, 'Kill gold cap');
+        clamp('abilityCdOnEliteKill', 0, rules.abilityCdOnEliteKillMax, 'Elite CD refund cap');
+        clamp('goldRush', 0, rules.goldRushMax, 'Gold rush cap');
+        clamp('waveBonusMult', 0, rules.waveBonusMultMax, 'Wave bonus cap');
+
+        return notes;
     },
 
     getActiveDoctrine() {
@@ -286,5 +364,27 @@ const GameState = {
             ...defaults,
             ...doctrine.effects,
         };
+        this.doctrineEffects = this._applyDoctrineBalanceLimits(this.doctrineEffects);
+    },
+
+    _applyDoctrineBalanceLimits(effects) {
+        const limits = CONFIG.DOCTRINE_BALANCE_LIMITS || {};
+        const out = { ...effects };
+
+        const clampKey = (key) => {
+            const rule = limits[key];
+            if (!rule || !Number.isFinite(out[key])) return;
+            out[key] = this._clampBonusValue(out[key], rule.min, rule.max);
+        };
+
+        clampKey('startGold');
+        clampKey('startLives');
+        clampKey('interestRateDelta');
+        clampKey('interestCapDelta');
+        clampKey('abilityCooldownMult');
+        clampKey('globalDamageMult');
+        clampKey('eliteBossDamageMult');
+
+        return out;
     },
 };

@@ -40,6 +40,7 @@ async function run() {
     const modalState = await page.evaluate(() => ({
         choiceCount: WaveSystem.tacticalEventChoices.length,
         modalDisplay: getComputedStyle(document.getElementById('tactical-event-modal')).display,
+        hasTempoChoice: WaveSystem.tacticalEventChoices.some(choice => Array.isArray(choice.tags) && choice.tags.includes('tempo')),
         firstChoice: WaveSystem.tacticalEventChoices[0]
             ? {
                 id: WaveSystem.tacticalEventChoices[0].id,
@@ -55,6 +56,7 @@ async function run() {
 
     assert(modalState.choiceCount === 3, `Tactical modal should show 3 options (got ${modalState.choiceCount})`);
     assert(modalState.modalDisplay === 'flex', `Tactical modal should be visible (display=${modalState.modalDisplay})`);
+    assert(modalState.hasTempoChoice, 'Tactical modal should always offer at least one tempo directive');
     assert(!!modalState.firstChoice, 'Tactical modal should expose first choice data');
 
     await page.keyboard.press('Digit1');

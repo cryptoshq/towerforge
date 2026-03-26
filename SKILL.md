@@ -80,6 +80,50 @@ It should not feel:
 
 ---
 
+## Context7 and External Docs
+
+When work touches a library, framework, or browser API, fetch current docs through Context7 before making decisions that depend on API behavior.
+
+Use this especially for:
+
+- Web Storage and persistence behavior,
+- Canvas or DOM APIs with browser-specific caveats,
+- Web Audio lifecycle rules,
+- Playwright testing patterns and waiting behavior.
+
+Preferred references:
+
+- MDN via Context7 (`/mdn/content`) for browser APIs such as `localStorage`, Canvas, DOM, Storage API, and Web Audio.
+- Playwright via Context7 (`/microsoft/playwright`) for regression-testing behavior and wait-safe assertions.
+
+Important current guidance already relevant to TowerForge:
+
+- Web Storage data is string-based, so persistent structures should remain JSON-serializable.
+- Persistence writes should stay wrapped in defensive error handling.
+- Storage quota and availability failures are real edge cases, not theoretical ones.
+- Playwright checks should prefer wait-aware patterns over brittle synchronous visibility snapshots.
+
+Do not rely on stale memory for browser API behavior when the code change depends on exact API guarantees.
+
+---
+
+## Active Progression Direction
+
+TowerForge's active progression direction is the hybrid `Command Marks` plus `Tower Licenses` model documented in `PROGRESSION_ROADMAP.md`.
+
+Key rules:
+
+- keep `Research Points` as the only spendable meta currency,
+- use `Command Marks` as the visible, non-spend progression target,
+- keep a starter roster always available,
+- keep advanced towers visible but locked with exact requirements,
+- make campaign maps, tower licenses, and difficulty bands point toward a clear next objective,
+- retroactively backfill existing saves wherever current persistent data can safely prove progress.
+
+If future progression work conflicts with `PROGRESSION_ROADMAP.md`, prefer the roadmap unless the user explicitly asks to revise the design direction.
+
+---
+
 ## Product Priorities
 
 Use this priority order when deciding what matters most:
@@ -311,7 +355,10 @@ Current dev server example:
 - Continue button content,
 - valid restore behavior,
 - no malformed state after load,
-- persistence compatibility.
+- persistence compatibility,
+- retroactive unlock or backfill behavior,
+- locked tower gating across click, hotkey, and load paths,
+- grandfather safety for old in-progress runs if progression rules changed.
 
 #### Research changes
 - no node overlap,

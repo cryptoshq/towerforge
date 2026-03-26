@@ -13,11 +13,19 @@ const CONFIG = {
     SELL_REFUND: 0.7,
     DISMANTLE_REFUND: 0.5,
     LINK_COST: 50,
+    LINK_RANGE: 190,
+    MAX_LINKS_PER_TOWER: 2,
+    LINK_DAMAGE_BONUS: 0.04,
+    LINK_SAME_TYPE_RATE_BONUS: 0.03,
+    LINK_CROSS_TYPE_RANGE_BONUS: 0.05,
+    LINK_DIVERSITY_CRIT_BONUS: 0.04,
     MOVE_COST_RATIO: 0.25,
     OVERCLOCK_BOOST: 1.5,
     OVERCLOCK_DURATION: 10,
     OVERCLOCK_COOLDOWN: 5,
     WAVE_BONUS_BASE: 20,
+    MASTERY_XP_PER_SCORE: 120,
+    FORMATION_RANGE: 125,
     MASTERY: [
         { kills: 25, title: 'Veteran', dmgBonus: 0.05, rateBonus: 0, rangeBonus: 0, color: '#cd7f32' },
         { kills: 75, title: 'Elite', dmgBonus: 0.10, rateBonus: 0.05, rangeBonus: 0, color: '#c0c0c0' },
@@ -113,6 +121,40 @@ const CONFIG = {
             },
         },
     ],
+
+    // ===== PHASE II BALANCE COMPRESSION =====
+    // Keep doctrine deltas meaningful and prevent runaway stacking noise.
+    DOCTRINE_BALANCE_LIMITS: {
+        startGold: { min: -150, max: 150 },
+        startLives: { min: -5, max: 10 },
+        interestRateDelta: { min: -0.03, max: 0.03 },
+        interestCapDelta: { min: -40, max: 40 },
+        abilityCooldownMult: { min: 0.7, max: 1.15 },
+        globalDamageMult: { min: 0.85, max: 1.2 },
+        eliteBossDamageMult: { min: 1.0, max: 1.35 },
+    },
+
+    // Research bonuses still add up from unlocked nodes, but high-noise bonuses
+    // are clamped so progression remains legible and easier to rebalance.
+    RESEARCH_COMPRESSION_RULES: {
+        bonusLivesMax: 15,
+        bonusGoldMax: 150,
+        bonusRpMax: 4,
+        costReduceMax: 0.18,
+        upgradeDiscountMax: 0.25,
+        dmgMultMax: 0.4,
+        rateMultMax: 0.3,
+        rangeMultMax: 0.2,
+        critChanceMax: 0.15,
+        critDmgMax: 0.6,
+        interestRateMax: 0.03,
+        interestCapMax: 75,
+        sellRefundMax: 0.85,
+        killGoldBonusMax: 0.35,
+        abilityCdOnEliteKillMax: 0.5,
+        goldRushMax: 75,
+        waveBonusMultMax: 1.5,
+    },
 
     // ===== TOWER UPGRADE COST SCALING FORMULA CONSTANTS =====
     UPGRADE_COST_BASE_MULT: 1.5,
@@ -363,6 +405,653 @@ const CONFIG = {
         panelGap: 8,
         sectionGap: 12,
         elementSpacing: 4,
+    },
+};
+
+// ===== PROJECTILE VISUAL SYSTEM =====
+// Family defaults are merged with tower/path/crit/special overrides.
+const PROJECTILE_FAMILY_DEFAULTS = {
+    dart: {
+        family: 'dart',
+        size: 3,
+        length: 12,
+        width: 4,
+        trailMode: 'streak',
+        trailLife: 0.16,
+        trailCount: 8,
+        glow: 0.12,
+        spin: 0,
+        impactStyle: 'pierce',
+    },
+    shell: {
+        family: 'shell',
+        size: 5,
+        length: 10,
+        width: 7,
+        trailMode: 'smoke',
+        trailLife: 0.22,
+        trailCount: 7,
+        glow: 0.08,
+        spin: 0.04,
+        impactStyle: 'blast',
+    },
+    shard: {
+        family: 'shard',
+        size: 4,
+        length: 11,
+        width: 6,
+        trailMode: 'shards',
+        trailLife: 0.18,
+        trailCount: 8,
+        glow: 0.20,
+        spin: 0.18,
+        impactStyle: 'frost',
+    },
+    bolt: {
+        family: 'bolt',
+        size: 3,
+        length: 14,
+        width: 3,
+        trailMode: 'sparks',
+        trailLife: 0.12,
+        trailCount: 7,
+        glow: 0.35,
+        spin: 0,
+        zigzag: 4,
+        impactStyle: 'arc',
+    },
+    tracer: {
+        family: 'tracer',
+        size: 2,
+        length: 18,
+        width: 2,
+        trailMode: 'line',
+        trailLife: 0.10,
+        trailCount: 6,
+        glow: 0.18,
+        spin: 0,
+        impactStyle: 'tracerPop',
+    },
+    rocket: {
+        family: 'rocket',
+        size: 4,
+        length: 14,
+        width: 5,
+        trailMode: 'smokeFire',
+        trailLife: 0.24,
+        trailCount: 9,
+        glow: 0.16,
+        spin: 0,
+        impactStyle: 'rocketBurst',
+    },
+    plume: {
+        family: 'plume',
+        size: 5,
+        length: 12,
+        width: 8,
+        trailMode: 'embers',
+        trailLife: 0.18,
+        trailCount: 10,
+        glow: 0.28,
+        spin: 0.12,
+        wobble: 0.18,
+        impactStyle: 'embers',
+    },
+    orb: {
+        family: 'orb',
+        size: 4,
+        length: 8,
+        width: 8,
+        trailMode: 'mist',
+        trailLife: 0.20,
+        trailCount: 8,
+        glow: 0.30,
+        spin: 0.10,
+        impactStyle: 'orbPop',
+    },
+};
+
+const PROJECTILE_IMPACT_PRESETS = {
+    pierce: {
+        mode: 'burst',
+        color: '#b8ffb8',
+        count: 4,
+        speed: 1.0,
+        size: 0.8,
+    },
+    blast: {
+        mode: 'burst',
+        color: '#ff9a5a',
+        count: 10,
+        speed: 1.4,
+        size: 1.1,
+    },
+    frost: {
+        mode: 'burst',
+        color: '#8fe8ff',
+        count: 8,
+        speed: 1.0,
+        size: 0.9,
+    },
+    arc: {
+        mode: 'arc',
+        color: '#ffe55a',
+        count: 6,
+        speed: 0.8,
+        size: 0.7,
+    },
+    tracerPop: {
+        mode: 'burst',
+        color: '#ffffff',
+        count: 3,
+        speed: 0.7,
+        size: 0.5,
+    },
+    rocketBurst: {
+        mode: 'burst',
+        color: '#ff7a3a',
+        count: 14,
+        speed: 1.6,
+        size: 1.2,
+    },
+    embers: {
+        mode: 'burst',
+        color: '#ff8a2a',
+        count: 9,
+        speed: 1.1,
+        size: 0.9,
+    },
+    toxicSplash: {
+        mode: 'burst',
+        color: '#6dff72',
+        count: 8,
+        speed: 0.9,
+        size: 0.9,
+    },
+    seismicBurst: {
+        mode: 'burst',
+        color: '#c4a27a',
+        count: 12,
+        speed: 1.2,
+        size: 1.0,
+    },
+    soulBurst: {
+        mode: 'burst',
+        color: '#b06dff',
+        count: 8,
+        speed: 0.95,
+        size: 0.95,
+    },
+    orbPop: {
+        mode: 'burst',
+        color: '#b0d0ff',
+        count: 6,
+        speed: 0.8,
+        size: 0.8,
+    },
+};
+
+const PROJECTILE_VISUALS = {
+    arrow: {
+        base: {
+            family: 'dart',
+            bodyColor: '#73d36f',
+            tipColor: '#e8ffd8',
+            accentColor: '#4e8c3b',
+            trailColor: '#67e17b',
+            trailAccent: '#d9ff8a',
+            glowColor: '#a8ffb0',
+            impactStyle: 'pierce',
+            impactColor: '#73d36f',
+        },
+        pathA: {
+            bodyColor: '#9bc7ff',
+            tipColor: '#ffffff',
+            accentColor: '#4b6da8',
+            trailColor: '#c1e4ff',
+            trailAccent: '#dff0ff',
+            glowColor: '#d7eeff',
+            length: 13,
+            width: 3,
+        },
+        pathB: {
+            bodyColor: '#8fe25a',
+            tipColor: '#f4ffb0',
+            accentColor: '#628c35',
+            trailColor: '#a8ff70',
+            trailAccent: '#f6ff80',
+            width: 5,
+        },
+        crit: {
+            bodyColor: '#ff5c5c',
+            tipColor: '#ffffff',
+            trailColor: '#ff8a8a',
+            glowColor: '#ffb0b0',
+        },
+        special: {
+            perfectShot: {
+                bodyColor: '#ffd74a',
+                tipColor: '#fff8d2',
+                trailColor: '#ffe68a',
+                trailAccent: '#fff2b0',
+                glowColor: '#ffd74a',
+                size: 4,
+                length: 15,
+                impactStyle: 'tracerPop',
+            },
+        },
+    },
+
+    cannon: {
+        base: {
+            family: 'shell',
+            bodyColor: '#8c8c8c',
+            coreColor: '#5a5a5a',
+            accentColor: '#c3b08a',
+            trailColor: '#9a6a45',
+            trailAccent: '#5a4a40',
+            glowColor: '#ff9a5a',
+            impactStyle: 'blast',
+            impactColor: '#ff9a5a',
+        },
+        pathA: {
+            bodyColor: '#4e4e52',
+            coreColor: '#ff7a2a',
+            accentColor: '#2a2a2e',
+            trailColor: '#ff8a42',
+            glowColor: '#ffb26e',
+            size: 5.5,
+        },
+        pathB: {
+            bodyColor: '#9a7a62',
+            coreColor: '#d8b07a',
+            accentColor: '#704f36',
+            trailColor: '#c9a07a',
+            trailAccent: '#805a42',
+            size: 4.5,
+        },
+        crit: {
+            coreColor: '#fff3d0',
+            glowColor: '#ffd070',
+        },
+    },
+
+    ice: {
+        base: {
+            family: 'shard',
+            bodyColor: '#8fe8ff',
+            coreColor: '#d7fbff',
+            accentColor: '#5ab0c9',
+            trailColor: '#8fe8ff',
+            trailAccent: '#d7fbff',
+            glowColor: '#c8f7ff',
+            impactStyle: 'frost',
+            impactColor: '#8fe8ff',
+        },
+        pathA: {
+            bodyColor: '#d9f7ff',
+            coreColor: '#ffffff',
+            accentColor: '#98d6ef',
+            trailColor: '#d7fbff',
+            glowColor: '#ffffff',
+            spin: 0.08,
+        },
+        pathB: {
+            bodyColor: '#72d7ff',
+            coreColor: '#b6f0ff',
+            accentColor: '#3a9bd2',
+            trailColor: '#7ce8ff',
+            trailAccent: '#b6f0ff',
+            spin: 0.24,
+            size: 4.5,
+        },
+        crit: {
+            glowColor: '#ffffff',
+            size: 4.5,
+        },
+    },
+
+    lightning: {
+        base: {
+            family: 'bolt',
+            bodyColor: '#ffe45a',
+            coreColor: '#fff8c2',
+            accentColor: '#d2b400',
+            trailColor: '#ffe45a',
+            trailAccent: '#fff8c2',
+            glowColor: '#ffe45a',
+            impactStyle: 'arc',
+            impactColor: '#ffe45a',
+        },
+        pathA: {
+            bodyColor: '#fff19a',
+            coreColor: '#ffffff',
+            accentColor: '#ffd43a',
+            trailColor: '#fff19a',
+            trailAccent: '#ffffff',
+            zigzag: 6,
+            width: 2.5,
+        },
+        pathB: {
+            family: 'orb',
+            bodyColor: '#f1d95a',
+            coreColor: '#fff6bf',
+            accentColor: '#8cc8ff',
+            trailColor: '#ffd84d',
+            trailAccent: '#8cc8ff',
+            glowColor: '#ffe45a',
+            impactStyle: 'arc',
+            size: 3.8,
+        },
+        crit: {
+            coreColor: '#ffffff',
+            glowColor: '#ffffff',
+            trailColor: '#fff7c8',
+        },
+    },
+
+    sniper: {
+        base: {
+            family: 'tracer',
+            bodyColor: '#f0f0f0',
+            coreColor: '#ffffff',
+            accentColor: '#9a9a9a',
+            trailColor: '#ffffff',
+            trailAccent: '#d0d0d0',
+            glowColor: '#f8f8f8',
+            impactStyle: 'tracerPop',
+            impactColor: '#ffffff',
+        },
+        pathA: {
+            bodyColor: '#ff7b7b',
+            coreColor: '#ffffff',
+            accentColor: '#702020',
+            trailColor: '#ff9a9a',
+            trailAccent: '#ffffff',
+            glowColor: '#ffb6b6',
+        },
+        pathB: {
+            bodyColor: '#9be1d9',
+            coreColor: '#ffffff',
+            accentColor: '#4a7a86',
+            trailColor: '#b8f4ef',
+            trailAccent: '#8ee0ff',
+            glowColor: '#d8ffff',
+        },
+        crit: {
+            bodyColor: '#ff4040',
+            trailColor: '#ff6a6a',
+            glowColor: '#ffb0b0',
+            length: 20,
+        },
+    },
+
+    missile: {
+        base: {
+            family: 'rocket',
+            bodyColor: '#9a9aa4',
+            coreColor: '#d7d7e0',
+            accentColor: '#5b5b66',
+            finColor: '#70707a',
+            exhaustColor: '#ff6a2a',
+            smokeColor: '#7e7e88',
+            trailColor: '#ff824a',
+            trailAccent: '#ffd090',
+            glowColor: '#ff8a52',
+            impactStyle: 'rocketBurst',
+            impactColor: '#ff824a',
+        },
+        pathA: {
+            bodyColor: '#c76a6a',
+            coreColor: '#ffe0c0',
+            accentColor: '#6a1f1f',
+            finColor: '#8a3232',
+            exhaustColor: '#ff4422',
+            trailColor: '#ff6a52',
+            glowColor: '#ff9e8a',
+            size: 4.5,
+        },
+        pathB: {
+            bodyColor: '#8aa5c8',
+            coreColor: '#f5f8ff',
+            accentColor: '#485b7e',
+            finColor: '#6a80a8',
+            exhaustColor: '#ff9a42',
+            trailColor: '#9ac4ff',
+            trailAccent: '#ffd090',
+            size: 3.5,
+        },
+        crit: {
+            coreColor: '#ffffff',
+            glowColor: '#ffd6a8',
+        },
+    },
+
+    flame: {
+        base: {
+            family: 'plume',
+            bodyColor: '#ff8a2a',
+            coreColor: '#ffd36a',
+            accentColor: '#c94d18',
+            emberColor: '#ffb24a',
+            trailColor: '#ff8a2a',
+            trailAccent: '#ffd36a',
+            glowColor: '#ff9a42',
+            impactStyle: 'embers',
+            impactColor: '#ff8a2a',
+        },
+        pathA: {
+            bodyColor: '#ffd08a',
+            coreColor: '#fff3c8',
+            accentColor: '#ff8c2a',
+            emberColor: '#fff0aa',
+            trailColor: '#ffd08a',
+            trailAccent: '#ffffff',
+            glowColor: '#fff1b8',
+            width: 6,
+        },
+        pathB: {
+            bodyColor: '#ff6a22',
+            coreColor: '#ffb04a',
+            accentColor: '#b82812',
+            emberColor: '#ffea70',
+            trailColor: '#ff6a22',
+            trailAccent: '#ffb04a',
+            glowColor: '#ff7a40',
+            wobble: 0.26,
+            size: 5.5,
+        },
+        crit: {
+            coreColor: '#fff8c0',
+            glowColor: '#ffd76a',
+        },
+    },
+
+    venom: {
+        base: {
+            family: 'orb',
+            bodyColor: '#57d85d',
+            coreColor: '#c8ffb0',
+            accentColor: '#2b7a34',
+            ringColor: '#91ff78',
+            trailColor: '#67f067',
+            trailAccent: '#c8ffb0',
+            glowColor: '#73ff73',
+            impactStyle: 'toxicSplash',
+            impactColor: '#57d85d',
+        },
+        pathA: {
+            bodyColor: '#9fd95a',
+            coreColor: '#e9ffb8',
+            accentColor: '#6f8f24',
+            ringColor: '#d4ff74',
+            trailColor: '#c0f06a',
+            trailAccent: '#f2ff9f',
+            glowColor: '#d6ff72',
+        },
+        pathB: {
+            bodyColor: '#45f05f',
+            coreColor: '#d8fff0',
+            accentColor: '#1c7a48',
+            ringColor: '#99ffd0',
+            trailColor: '#52ff8d',
+            trailAccent: '#b8fff0',
+            glowColor: '#74ffc1',
+        },
+        crit: {
+            coreColor: '#ffffff',
+            glowColor: '#dfff9a',
+        },
+    },
+
+    mortar: {
+        base: {
+            family: 'shell',
+            bodyColor: '#9a846b',
+            coreColor: '#6f5a46',
+            accentColor: '#d0b28d',
+            trailColor: '#9e866d',
+            trailAccent: '#5f5248',
+            smokeColor: '#75675a',
+            glowColor: '#caa278',
+            impactStyle: 'seismicBurst',
+            impactColor: '#caa278',
+            size: 5.5,
+        },
+        pathA: {
+            bodyColor: '#7d6b5c',
+            coreColor: '#4e433a',
+            accentColor: '#b89a7d',
+            trailColor: '#9a8169',
+            trailAccent: '#706154',
+            glowColor: '#d0a680',
+        },
+        pathB: {
+            bodyColor: '#a79b8f',
+            coreColor: '#d9d1c8',
+            accentColor: '#6f6760',
+            trailColor: '#b4aca4',
+            trailAccent: '#ece4dc',
+            glowColor: '#d7c6b2',
+            size: 5,
+        },
+        crit: {
+            coreColor: '#fff0d6',
+            glowColor: '#ffe0aa',
+        },
+    },
+
+    necro: {
+        base: {
+            family: 'orb',
+            bodyColor: '#9d62ff',
+            coreColor: '#d7b8ff',
+            accentColor: '#5628a8',
+            ringColor: '#c88cff',
+            trailColor: '#b07cff',
+            trailAccent: '#e4c8ff',
+            glowColor: '#b47dff',
+            impactStyle: 'soulBurst',
+            impactColor: '#b07cff',
+            size: 4.5,
+        },
+        pathA: {
+            bodyColor: '#7d78ff',
+            coreColor: '#efe6ff',
+            accentColor: '#5340b8',
+            ringColor: '#c9bcff',
+            trailColor: '#8ea0ff',
+            trailAccent: '#efe6ff',
+            glowColor: '#a8b0ff',
+        },
+        pathB: {
+            bodyColor: '#b06dff',
+            coreColor: '#ffe0ff',
+            accentColor: '#6f2e8e',
+            ringColor: '#f1a8ff',
+            trailColor: '#cf8cff',
+            trailAccent: '#ffd8ff',
+            glowColor: '#d79cff',
+            trailMode: 'ghost',
+        },
+        crit: {
+            coreColor: '#ffffff',
+            glowColor: '#f0c8ff',
+        },
+    },
+};
+
+const LASER_BEAM_VISUALS = {
+    base: {
+        colorStart: '#ff4060',
+        colorEnd: '#ffffff',
+        coreStart: '#ff9ab0',
+        coreEnd: '#ffffff',
+        glowColor: '#ff6080',
+        widthBase: 2.0,
+        widthRamp: 3.0,
+        pulseHz: 12,
+        pulseAmp: 0.08,
+        jitter: 0.2,
+        taper: 1.0,
+    },
+    focused: {
+        colorStart: '#ff3050',
+        colorEnd: '#ffffff',
+        coreStart: '#ffd0de',
+        coreEnd: '#ffffff',
+        glowColor: '#ff6a95',
+        widthBase: 2.2,
+        widthRamp: 3.8,
+        pulseHz: 14,
+        pulseAmp: 0.12,
+        jitter: 0.25,
+    },
+    prism: {
+        colorStart: '#ff50c0',
+        colorEnd: '#b8ffff',
+        coreStart: '#ffd8ff',
+        coreEnd: '#ffffff',
+        glowColor: '#d070ff',
+        widthBase: 1.8,
+        widthRamp: 2.2,
+        pulseHz: 10,
+        pulseAmp: 0.1,
+        jitter: 0.15,
+        dual: true,
+        dualOffset: 1.8,
+        altColor: '#80e0ff',
+    },
+    split: {
+        colorStart: '#d56cff',
+        colorEnd: '#ffffff',
+        coreStart: '#f0c8ff',
+        coreEnd: '#ffffff',
+        glowColor: '#c080ff',
+        widthBase: 1.6,
+        widthRamp: 1.8,
+        pulseHz: 11,
+        pulseAmp: 0.09,
+        jitter: 0.2,
+        dual: true,
+        dualOffset: 1.2,
+        altColor: '#88e8ff',
+    },
+    deathRay: {
+        colorStart: '#fff0b8',
+        colorEnd: '#ffffff',
+        coreStart: '#ffffff',
+        coreEnd: '#ffffff',
+        glowColor: '#fff2a8',
+        widthBase: 5.5,
+        widthRamp: 2.5,
+        pulseHz: 18,
+        pulseAmp: 0.18,
+        jitter: 0.35,
+        dual: true,
+        dualOffset: 2.3,
+        altColor: '#ffd070',
+        taper: 1.1,
     },
 };
 
@@ -1013,9 +1702,14 @@ function generateWaves(mapIndex, waveCount) {
                 wave.enemies.push({ type: 'toxic', count: Math.max(1, Math.floor(countBase * 0.22)), hpMult: hpScale, delay: 0.8 });
                 wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.6 });
             } else if (w % 13 === 0) {
-                // Phantom parade
-                wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.6), hpMult: hpScale, delay: 0.6 });
-                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.7 });
+                // Tunneler ambush
+                if (typeof ENEMIES !== 'undefined' && ENEMIES.tunneler) {
+                    wave.enemies.push({ type: 'tunneler', count: Math.floor(countBase * 0.4), hpMult: hpScale, delay: 0.7 });
+                    wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.8 });
+                } else {
+                    wave.enemies.push({ type: 'ghost', count: Math.floor(countBase * 0.6), hpMult: hpScale, delay: 0.6 });
+                    wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.3), hpMult: hpScale, delay: 0.7 });
+                }
             } else if (w % 3 === 0) {
                 // Stealth wave
                 wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.5), hpMult: hpScale, delay: 0.6 });
@@ -1063,9 +1757,23 @@ function generateWaves(mapIndex, waveCount) {
                 // Elite berserker rush
                 wave.enemies.push({ type: 'berserker', count: Math.floor(countBase * 0.6), hpMult: hpScale * 1.5, delay: 0.6 });
                 wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.5, delay: 0.7 });
+            } else if (w % 13 === 0) {
+                // Sapper gold heist
+                wave.enemies.push({ type: 'sapper', count: Math.floor(countBase * 0.5), hpMult: hpScale * 0.8, delay: 0.3 });
+                wave.enemies.push({ type: 'fast', count: Math.floor(countBase * 0.4), hpMult: hpScale * 0.7, delay: 0.3 });
+                wave.enemies.push({ type: 'stealth', count: Math.floor(countBase * 0.2), hpMult: hpScale, delay: 0.5 });
+            } else if (w % 14 === 0) {
+                // Mirror + Summoner nightmare
+                wave.enemies.push({ type: 'mirror', count: Math.floor(countBase * 0.4), hpMult: hpScale * 1.2, delay: 0.6 });
+                wave.enemies.push({ type: 'summoner', count: Math.max(2, Math.floor(countBase * 0.15)), hpMult: hpScale * 1.3, delay: 1.0 });
+                wave.enemies.push({ type: 'shield', count: Math.floor(countBase * 0.15), hpMult: hpScale * 1.2, delay: 0.8 });
+            } else if (w % 15 === 0 && w % 5 !== 0) {
+                // Tunneler invasion
+                wave.enemies.push({ type: 'tunneler', count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.3, delay: 0.7 });
+                wave.enemies.push({ type: 'heavy', count: Math.floor(countBase * 0.3), hpMult: hpScale * 1.4, delay: 0.8 });
             } else {
-                // Nightmare standard — everything mixed
-                const types = ['basic', 'fast', 'heavy', 'stealth', 'berserker', 'ghost', 'splitter', 'disruptor', 'toxic'];
+                // Nightmare standard — everything mixed (including new types)
+                const types = ['basic', 'fast', 'heavy', 'stealth', 'berserker', 'ghost', 'splitter', 'disruptor', 'toxic', 'tunneler', 'mirror', 'sapper', 'summoner'];
                 const pick1 = types[w % types.length];
                 const pick2 = types[(w * 3 + 1) % types.length];
                 wave.enemies.push({ type: pick1, count: Math.floor(countBase * 0.5), hpMult: hpScale * 1.2, delay: 0.5 });
@@ -1440,6 +2148,191 @@ const MAPS = [
         ],
     },
 ];
+
+CONFIG.PROGRESSION = {
+    STARTER_TOWERS: ['arrow', 'cannon', 'ice', 'lightning', 'sniper'],
+    LICENSE_ORDER: ['flame', 'venom', 'boost', 'missile', 'mortar', 'laser', 'necro'],
+    BAND_GATES: {
+        easy: {
+            label: 'Training Grounds',
+            requires: null,
+        },
+        normal: {
+            label: 'The Battlefield',
+            requires: {
+                and: [
+                    { marksAtLeast: 9 },
+                    { clearMap: 4 },
+                ],
+            },
+        },
+        hard: {
+            label: 'The Gauntlet',
+            requires: {
+                and: [
+                    { marksAtLeast: 22 },
+                    { clearMap: 9 },
+                ],
+            },
+        },
+        nightmare: {
+            label: 'The Void',
+            requires: {
+                and: [
+                    { marksAtLeast: 38 },
+                    { clearMap: 14 },
+                ],
+            },
+        },
+    },
+    TOWER_LICENSES: {
+        flame: {
+            label: 'Flame Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 2 },
+                    { clearMap: 0 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { clearMap: 0 },
+                    { mapsClearedAtLeast: 1 },
+                ],
+            },
+        },
+        venom: {
+            label: 'Venom Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 5 },
+                    { clearMap: 1 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { clearMap: 1 },
+                    { mapsClearedAtLeast: 2 },
+                ],
+            },
+        },
+        boost: {
+            label: 'Boost Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 6 },
+                    { mapsClearedAtLeast: 2 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { mapsClearedAtLeast: 3 },
+                    { researchNodesAtLeast: 5 },
+                ],
+            },
+        },
+        missile: {
+            label: 'Missile Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 10 },
+                    { mapsClearedAtLeast: 3 },
+                    { bossKillsAtLeast: 3 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { clearDifficultyBand: 'easy' },
+                    { achievementUnlocked: 'boss5' },
+                ],
+            },
+        },
+        mortar: {
+            label: 'Mortar Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 14 },
+                    { clearMap: 5 },
+                    { peakLinksAtLeast: 2 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { clearMap: 5 },
+                    { mapsClearedAtLeast: 8 },
+                ],
+            },
+        },
+        laser: {
+            label: 'Laser Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 18 },
+                    { clearMap: 7 },
+                    { researchNodesAtLeast: 6 },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { clearDifficultyBand: 'normal' },
+                    { researchNodesAtLeast: 10 },
+                ],
+            },
+        },
+        necro: {
+            label: 'Necro Tower',
+            requires: {
+                and: [
+                    { marksAtLeast: 24 },
+                    {
+                        or: [
+                            { clearMap: 10 },
+                            { endlessDepthAtLeast: 10 },
+                        ],
+                    },
+                    {
+                        or: [
+                            { achievementUnlocked: 'mythic_tower' },
+                            { clearDifficultyBand: 'hard' },
+                        ],
+                    },
+                ],
+            },
+            legacyProof: {
+                or: [
+                    { achievementUnlocked: 'mythic_tower' },
+                    { clearDifficultyBand: 'hard' },
+                    { endlessDepthAtLeast: 10 },
+                ],
+            },
+        },
+    },
+    MAP_DIRECTIVES: [
+        { id: 'frost_lock', name: 'Frost Lock', desc: 'Apply 20 freeze effects and win.', requirement: { freezeApplicationsAtLeast: 20 } },
+        { id: 'war_chest', name: 'War Chest', desc: 'Reach 500 gold at any point and win.', requirement: { maxGoldAtLeast: 500 } },
+        { id: 'relay_command', name: 'Relay Command', desc: 'Use overclock at least once in a winning run.', requirement: { overclockUsesAtLeast: 1 } },
+        { id: 'burn_scar', name: 'Burn Scar', desc: 'Deal 2500 burn damage and win.', requirement: { burnDamageAtLeast: 2500 } },
+        { id: 'toxic_crown', name: 'Toxic Crown', desc: 'Deal 2000 poison damage and win.', requirement: { poisonDamageAtLeast: 2000 } },
+
+        { id: 'frost_relay', name: 'Frost Relay', desc: 'Apply 45 freeze effects, reach 1 active link, and win.', requirement: { and: [{ freezeApplicationsAtLeast: 45 }, { peakLinksAtLeast: 1 }] } },
+        { id: 'ember_reserve', name: 'Ember Reserve', desc: 'Deal 5000 burn damage and win.', requirement: { burnDamageAtLeast: 5000 } },
+        { id: 'venom_coast', name: 'Venom Coast', desc: 'Deal 4500 poison damage and win.', requirement: { poisonDamageAtLeast: 4500 } },
+        { id: 'pressure_net', name: 'Pressure Net', desc: 'Reach 2 active links, use 3 abilities, and win.', requirement: { and: [{ peakLinksAtLeast: 2 }, { abilitiesUsedAtLeast: 3 }] } },
+        { id: 'twin_apex', name: 'Twin Apex', desc: 'Reach 2 Tier 5 towers and win.', requirement: { peakTier5AtLeast: 2 } },
+
+        { id: 'captain_breaker', name: 'Captain Breaker', desc: 'Kill 1 captain and win.', requirement: { captainKillsAtLeast: 1 } },
+        { id: 'whiteout_lock', name: 'Whiteout Lock', desc: 'Apply 90 freeze effects, take no leaks, and win.', requirement: { and: [{ freezeApplicationsAtLeast: 90 }, { noLeaks: true }] } },
+        { id: 'inferno_feed', name: 'Inferno Feed', desc: 'Deal 12000 burn damage and win.', requirement: { burnDamageAtLeast: 12000 } },
+        { id: 'blight_hunt', name: 'Blight Hunt', desc: 'Deal 9000 poison damage, kill 1 captain, and win.', requirement: { and: [{ poisonDamageAtLeast: 9000 }, { captainKillsAtLeast: 1 }] } },
+        { id: 'iron_discipline', name: 'Iron Discipline', desc: 'Kill 1 captain, sell no towers, and win.', requirement: { and: [{ captainKillsAtLeast: 1 }, { noSell: true }] } },
+
+        { id: 'nexus_hunt', name: 'Nexus Hunt', desc: 'Kill 2 captains and win.', requirement: { captainKillsAtLeast: 2 } },
+        { id: 'ash_spiral', name: 'Ash Spiral', desc: 'Deal 18000 burn damage and win.', requirement: { burnDamageAtLeast: 18000 } },
+        { id: 'pandemic_spiral', name: 'Pandemic Spiral', desc: 'Deal 15000 poison damage and win.', requirement: { poisonDamageAtLeast: 15000 } },
+        { id: 'frozen_command', name: 'Frozen Command', desc: 'Apply 150 freeze effects, kill 1 captain, and win.', requirement: { and: [{ freezeApplicationsAtLeast: 150 }, { captainKillsAtLeast: 1 }] } },
+        { id: 'final_oblivion', name: 'Final Oblivion', desc: 'Kill 2 captains, reach 3 Tier 5 towers, take no leaks, and win.', requirement: { and: [{ captainKillsAtLeast: 2 }, { peakTier5AtLeast: 3 }, { noLeaks: true }] } },
+    ],
+};
 
 // ===== RESEARCH TREE =====
 const RESEARCH = {
