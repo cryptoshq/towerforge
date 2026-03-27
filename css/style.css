@@ -114,8 +114,8 @@
     animation: ls-sonar-out 2.6s ease-out infinite;
 }
 @keyframes ls-sonar-out {
-    0%   { width:  56px; height:  56px; margin: -28px;  opacity: 0.9; }
-    100% { width: 360px; height: 360px; margin: -180px; opacity: 0; }
+    0%   { width:  56px; height:  56px; opacity: 0.9; }
+    100% { width: 360px; height: 360px; opacity: 0; }
 }
 /* Second delayed sonar */
 .ls-sonar-2 {
