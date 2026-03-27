@@ -233,7 +233,7 @@ class Tower {
         this.special = tierData.special || {};
 
         if (this.tier >= 4) this._applyTier4Passive();
-    },
+    }
 
     // ===== TIER 4 PASSIVES =====
     // Each tower gains a passive ability at Tier 4, before Tier 5 actives unlock.
@@ -434,7 +434,7 @@ class Tower {
                 break; // Only one instance per synergy type
             }
         }
-    },
+    }
 
     _announceSynergyDiscovery(synergy, partner) {
         // Pulse both towers with synergy color
@@ -449,7 +449,7 @@ class Tower {
             Effects.addFloatingText(mx, my, `⚡ ${synergy.name}`, '#ffe066', 13);
         }
         if (typeof Audio !== 'undefined') Audio.play('powerup');
-    },
+    }
 
     _checkFormationThreshold() {
         const formation = this.getFormationBonus();
