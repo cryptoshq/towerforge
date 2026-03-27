@@ -725,17 +725,11 @@ const MapSystem = {
                 case 'flowers':
                     this._drawFlowers(ctx, x, y, ts);
                     break;
-                case 'mushroom':
-                    this._drawMushroom(ctx, x, y, ts);
-                    break;
                 case 'stump':
                     this._drawStump(ctx, x, y, ts);
                     break;
                 case 'grass_tall':
                     this._drawTallGrass(ctx, x, y, ts);
-                    break;
-                case 'butterfly':
-                    this._drawButterfly(ctx, x, y, ts);
                     break;
                 case 'pond':
                     this._drawPond(ctx, deco.x * ts, deco.y * ts, w, h);
@@ -1948,7 +1942,6 @@ const MapSystem = {
                     case 'frostpine':
                         return '#5bbf74';
                     case 'flowers':
-                    case 'butterfly':
                         return '#ff86d8';
                     case 'rock':
                     case 'stump':

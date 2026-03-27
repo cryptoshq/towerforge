@@ -1,3 +1,8 @@
+---
+name: towerforge-project-skill
+description: Guidance for working effectively in the TowerForge codebase.
+---
+
 # TowerForge Project Skill
 
 ## Purpose

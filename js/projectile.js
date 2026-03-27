@@ -263,6 +263,16 @@ class Projectile {
             dmg *= this.special.bossDmgMult;
         }
 
+        // T4 Frost Vulnerability: frozen enemies take +25% dmg from ice tower
+        if (this.special.t4FrostVuln && enemy.frozen) {
+            dmg *= (1 + this.special.t4FrostVuln);
+        }
+
+        // T4 Inferno: burning enemies take +20% dmg from flame tower
+        if (this.special.t4Inferno && enemy.burnTimer > 0) {
+            dmg *= (1 + this.special.t4Inferno);
+        }
+
         // Splash damage
         if (this.splash > 0) {
             const centerBonus = this.special.centerBonus || 1;
@@ -278,10 +288,36 @@ class Projectile {
                     } else {
                         splashDmg *= (1 - d / this.splash) * 0.6 + 0.4; // falloff
                     }
+                    // T4 Inferno: burning enemies take +20% dmg (per-enemy check)
+                    if (this.special.t4Inferno && e.burnTimer > 0) {
+                        splashDmg *= (1 + this.special.t4Inferno);
+                    }
                     e.takeDamage(splashDmg, this.tower);
                     affectedEnemies.push(e);
                 }
             }
+
+            // T4 Shockwave: stun enemies in outer 30% of splash radius
+            if (this.special.t4Shockwave) {
+                const outerThreshold = this.splash * 0.70;
+                for (const e of affectedEnemies) {
+                    if (!e.alive) continue;
+                    if (dist(this, e) > outerThreshold) {
+                        e.applyStun(0.4);
+                    }
+                }
+            }
+
+            // T4 Napalm Zone (missile): leave a burn/slow zone
+            if (this.special.t4NapalmZone && this.tower && typeof this.tower._addT4Zone === 'function') {
+                this.tower._addT4Zone(this.x, this.y, 'napalm');
+            }
+
+            // T4 Crater (mortar): leave a slow crater
+            if (this.special.t4Crater && this.tower && typeof this.tower._addT4Zone === 'function') {
+                this.tower._addT4Zone(this.x, this.y, 'crater');
+            }
+
             Effects.spawnSplash(this.x, this.y, this._getColor('trailColor', '#ffffff'), this.splash);
             if (this.splash > 50) {
                 addScreenShake(this.splash / 20 * (GameState.settings.shakeIntensity || 1));
@@ -324,6 +360,10 @@ class Projectile {
                 }
                 if (this.special.weakenVuln) {
                     e.applyVulnerability(1 + this.special.weakenVuln, this.special.poisonDuration || 3);
+                }
+                // T4 Neurotoxin: poison also applies Brittle (armor reduction)
+                if (this.special.t4Neurotoxin && typeof e.applyBrittle === 'function') {
+                    e.applyBrittle(0.20, 3);
                 }
             }
         }

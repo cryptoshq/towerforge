@@ -172,6 +172,41 @@ const UIRenderer = {
             this.lastTowerCap = towerCap;
         }
 
+        // Doctrine badge
+        const doctrineBadge = document.getElementById('hud-doctrine-badge');
+        if (doctrineBadge) {
+            const doctrine = GameState.getActiveDoctrine ? GameState.getActiveDoctrine() : null;
+            if (doctrine) {
+                doctrineBadge.style.display = 'flex';
+                doctrineBadge.style.borderColor = doctrine.style?.accent ? `${doctrine.style.accent}55` : 'rgba(255,255,255,0.18)';
+                const iconEl = document.getElementById('hdb-icon');
+                const nameEl = document.getElementById('hdb-name');
+                if (iconEl) iconEl.textContent = doctrine.icon || '';
+                if (nameEl) {
+                    nameEl.textContent = doctrine.name;
+                    nameEl.style.color = doctrine.style?.accent || '#e0e8ff';
+                }
+                doctrineBadge.title = `${doctrine.bonusText} | ${doctrine.drawbackText}`;
+            } else {
+                doctrineBadge.style.display = 'none';
+            }
+        }
+
+        // Endless depth badge
+        const depthBadge = document.getElementById('endless-depth-badge');
+        if (depthBadge) {
+            const inEndless = typeof WaveSystem !== 'undefined' && WaveSystem.endlessMode
+                && GameState.wave > GameState.maxWave;
+            if (inEndless) {
+                const depth = GameState.wave - GameState.maxWave;
+                depthBadge.style.display = 'flex';
+                const depthValEl = document.getElementById('endless-depth-val');
+                if (depthValEl) depthValEl.textContent = `+${depth}`;
+            } else {
+                depthBadge.style.display = 'none';
+            }
+        }
+
         const threatHint = this._getWaveThreatHint();
         if (threatHint !== this.lastThreatHint) {
             const threatEl = document.getElementById('hud-threat-val');
@@ -758,6 +793,15 @@ const UIRenderer = {
                 }
                 statsHTML += `</div>`;
             }
+
+            // T4 passive badge
+            if (tower.tier >= 4 && tower.special.t4PassiveName) {
+                statsHTML += `<div class="t4-passive-badge">
+                    <span class="t4-passive-icon">&#9670;</span>
+                    <span class="t4-passive-name">${tower.special.t4PassiveName}</span>
+                    <span class="t4-passive-desc">${tower.special.t4PassiveDesc || ''}</span>
+                </div>`;
+            }
         }
 
         stats.innerHTML = statsHTML;
@@ -957,9 +1001,10 @@ const UIRenderer = {
             actionHints.push(`Link network: +${Math.round(linkNet.dmg * 100)}% dmg, +${Math.round(linkNet.rate * 100)}% rate, +${Math.round(linkNet.range * 100)}% range.`);
         }
 
+        const shortcutBar = `<div class="tip2-shortcut-bar"><span>[S] Sell</span><span>[M] Move</span><span>[L] Link</span><span>[Esc] Deselect</span></div>`;
         actionsEl.innerHTML = actionRows.join('') + (actionHints.length
             ? `<div class="tip2-action-notes">${actionHints.map((line) => `<div class="action-hint-line">${line}</div>`).join('')}</div>`
-            : '');
+            : '') + shortcutBar;
 
         // Bind action buttons
         const upgradeBtn = document.getElementById('btn-upgrade-tower');

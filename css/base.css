@@ -1,0 +1,75 @@
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: 'Rajdhani', sans-serif;
+    background: #181830;
+    color: #e8e8f0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+:root {
+    --gold: #f5cc50;
+    --gold-dark: #d0a030;
+    --red: #ff5050;
+    --green: #50ff90;
+    --blue: #50b0ff;
+    --cyan: #50e8e8;
+    --purple: #b060ff;
+    --orange: #ff9050;
+    --bg-dark: #181830;
+    --bg-panel: #1e1e40;
+    --bg-card: #262650;
+    --border: #3a3a70;
+    --border-glow: #5858cc;
+    --text-dim: #9999bb;
+    --sidebar-w: 220px;
+    --hud-h: 52px;
+    --menu-btn-w: 300px;
+    --game-area-center-x: calc((100vw - var(--sidebar-w)) / 2);
+}
+
+/* ===== AUDIO UNLOCK HINT ===== */
+.audio-unlock-hint {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    padding: 8px 20px;
+    border-radius: 6px;
+    background: rgba(30, 30, 64, 0.92);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+.audio-unlock-hint.hidden {
+    opacity: 0;
+}
+.audio-hint-icon {
+    margin-right: 4px;
+}
+
+/* ===== SCREENS ===== */
+.screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: none; z-index: 10;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.screen.active {
+    display: flex;
+    animation: screenFadeIn 0.3s ease forwards;
+}
+@keyframes screenFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+

@@ -1532,8 +1532,7 @@ const Audio = {
                 this._tone(80 * pitchMult, 0.2, effectiveVol * 0.8 * volMult, 'sine');
                 break;
             case 'ice':
-                this._tone(2000 * pitchMult, 0.1, effectiveVol * 0.5 * volMult, 'sine');
-                this._noisePooled('ice', 0.08, effectiveVol * 0.3 * volMult, 3000 * pitchMult * brightnessMult);
+                this._cryoShot(effectiveVol * volMult);
                 break;
             case 'lightning':
                 this._noisePooled('lightning', 0.08, effectiveVol * 0.6 * volMult, 2000 * pitchMult * brightnessMult);
@@ -1582,8 +1581,7 @@ const Audio = {
                 this._tone(1200, 0.2, effectiveVol * 0.6, 'sine', 0.1);
                 break;
             case 'freeze':
-                this._tone(3000 * pitchMult, 0.15, effectiveVol * 0.4 * volMult, 'sine');
-                this._tone(2500 * pitchMult, 0.1, effectiveVol * 0.3 * volMult, 'sine', 0.05);
+                this._cryoFreeze(effectiveVol * volMult);
                 break;
             case 'crit':
                 this._tone(1000 * pitchMult, 0.08, effectiveVol * 0.6 * volMult, 'square');
@@ -1663,6 +1661,81 @@ const Audio = {
         gain.connect(this.sfxGain);
         source.start();
         source.stop(this.ctx.currentTime + duration + 0.01);
+    },
+
+    // Cryo shot — ice tower firing: crystalline shard with descending shimmer
+    _cryoShot(vol) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        // High-pass noise burst (glassy hiss of a shard launching)
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.09);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 4800;
+        const ng = this.ctx.createGain();
+        ng.gain.setValueAtTime(vol * 0.45, now);
+        ng.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        src.connect(hp); hp.connect(ng); ng.connect(this.sfxGain);
+        src.start(now); src.stop(now + 0.1);
+        // Descending crystal tone: 2600Hz → fades out (ice shard travel)
+        const osc = this.ctx.createOscillator();
+        const og = this.ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(2600, now);
+        osc.frequency.exponentialRampToValueAtTime(900, now + 0.12);
+        og.gain.setValueAtTime(0, now); og.gain.linearRampToValueAtTime(vol * 0.35, now + 0.01);
+        og.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.connect(og); og.connect(this.sfxGain);
+        osc.start(now); osc.stop(now + 0.13);
+        // Bright harmonic shimmer (glassy overtone)
+        [3400, 5100].forEach((f, i) => {
+            const o2 = this.ctx.createOscillator(); const g2 = this.ctx.createGain();
+            o2.type = 'sine'; o2.frequency.value = f;
+            g2.gain.setValueAtTime(0, now + i * 0.01);
+            g2.gain.linearRampToValueAtTime(vol * 0.12, now + i * 0.01 + 0.008);
+            g2.gain.exponentialRampToValueAtTime(0.001, now + i * 0.01 + 0.055);
+            o2.connect(g2); g2.connect(this.sfxGain);
+            o2.start(now + i * 0.01); o2.stop(now + i * 0.01 + 0.06);
+        });
+    },
+
+    // Cryo freeze — enemy frozen: impact + spreading crystal resonance
+    _cryoFreeze(vol) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        // Dull impact thud (freeze hitting the enemy)
+        const o0 = this.ctx.createOscillator(); const g0 = this.ctx.createGain();
+        o0.type = 'sine'; o0.frequency.setValueAtTime(220, now);
+        o0.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+        g0.gain.setValueAtTime(0, now); g0.gain.linearRampToValueAtTime(vol * 0.4, now + 0.005);
+        g0.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        o0.connect(g0); g0.connect(this.sfxGain); o0.start(now); o0.stop(now + 0.09);
+        // Rising crystalline chord (ice spreading outward)
+        [800, 1200, 1600, 2100].forEach((f, i) => {
+            const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+            o.type = 'sine'; o.frequency.value = f;
+            const t = now + i * 0.028;
+            g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol * (0.28 - i * 0.05), t + 0.012);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+            o.connect(g); g.connect(this.sfxGain); o.start(t); o.stop(t + 0.24);
+        });
+        // High shimmer noise (frozen surface sparkle)
+        const bufLen = Math.floor(this.ctx.sampleRate * 0.18);
+        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+        const ns = this.ctx.createBufferSource(); ns.buffer = buf;
+        const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass';
+        bp.frequency.value = 5500; bp.Q.value = 0.8;
+        const ng = this.ctx.createGain();
+        ng.gain.setValueAtTime(0, now + 0.05);
+        ng.gain.linearRampToValueAtTime(vol * 0.25, now + 0.08);
+        ng.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+        ns.connect(bp); bp.connect(ng); ng.connect(this.sfxGain);
+        ns.start(now + 0.05); ns.stop(now + 0.24);
     },
 
     // Pooled noise - reuses pre-created buffers to avoid allocation overhead

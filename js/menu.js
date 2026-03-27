@@ -5,8 +5,6 @@ const MenuSystem = {
     menuParticles: [],
     menuAnimId: null,
     _hotkeyCaptureAction: null,
-    _lastDoctrineSpotlightId: null,
-    _doctrineSpotlightAnimTimer: null,
     _doctrineSelectionContext: null,
     _menuReactiveLevel: 0,
     _menuReactiveLow: 0,
@@ -312,12 +310,21 @@ const MenuSystem = {
             });
         }
 
+        // Slider track fill helper
+        function updateSliderFill(el) {
+            const min = parseFloat(el.min) || 0;
+            const max = parseFloat(el.max) || 100;
+            const pct = ((el.value - min) / (max - min)) * 100;
+            el.style.setProperty('--fill', pct + '%');
+        }
+
         // Settings controls
         document.getElementById('music-volume').addEventListener('input', (e) => {
             const v = e.target.value / 100;
             GameState.settings.musicVolume = v;
             Audio.setMusicVolume(v);
             document.getElementById('music-vol-val').textContent = e.target.value + '%';
+            updateSliderFill(e.target);
         });
 
         document.getElementById('sfx-volume').addEventListener('input', (e) => {
@@ -325,11 +332,13 @@ const MenuSystem = {
             GameState.settings.sfxVolume = v;
             Audio.setSfxVolume(v);
             document.getElementById('sfx-vol-val').textContent = e.target.value + '%';
+            updateSliderFill(e.target);
         });
 
         document.getElementById('shake-intensity').addEventListener('input', (e) => {
             GameState.settings.shakeIntensity = e.target.value / 100;
             document.getElementById('shake-val').textContent = e.target.value + '%';
+            updateSliderFill(e.target);
         });
 
         document.getElementById('show-ranges').addEventListener('change', (e) => {
@@ -875,106 +884,45 @@ const MenuSystem = {
 
     renderDoctrineSelect() {
         const cardsEl = document.getElementById('doctrine-cards');
-        const summaryEl = document.getElementById('doctrine-summary');
-        const spotlightEl = document.getElementById('doctrine-spotlight');
-        if (!cardsEl || !summaryEl || !spotlightEl) return;
-
-        const mapIndex = Number.isFinite(GameState.pendingMapIndex) ? GameState.pendingMapIndex : GameState.mapIndex;
-        const map = MAPS[mapIndex];
-        const diffKey = GameState.settings.difficulty || 'normal';
-        const diffPreset = CONFIG.DIFFICULTY_PRESETS[diffKey] || CONFIG.DIFFICULTY_PRESETS.normal;
-        const challengeCount = Array.isArray(GameState._pendingChallenges) ? GameState._pendingChallenges.length : 0;
-
-        this._doctrineSelectionContext = {
-            diffPreset,
-            map,
-            challengeCount,
-        };
-
-        const mapName = map ? map.name : 'Unknown';
-        const challengeText = challengeCount > 0 ? `+${challengeCount} active` : 'None';
-        summaryEl.innerHTML = `
-            <div class="doctrine-summary-head">
-                <span class="d-summary-title">Mission Briefing</span>
-                <span class="d-summary-note">Weekly uses fixed rules (no doctrine).</span>
-            </div>
-            <div class="doctrine-summary-grid">
-                <div class="d-summary-chip"><span>Map</span><strong>${mapName}</strong></div>
-                <div class="d-summary-chip"><span>Difficulty</span><strong>${diffPreset.name}</strong></div>
-                <div class="d-summary-chip"><span>Challenges</span><strong>${challengeText}</strong></div>
-                <div class="d-summary-chip"><span>Base Start</span><strong>${diffPreset.startingGold}g / ${diffPreset.startingLives} lives</strong></div>
-            </div>
-        `;
+        if (!cardsEl) return;
 
         cardsEl.innerHTML = '';
         const doctrineList = Array.isArray(CONFIG.DOCTRINES) ? CONFIG.DOCTRINES : [];
-        if (doctrineList.length === 0) {
-            cardsEl.innerHTML = '<div class="doctrine-summary">No doctrines configured.</div>';
-            return;
-        }
 
-        let selectedId = GameState.pendingDoctrineId;
-        if (!selectedId || !doctrineList.some(d => d.id === selectedId)) {
-            selectedId = doctrineList[0].id;
-            GameState.pendingDoctrineId = selectedId;
-        }
+        let selectedId = GameState.pendingDoctrineId || 'none';
 
-        for (let idx = 0; idx < doctrineList.length; idx++) {
-            const doctrine = doctrineList[idx];
+        // --- "No Doctrine" skip card ---
+        const skipCard = document.createElement('div');
+        skipCard.className = 'dv2-card dv2-skip';
+        if (selectedId === 'none') skipCard.classList.add('is-selected');
+        skipCard.dataset.doctrineId = 'none';
+        skipCard.innerHTML = `
+            <div class="dv2-icon">&#9654;</div>
+            <div class="dv2-name">No Doctrine</div>
+            <div class="dv2-summary">Standard start. No bonuses, no drawbacks.</div>
+        `;
+        skipCard.addEventListener('click', () => {
+            this._selectDoctrineInView('none');
+            Audio.play('click');
+        });
+        cardsEl.appendChild(skipCard);
+
+        // --- Doctrine cards ---
+        for (const doctrine of doctrineList) {
             const card = document.createElement('div');
-            card.className = 'doctrine-card';
+            card.className = 'dv2-card';
             if (doctrine.id === selectedId) card.classList.add('is-selected');
             card.dataset.doctrineId = doctrine.id;
-            card.style.background = doctrine.style && doctrine.style.gradient
-                ? doctrine.style.gradient
-                : 'linear-gradient(135deg, rgba(32,32,62,0.95), rgba(20,20,42,0.92))';
-            card.style.setProperty('--doctrine-accent', doctrine.style && doctrine.style.accent ? doctrine.style.accent : '#aab4ff');
-            card.style.setProperty('--doctrine-index', String(idx));
-
-            const effects = doctrine.effects || {};
-            const projectedGold = Math.max(0, Math.floor(diffPreset.startingGold + (effects.startGold || 0)));
-            const projectedLives = Math.max(1, Math.floor(diffPreset.startingLives + (effects.startLives || 0)));
-
-            const tags = [];
-            if ((effects.startLives || 0) > 0) tags.push('DEFENSE');
-            if ((effects.startGold || 0) < 0) tags.push('LOW SUPPLY');
-            if ((effects.interestRateDelta || 0) > 0 || (effects.interestCapDelta || 0) > 0) tags.push('ECON');
-            if ((effects.abilityCooldownMult || 1) < 1) tags.push('ABILITY');
-            if ((effects.eliteBossDamageMult || 1) > 1) tags.push('BOSS');
-            if ((effects.globalDamageMult || 1) < 1) tags.push('RISK');
-            if (tags.length === 0) tags.push('BALANCED');
-            const tagMarkup = tags.slice(0, 3)
-                .map((tag) => `<span class="doctrine-tag">${tag}</span>`)
-                .join('');
-
-            const codeName = doctrine.id ? doctrine.id.replace(/_/g, '-').toUpperCase() : 'UNKNOWN';
-            const selectedLabel = doctrine.id === selectedId ? 'SELECTED' : 'SELECT';
+            const accent = doctrine.style?.accent || '#aab4ff';
+            card.style.setProperty('--doctrine-accent', accent);
+            card.style.borderColor = doctrine.id === selectedId ? accent : '';
 
             card.innerHTML = `
-                <div class="doctrine-card-head">
-                    <div class="doctrine-icon">${doctrine.icon || ''}</div>
-                    <div class="doctrine-title-wrap">
-                        <div class="doctrine-name">${doctrine.name}</div>
-                        <div class="doctrine-short">Code: ${codeName}</div>
-                    </div>
-                    <div class="doctrine-select-indicator">${selectedLabel}</div>
-                </div>
-                <div class="doctrine-summary-text">${doctrine.summary || ''}</div>
-                <div class="doctrine-tag-row">${tagMarkup}</div>
-                <div class="doctrine-start-stats">
-                    <div class="d-start-stat">
-                        <span class="d-start-label">Start Gold</span>
-                        <span class="d-start-value">${projectedGold}g</span>
-                    </div>
-                    <div class="d-start-stat">
-                        <span class="d-start-label">Start Lives</span>
-                        <span class="d-start-value">${projectedLives}</span>
-                    </div>
-                </div>
-                <div class="doctrine-effects">
-                    <div class="doctrine-effect bonus">BONUS: ${doctrine.bonusText || 'None'}</div>
-                    <div class="doctrine-effect drawback">DRAWBACK: ${doctrine.drawbackText || 'None'}</div>
-                </div>
+                <div class="dv2-icon">${doctrine.icon || ''}</div>
+                <div class="dv2-name">${doctrine.name}</div>
+                <div class="dv2-summary">${doctrine.summary || ''}</div>
+                <div class="dv2-bonus">${doctrine.bonusText || ''}</div>
+                <div class="dv2-drawback">${doctrine.drawbackText || ''}</div>
             `;
 
             card.addEventListener('click', () => {
@@ -988,145 +936,37 @@ const MenuSystem = {
         this._selectDoctrineInView(selectedId, { fromRender: true });
     },
 
-    _updateDoctrineStartButton(doctrineId) {
-        const startBtn = document.getElementById('btn-doctrine-start');
-        if (!startBtn) return;
-
-        const selectedDoctrine = this._getDoctrineById(doctrineId);
-        const shortName = selectedDoctrine && typeof selectedDoctrine.name === 'string'
-            ? selectedDoctrine.name.replace(/\s+Doctrine$/i, '').toUpperCase()
-            : '';
-        startBtn.textContent = shortName ? `START RUN (${shortName})` : 'START RUN';
-    },
-
-    _setDoctrineSelectedCardState(doctrineId) {
-        const cards = document.querySelectorAll('.doctrine-card');
-        cards.forEach((card) => {
-            const isSelected = card.dataset.doctrineId === doctrineId;
-            card.classList.toggle('is-selected', isSelected);
-            const indicator = card.querySelector('.doctrine-select-indicator');
-            if (indicator) indicator.textContent = isSelected ? 'SELECTED' : 'SELECT';
-        });
-    },
-
     _selectDoctrineInView(doctrineId, options = {}) {
-        const doctrine = this._getDoctrineById(doctrineId);
-        if (!doctrine) return;
-
-        const prevDoctrineId = GameState.pendingDoctrineId;
-        GameState.pendingDoctrineId = doctrine.id;
-        this._setDoctrineSelectedCardState(doctrine.id);
-        this._updateDoctrineStartButton(doctrine.id);
-
-        const ctx = this._doctrineSelectionContext || {};
-        this._renderDoctrineSpotlight(doctrine, ctx.diffPreset, ctx.map, ctx.challengeCount);
-
-        if (options.fromRender) {
-            this._lastDoctrineSpotlightId = doctrine.id;
-        } else if (prevDoctrineId === doctrine.id) {
-            return;
+        // 'none' means no doctrine — allow it
+        if (doctrineId !== 'none') {
+            const doctrine = this._getDoctrineById(doctrineId);
+            if (!doctrine) return;
         }
-    },
 
-    _renderDoctrineSpotlight(doctrine, diffPreset, map, challengeCount) {
-        const spotlightEl = document.getElementById('doctrine-spotlight');
-        const nameEl = document.getElementById('doctrine-spotlight-name');
-        const codeEl = document.getElementById('doctrine-spotlight-code');
-        const emblemEl = document.getElementById('doctrine-spotlight-emblem');
-        const summaryEl = document.getElementById('doctrine-spotlight-summary');
-        const bonusEl = document.getElementById('doctrine-spotlight-bonus');
-        const drawbackEl = document.getElementById('doctrine-spotlight-drawback');
-        const metricsEl = document.getElementById('doctrine-spotlight-metrics');
-        if (!spotlightEl || !nameEl || !codeEl || !emblemEl || !summaryEl || !bonusEl || !drawbackEl || !metricsEl) return;
+        GameState.pendingDoctrineId = doctrineId === 'none' ? null : doctrineId;
 
-        const doctrineId = doctrine && doctrine.id ? doctrine.id : 'none';
-        const shouldAnimate = this._lastDoctrineSpotlightId !== null && this._lastDoctrineSpotlightId !== doctrineId;
-        spotlightEl.dataset.doctrine = doctrineId;
-        spotlightEl.style.setProperty('--spot-accent', doctrine.style && doctrine.style.accent ? doctrine.style.accent : '#90a2ff');
-        spotlightEl.style.setProperty('--spot-gradient', doctrine.style && doctrine.style.gradient
-            ? doctrine.style.gradient
-            : 'linear-gradient(135deg, rgba(28, 34, 86, 0.95), rgba(18, 22, 58, 0.94))');
-
-        const codeName = doctrineId.replace(/_/g, '-').toUpperCase();
-        nameEl.textContent = doctrine.name || 'Doctrine';
-        codeEl.textContent = `Code: ${codeName}`;
-        emblemEl.textContent = doctrine.icon || '?';
-        summaryEl.textContent = doctrine.summary || '';
-        bonusEl.textContent = `BONUS: ${doctrine.bonusText || 'None'}`;
-        drawbackEl.textContent = `DRAWBACK: ${doctrine.drawbackText || 'None'}`;
-
-        const effects = doctrine.effects || {};
-        const projectedGold = Math.max(0, Math.floor((diffPreset && diffPreset.startingGold ? diffPreset.startingGold : 0) + (effects.startGold || 0)));
-        const projectedLives = Math.max(1, Math.floor((diffPreset && diffPreset.startingLives ? diffPreset.startingLives : 1) + (effects.startLives || 0)));
-
-        const metrics = [];
-        metrics.push({
-            label: 'Projected Start',
-            value: `${projectedGold}g / ${projectedLives} lives`,
-        });
-
-        if (Number.isFinite(effects.interestRateDelta) && effects.interestRateDelta !== 0) {
-            const ratePct = (effects.interestRateDelta * 100).toFixed(1).replace(/\.0$/, '');
-            metrics.push({
-                label: 'Interest Rate',
-                value: `${effects.interestRateDelta > 0 ? '+' : ''}${ratePct}%`,
+        // Update card selected state
+        const cardsEl = document.getElementById('doctrine-cards');
+        if (cardsEl) {
+            cardsEl.querySelectorAll('.dv2-card').forEach(card => {
+                const isSelected = card.dataset.doctrineId === doctrineId;
+                card.classList.toggle('is-selected', isSelected);
+                const doctrine = this._getDoctrineById(card.dataset.doctrineId);
+                card.style.borderColor = isSelected && doctrine?.style?.accent ? doctrine.style.accent : '';
             });
         }
 
-        if (Number.isFinite(effects.interestCapDelta) && effects.interestCapDelta !== 0) {
-            metrics.push({
-                label: 'Interest Cap',
-                value: `${effects.interestCapDelta > 0 ? '+' : ''}${Math.floor(effects.interestCapDelta)}`,
-            });
+        // Update start button
+        const startBtn = document.getElementById('btn-doctrine-start');
+        if (startBtn) {
+            if (doctrineId === 'none') {
+                startBtn.textContent = 'START RUN';
+            } else {
+                const doctrine = this._getDoctrineById(doctrineId);
+                const name = doctrine?.name?.replace(/\s+Doctrine$/i, '').toUpperCase() || '';
+                startBtn.textContent = name ? `START RUN (${name})` : 'START RUN';
+            }
         }
-
-        if (Number.isFinite(effects.abilityCooldownMult) && effects.abilityCooldownMult !== 1) {
-            metrics.push({
-                label: 'Ability Cooldown',
-                value: `x${effects.abilityCooldownMult.toFixed(2)}`,
-            });
-        }
-
-        if (Number.isFinite(effects.globalDamageMult) && effects.globalDamageMult !== 1) {
-            metrics.push({
-                label: 'Global Damage',
-                value: `x${effects.globalDamageMult.toFixed(2)}`,
-            });
-        }
-
-        if (Number.isFinite(effects.eliteBossDamageMult) && effects.eliteBossDamageMult !== 1) {
-            metrics.push({
-                label: 'Elite/Boss Damage',
-                value: `x${effects.eliteBossDamageMult.toFixed(2)}`,
-            });
-        }
-
-        metrics.push({
-            label: 'Mission Context',
-            value: `${map && map.name ? map.name : 'Unknown'} | ${diffPreset && diffPreset.name ? diffPreset.name : 'Unknown'}`,
-        });
-
-        metrics.push({
-            label: 'Challenge Pack',
-            value: challengeCount > 0 ? `+${challengeCount} active` : 'None active',
-        });
-
-        metricsEl.innerHTML = metrics
-            .map((item) => `<div class="d-metric-row"><span>${item.label}</span><strong>${item.value}</strong></div>`)
-            .join('');
-
-        if (shouldAnimate) {
-            spotlightEl.classList.remove('is-switching');
-            spotlightEl.offsetWidth;
-            spotlightEl.classList.add('is-switching');
-            if (this._doctrineSpotlightAnimTimer) clearTimeout(this._doctrineSpotlightAnimTimer);
-            this._doctrineSpotlightAnimTimer = setTimeout(() => {
-                spotlightEl.classList.remove('is-switching');
-                this._doctrineSpotlightAnimTimer = null;
-            }, 520);
-        }
-
-        this._lastDoctrineSpotlightId = doctrineId;
     },
 
     startRunWithDoctrine() {
@@ -1185,16 +1025,6 @@ const MenuSystem = {
         }
 
         GameState.screen = screen;
-
-        if (screen !== 'doctrine') {
-            this._lastDoctrineSpotlightId = null;
-            if (this._doctrineSpotlightAnimTimer) {
-                clearTimeout(this._doctrineSpotlightAnimTimer);
-                this._doctrineSpotlightAnimTimer = null;
-            }
-            const spotlight = document.getElementById('doctrine-spotlight');
-            if (spotlight) spotlight.classList.remove('is-switching');
-        }
 
         switch (screen) {
             case 'menu':
@@ -1877,6 +1707,14 @@ const MenuSystem = {
         document.getElementById('show-ranges').checked = s.showRanges;
         document.getElementById('auto-start').checked = s.autoStart;
 
+        // Update slider track fills
+        document.querySelectorAll('input[type="range"]').forEach(el => {
+            const min = parseFloat(el.min) || 0;
+            const max = parseFloat(el.max) || 100;
+            const pct = ((el.value - min) / (max - min)) * 100;
+            el.style.setProperty('--fill', pct + '%');
+        });
+
         // Build/refresh main menu difficulty selector
         this._buildMainDifficultySelector();
         this._renderHotkeySettings();
@@ -2043,7 +1881,7 @@ const MenuSystem = {
             '.tc-cycle-btn',
             '.tc-filter-btn',
             '.diff-btn',
-            '.doctrine-card',
+            '.dv2-card',
             '.hud-btn',
             '.hud-toggle',
             '.action-btn',
@@ -2620,57 +2458,85 @@ const MenuSystem = {
             return PLAYER_ABILITIES[i] && PLAYER_ABILITIES[i].key ? PLAYER_ABILITIES[i].key : '?';
         });
         content.innerHTML = `
-            <h3>OBJECTIVE</h3>
-            <p>Enemies march along the path toward your base. Build towers to stop them before they reach the exit. If too many get through, you lose!</p>
+            <div class="howtoplay-section">
+                <h3>OBJECTIVE</h3>
+                <p>Enemies march along the path toward your base. Build towers to stop them before they reach the exit. If too many get through, you lose!</p>
+            </div>
 
-            <h3>PLACING TOWERS</h3>
-            <p>Click a tower in the sidebar (or press <span class="key">1-0 - =</span>) then click on a buildable tile. Towers cannot be placed on the path or decorations.</p>
+            <div class="howtoplay-section">
+                <h3>PLACING TOWERS</h3>
+                <p>Click a tower in the sidebar (or press <span class="key">1-0 - =</span>) then click on a buildable tile. Towers cannot be placed on the path or decorations.</p>
+            </div>
 
-            <h3>UPGRADING</h3>
-            <p>Click a placed tower to see its info panel. Click <span class="key">UPGRADE</span> or press <span class="key">${hk('upgradeTower', 'U')}</span> to upgrade.</p>
+            <div class="howtoplay-section">
+                <h3>UPGRADING</h3>
+                <p>Click a placed tower to see its info panel. Click <span class="key">UPGRADE</span> or press <span class="key">${hk('upgradeTower', 'U')}</span> to upgrade.</p>
+            </div>
 
-            <h3>DUAL PATH SYSTEM</h3>
-            <p>At <b>Tier 3</b>, you must choose between two upgrade paths. This choice is <b>permanent</b>! Each path leads to different Tier 4 and Tier 5 abilities.</p>
-            <p><b>Path A</b> typically focuses on single-target power: critical hits, armor penetration, precision damage.</p>
-            <p><b>Path B</b> typically focuses on area/utility effects: multi-shot, crowd control, support abilities.</p>
-            <p>Read the path descriptions carefully before choosing. You'll see previews of Tier 4 and 5 abilities to help you decide.</p>
+            <div class="howtoplay-section">
+                <h3>DUAL PATH SYSTEM</h3>
+                <p>At <b>Tier 3</b>, you must choose between two upgrade paths. This choice is <b>permanent</b>! Each path leads to different Tier 4 and Tier 5 abilities.</p>
+                <p><b>Path A</b> typically focuses on single-target power: critical hits, armor penetration, precision damage.</p>
+                <p><b>Path B</b> typically focuses on area/utility effects: multi-shot, crowd control, support abilities.</p>
+                <p>Read the path descriptions carefully before choosing. You'll see previews of Tier 4 and 5 abilities to help you decide.</p>
+            </div>
 
-            <h3>TOWER TARGETING</h3>
-            <p>Click a tower to change its targeting priority: Closest, Strongest, Weakest, First (nearest to exit), Last, or Fastest. Use <span class="key">Mouse Wheel</span> to cycle modes.</p>
+            <div class="howtoplay-section">
+                <h3>TOWER TARGETING</h3>
+                <p>Click a tower to change its targeting priority: Closest, Strongest, Weakest, First (nearest to exit), Last, or Fastest. Use <span class="key">Mouse Wheel</span> to cycle modes.</p>
+            </div>
 
-            <h3>OVERCLOCK</h3>
-            <p>Use the tower panel <span class="key">OVERCLOCK</span> action: +50% attack speed for 10 seconds, then disabled for 5 seconds. Save it for heavy pressure waves.</p>
+            <div class="howtoplay-section">
+                <h3>OVERCLOCK</h3>
+                <p>Use the tower panel <span class="key">OVERCLOCK</span> action: +50% attack speed for 10 seconds, then disabled for 5 seconds. Save it for heavy pressure waves.</p>
+            </div>
 
-            <h3>ABILITIES</h3>
-            <p>Use <span class="key">${abilityHotkeys.join(' ')}</span> to activate powerful abilities with cooldowns:</p>
-            <p><span class="key">${abilityHotkeys[0]}</span> Air Strike \u2014 AOE damage at cursor<br>
-               <span class="key">${abilityHotkeys[1]}</span> Reinforce \u2014 Temporary extra lives<br>
-               <span class="key">${abilityHotkeys[2]}</span> Gold Mine \u2014 Instant gold<br>
-               <span class="key">${abilityHotkeys[3]}</span> Slow Field \u2014 Slow all enemies<br>
-               <span class="key">${abilityHotkeys[4]}</span> Overcharge \u2014 Buff all tower damage</p>
+            <div class="howtoplay-section">
+                <h3>ABILITIES</h3>
+                <p>Use <span class="key">${abilityHotkeys.join(' ')}</span> to activate powerful abilities with cooldowns:</p>
+                <ul>
+                    <li><span class="key">${abilityHotkeys[0]}</span> Air Strike \u2014 AOE damage at cursor</li>
+                    <li><span class="key">${abilityHotkeys[1]}</span> Reinforce \u2014 Temporary extra lives</li>
+                    <li><span class="key">${abilityHotkeys[2]}</span> Gold Mine \u2014 Instant gold</li>
+                    <li><span class="key">${abilityHotkeys[3]}</span> Slow Field \u2014 Slow all enemies</li>
+                    <li><span class="key">${abilityHotkeys[4]}</span> Overcharge \u2014 Buff all tower damage</li>
+                </ul>
+            </div>
 
-            <h3>ECONOMY</h3>
-            <p>Kill enemies to earn gold. Between waves you earn interest on your gold (5% up to 50g cap). Sell towers for 70% refund. Plan your economy!</p>
+            <div class="howtoplay-section">
+                <h3>ECONOMY</h3>
+                <p>Kill enemies to earn gold. Between waves you earn interest on your gold (5% up to 50g cap). Sell towers for 70% refund. Plan your economy!</p>
+            </div>
 
-            <h3>SYNERGY ZONES</h3>
-            <p>Place 3 towers of the same type in a triangle formation to create powerful synergy zones that affect enemies within the area!</p>
+            <div class="howtoplay-section">
+                <h3>SYNERGY ZONES</h3>
+                <p>Place 3 towers of the same type in a triangle formation to create powerful synergy zones that affect enemies within the area!</p>
+            </div>
 
-            <h3>MASTERY</h3>
-            <p>Each tower tracks its kills and gains permanent bonuses at 25, 75, 150, 300, and 500 kills. Protect your veteran towers!</p>
+            <div class="howtoplay-section">
+                <h3>MASTERY</h3>
+                <p>Each tower tracks its kills and gains permanent bonuses at 25, 75, 150, 300, and 500 kills. Protect your veteran towers!</p>
+            </div>
 
-            <h3>RESEARCH</h3>
-            <p>Earn Research Points by completing maps. Spend them in the Research Lab \u2014 a visual skill tree with 4 branches: Offense, Defense, Economy, and Knowledge.</p>
+            <div class="howtoplay-section">
+                <h3>RESEARCH</h3>
+                <p>Earn Research Points by completing maps. Spend them in the Research Lab \u2014 a visual skill tree with 4 branches: Offense, Defense, Economy, and Knowledge.</p>
+            </div>
 
-            <h3>CONTROLS</h3>
-            <p><span class="key">${hk('startWave', 'Space')}</span> Start next wave<br>
-               <span class="key">1-0 - =</span> Select tower type<br>
-               <span class="key">${hk('sellTower', 'S')}</span> Sell selected tower<br>
-               <span class="key">${hk('upgradeTower', 'U')}</span> Upgrade selected tower<br>
-               <span class="key">${hk('cycleTower', 'Tab')}</span> Cycle through towers<br>
-               <span class="key">${hk('toggleRanges', 'G')}</span> Toggle range circles<br>
-               <span class="key">Del</span> Sell selected tower<br>
-               <span class="key">${hk('pause', 'Esc')}</span> Deselect / Pause<br>
-               <span class="key">${hk('speedUp', '+')}/${hk('speedReset', '-')}</span> Game speed</p>
+            <div class="howtoplay-section">
+                <h3>CONTROLS</h3>
+                <ul>
+                    <li><span class="key">${hk('startWave', 'Space')}</span> Start next wave</li>
+                    <li><span class="key">1-0 - =</span> Select tower type</li>
+                    <li><span class="key">${hk('sellTower', 'S')}</span> Sell selected tower</li>
+                    <li><span class="key">${hk('upgradeTower', 'U')}</span> Upgrade selected tower</li>
+                    <li><span class="key">${hk('cycleTower', 'Tab')}</span> Cycle through towers</li>
+                    <li><span class="key">${hk('toggleRanges', 'G')}</span> Toggle range circles</li>
+                    <li><span class="key">Del</span> Sell selected tower</li>
+                    <li><span class="key">${hk('pause', 'Esc')}</span> Deselect / Pause</li>
+                    <li><span class="key">${hk('speedUp', '+')}/${hk('speedReset', '-')}</span> Game speed</li>
+                </ul>
+            </div>
         `;
     },
 
@@ -2726,6 +2592,17 @@ const MenuSystem = {
             selector.appendChild(btn);
         }
 
+        // In-game slider fill sync helper
+        function syncSliderFills(...els) {
+            for (const el of els) {
+                if (!el) continue;
+                const min = parseFloat(el.min) || 0;
+                const max = parseFloat(el.max) || 100;
+                const pct = ((el.value - min) / (max - min)) * 100;
+                el.style.setProperty('--fill', pct + '%');
+            }
+        }
+
         // Music volume
         document.getElementById('set-music').addEventListener('input', (e) => {
             const v = e.target.value / 100;
@@ -2736,6 +2613,7 @@ const MenuSystem = {
             if (mainSlider) mainSlider.value = e.target.value;
             const mainVal = document.getElementById('music-vol-val');
             if (mainVal) mainVal.textContent = e.target.value + '%';
+            syncSliderFills(e.target, mainSlider);
         });
 
         // SFX volume
@@ -2747,6 +2625,7 @@ const MenuSystem = {
             if (mainSlider) mainSlider.value = e.target.value;
             const mainVal = document.getElementById('sfx-vol-val');
             if (mainVal) mainVal.textContent = e.target.value + '%';
+            syncSliderFills(e.target, mainSlider);
         });
 
         // Screen shake
@@ -2756,6 +2635,7 @@ const MenuSystem = {
             if (mainSlider) mainSlider.value = e.target.value;
             const mainVal = document.getElementById('shake-val');
             if (mainVal) mainVal.textContent = e.target.value + '%';
+            syncSliderFills(e.target, mainSlider);
         });
 
         // Show ranges

@@ -174,6 +174,8 @@ class Tower {
         this.activeSynergies = [];
         this.synergyUpdateTimer = 0;
         this.synergyBonuses = { dmg: 0, rate: 0, range: 0, splashBonus: 0, critBonus: 0, rampBonus: 0 };
+        this._lastFormationThreshold = 0;
+        this.synergyPulse = null;
 
         // Statistics tracking
         this.stats = {
@@ -202,6 +204,7 @@ class Tower {
         this.souls = 0;
         this.specialTimers = {};
         this.quakeZones = [];
+        this.t4Zones = []; // Napalm / Crater zones (T4 passives)
         this.deathPactTimer = 0;
 
         // ID
@@ -228,6 +231,99 @@ class Tower {
         this.fireRate = tierData.fireRate;
         this.splash = tierData.splash || 0;
         this.special = tierData.special || {};
+
+        if (this.tier >= 4) this._applyTier4Passive();
+    },
+
+    // ===== TIER 4 PASSIVES =====
+    // Each tower gains a passive ability at Tier 4, before Tier 5 actives unlock.
+    _applyTier4Passive() {
+        if (!this.special) this.special = {};
+        switch (this.type) {
+            case 'arrow':
+                // Pinpoint: shots pierce first target
+                this.special.t4Pierce = true;
+                this.special.pierce = Math.max(this.special.pierce || 0, 1);
+                this.special.t4PassiveName = 'Pinpoint';
+                this.special.t4PassiveDesc = 'Arrows pierce first target (60% pass-through dmg)';
+                break;
+            case 'cannon':
+                // Shockwave: explosions apply 0.4s stun in outer 30% of splash
+                this.special.t4Shockwave = true;
+                this.special.t4PassiveName = 'Shockwave';
+                this.special.t4PassiveDesc = 'Explosions stun enemies at splash edge for 0.4s';
+                break;
+            case 'ice':
+                // Frost Vulnerability: frozen enemies take +25% extra damage
+                this.special.t4FrostVuln = 0.25;
+                this.special.t4PassiveName = 'Frost Vulnerability';
+                this.special.t4PassiveDesc = 'Frozen enemies take +25% damage from all sources';
+                break;
+            case 'lightning':
+                // Overload: kills chain 40% damage to nearest alive enemy
+                this.special.t4ChainKill = 0.40;
+                this.special.t4PassiveName = 'Overload';
+                this.special.t4PassiveDesc = '40% chance on kill to chain to nearest enemy';
+                break;
+            case 'sniper':
+                // Auto-Mark: every shot applies Marked status (+20% next hit)
+                this.special.t4AutoMark = true;
+                if (!this.special.markVuln) {
+                    this.special.markVuln = 0.20;
+                    this.special.markDuration = 4;
+                }
+                this.special.t4PassiveName = "Hunter's Mark";
+                this.special.t4PassiveDesc = 'Every shot automatically applies Marked (+20% dmg)';
+                break;
+            case 'laser':
+                // Rapid Ramp: laser damage ramps 40% faster
+                this.special.t4RampBoost = 0.40;
+                this.special.t4PassiveName = 'Rapid Ramp';
+                this.special.t4PassiveDesc = 'Laser damage ramps up 40% faster';
+                break;
+            case 'missile':
+                // Napalm Zone: explosions leave a 1.5s burn/slow zone
+                this.special.t4NapalmZone = true;
+                this.special.t4PassiveName = 'Napalm Zone';
+                this.special.t4PassiveDesc = 'Explosions leave a burning slow zone for 1.5s';
+                break;
+            case 'flame':
+                // Inferno: burning enemies take +20% damage while on fire
+                this.special.t4Inferno = 0.20;
+                this.special.t4PassiveName = 'Inferno';
+                this.special.t4PassiveDesc = 'Burning enemies take +20% damage from all sources';
+                break;
+            case 'venom':
+                // Neurotoxin: poison also applies Brittle (armor reduction)
+                this.special.t4Neurotoxin = true;
+                this.special.t4PassiveName = 'Neurotoxin';
+                this.special.t4PassiveDesc = 'Poison also reduces enemy armor (Brittle)';
+                break;
+            case 'boost':
+                // Amplifier: aura range +20% and applies to linked towers at full strength
+                this.special.t4AmpRange = 0.20;
+                this.special.t4PassiveName = 'Amplifier';
+                this.special.t4PassiveDesc = 'Aura range +20%; full buff through tower links';
+                break;
+            case 'mortar':
+                // Crater: direct hits leave a 2s slow crater (40% slow)
+                this.special.t4Crater = true;
+                this.special.t4PassiveName = 'Crater';
+                this.special.t4PassiveDesc = 'Direct hits leave a slow crater for 2s';
+                break;
+            case 'necro':
+                // Soul Siphon: on kill, next shot deals +30% bonus damage
+                this.special.t4SoulSiphon = true;
+                this.special.t4SoulCharge = false;
+                this.special.t4PassiveName = 'Soul Siphon';
+                this.special.t4PassiveDesc = 'On kill, next shot deals +30% bonus damage';
+                break;
+            default:
+                // Generic Tier 4 passive for any unlisted tower: +8% damage
+                this.special.t4GenericDmg = 0.08;
+                this.special.t4PassiveName = 'Hardened';
+                this.special.t4PassiveDesc = '+8% damage from combat experience';
+        }
     }
 
     // ===== XP SYSTEM =====
@@ -296,6 +392,7 @@ class Tower {
 
     // ===== SYNERGY DETECTION =====
     _detectSynergies() {
+        const prevNames = new Set((this.activeSynergies || []).map(s => s.name));
         this.activeSynergies = [];
         this.synergyBonuses = { dmg: 0, rate: 0, range: 0, splashBonus: 0, critBonus: 0, rampBonus: 0 };
 
@@ -329,8 +426,54 @@ class Tower {
                 this.synergyBonuses.critBonus += synergy.bonuses.critBonus || 0;
                 this.synergyBonuses.rampBonus += synergy.bonuses.rampBonus || 0;
 
+                // Announce newly-discovered synergy
+                if (!prevNames.has(synergy.name)) {
+                    this._announceSynergyDiscovery(synergy, other);
+                }
+
                 break; // Only one instance per synergy type
             }
+        }
+    },
+
+    _announceSynergyDiscovery(synergy, partner) {
+        // Pulse both towers with synergy color
+        const color = '#ffe066';
+        this.synergyPulse = { timer: 1.2, color };
+        if (partner) partner.synergyPulse = { timer: 1.2, color };
+
+        // Floating text between both towers
+        const mx = (this.x + (partner ? partner.x : this.x)) / 2;
+        const my = (this.y + (partner ? partner.y : this.y)) / 2 - 22;
+        if (typeof Effects !== 'undefined') {
+            Effects.addFloatingText(mx, my, `⚡ ${synergy.name}`, '#ffe066', 13);
+        }
+        if (typeof Audio !== 'undefined') Audio.play('powerup');
+    },
+
+    _checkFormationThreshold() {
+        const formation = this.getFormationBonus();
+        const count = formation.count;
+        // Find the highest threshold we're at
+        let threshold = 0;
+        for (const cb of CONFIG.COMBO_BONUSES) {
+            if (count >= cb.count) threshold = cb.count;
+        }
+        // Only announce when crossing to a new (higher) threshold
+        if (threshold > 0 && threshold > this._lastFormationThreshold) {
+            this._lastFormationThreshold = threshold;
+            const dmgPct = Math.round((formation.dmg || 0) * 100);
+            const ratePct = Math.round((formation.rate || 0) * 100);
+            let bonusText = dmgPct > 0 ? `+${dmgPct}% Formation` : '';
+            if (ratePct > 0) bonusText += bonusText ? ` +${ratePct}% Rate` : `+${ratePct}% Rate Formation`;
+            if (bonusText) {
+                this.synergyPulse = { timer: 1.0, color: '#88ffcc' };
+                if (typeof Effects !== 'undefined') {
+                    Effects.addFloatingText(this.x, this.y - 20, bonusText, '#88ffcc', 11);
+                }
+            }
+        } else if (count < threshold) {
+            this._lastFormationThreshold = threshold;
         }
     }
 
@@ -408,6 +551,16 @@ class Tower {
             dmg *= (1 + this.souls * this.special.soulDmgBonus);
         }
 
+        // T4 Soul Siphon: on kill, next shot +30%
+        if (this.special && this.special.t4SoulCharge) {
+            dmg *= 1.30;
+        }
+
+        // T4 generic passive: +8% damage
+        if (this.special && this.special.t4GenericDmg) {
+            dmg *= (1 + this.special.t4GenericDmg);
+        }
+
         // Challenge: glass_cannon — towers deal 2x damage
         if (GameState.activeChallenges.includes('glass_cannon')) dmg *= 2;
 
@@ -417,7 +570,8 @@ class Tower {
     getEffectiveRange() {
         let r = this.range;
         const rb = GameState.researchBonuses;
-        r *= (1 + (rb.rangeMult || 0));
+        const de = GameState.doctrineEffects || {};
+        r *= (1 + (rb.rangeMult || 0) + (de.rangeMult || 0));
 
         const mastery = this.getMasteryData();
         if (mastery) {
@@ -443,7 +597,8 @@ class Tower {
         if (rate === 0) return 0; // Continuous beam
 
         const rb = GameState.researchBonuses;
-        rate *= (1 - Math.min(rb.rateMult || 0, 0.5));
+        const de = GameState.doctrineEffects || {};
+        rate *= (1 - Math.min((rb.rateMult || 0) + (de.rateMult || 0), 0.5));
 
         const mastery = this.getMasteryData();
         if (mastery) {
@@ -629,7 +784,8 @@ class Tower {
             if (t.type === 'boost' && t !== this && t.special.aura) {
                 // Use base range (t.range) to avoid infinite recursion:
                 // getBoostBuff -> getEffectiveRange -> getBoostBuff -> ...
-                if (dist(this, t) <= t.range) {
+                const boostRange = t.range * (1 + (t.special.t4AmpRange || 0));
+                if (dist(this, t) <= boostRange) {
                     dmg += t.special.dmgBuff || 0;
                     rate += t.special.rateBuff || 0;
                     range += t.special.rangeBuff || 0;
@@ -645,13 +801,17 @@ class Tower {
         this.animTimer += dt;
         this.stats.timeAlive += dt;
         if (this.deathPactTimer > 0) this.deathPactTimer = Math.max(0, this.deathPactTimer - dt);
+        if (this.synergyPulse && this.synergyPulse.timer > 0) {
+            this.synergyPulse.timer = Math.max(0, this.synergyPulse.timer - dt);
+        }
 
         // Update synergies periodically (every 2 seconds)
         this.synergyUpdateTimer -= dt;
         if (this.synergyUpdateTimer <= 0) {
-            this.synergyUpdateTimer = 2.0;
+            this.synergyUpdateTimer = CONFIG.SYNERGY_UPDATE_INTERVAL;
             this.clearBrokenLinks();
             this._detectSynergies();
+            this._checkFormationThreshold();
         }
 
         // Sell confirmation timeout
@@ -1293,6 +1453,23 @@ class Tower {
                 }
             }
         }
+
+        // T4 zones: Napalm (missile) and Crater (mortar)
+        if (this.t4Zones && this.t4Zones.length > 0) {
+            for (let i = this.t4Zones.length - 1; i >= 0; i--) {
+                const zone = this.t4Zones[i];
+                zone.remaining -= dt;
+                if (zone.remaining <= 0) {
+                    this.t4Zones.splice(i, 1);
+                    continue;
+                }
+                for (const e of GameState.enemies) {
+                    if (!e.alive || Math.hypot(e.x - zone.x, e.y - zone.y) > zone.radius) continue;
+                    if (zone.slow > 0) e.applySlow(zone.slow, Math.max(0.2, dt * 2));
+                    if (zone.dps > 0) e.takeDamage(zone.dps * dt, this);
+                }
+            }
+        }
     }
 
     _addQuakeZone(x, y, special) {
@@ -1308,6 +1485,16 @@ class Tower {
         if (this.quakeZones.length > 10) {
             this.quakeZones.shift();
         }
+    }
+
+    _addT4Zone(x, y, zoneType) {
+        if (!this.t4Zones) this.t4Zones = [];
+        if (zoneType === 'napalm') {
+            this.t4Zones.push({ x, y, radius: 55, remaining: 1.5, slow: 0.35, dps: 12, color: '#ff7020' });
+        } else if (zoneType === 'crater') {
+            this.t4Zones.push({ x, y, radius: 50, remaining: 2.0, slow: 0.40, dps: 0, color: '#a08060' });
+        }
+        if (this.t4Zones.length > 8) this.t4Zones.shift();
     }
 
     _getLaserBeamProfile(variant = 'main', intensity = null) {
@@ -1398,6 +1585,10 @@ class Tower {
             // Synergy ramp bonus
             if (this.synergyBonuses.rampBonus > 0) {
                 rampRate *= (1 + this.synergyBonuses.rampBonus);
+            }
+            // T4 passive: Rapid Ramp — 40% faster ramp
+            if (this.special.t4RampBoost) {
+                rampRate *= (1 + this.special.t4RampBoost);
             }
             this.beamRamp = Math.min(this.beamRamp + rampRate * dt, this.special.rampMax || 1);
         }
@@ -1507,7 +1698,8 @@ class Tower {
         let isCrit = false;
         let critMult = 1;
         const linkBonuses = this.getLinkBonuses();
-        let critChance = (special.critChance || 0) + (this.getBoostBuff().crit || 0) + (GameState.researchBonuses.critChance || 0);
+        const de = GameState.doctrineEffects || {};
+        let critChance = (special.critChance || 0) + (this.getBoostBuff().crit || 0) + (GameState.researchBonuses.critChance || 0) + (de.critChance || 0);
         // Add synergy crit bonus
         critChance += this.synergyBonuses.critBonus;
         critChance += linkBonuses.crit || 0;
@@ -1539,6 +1731,11 @@ class Tower {
             }
         } else {
             this._createProjectile(target, dmg, isCrit, critMult, instantKill, isPerfectShot);
+        }
+
+        // T4 Soul Siphon: clear charge after shot (bonus was already baked into dmg)
+        if (this.special && this.special.t4SoulCharge) {
+            this.special.t4SoulCharge = false;
         }
 
         // Track damage estimate
@@ -1593,6 +1790,28 @@ class Tower {
         // Necro tower: gain souls on kill
         if (this.type === 'necro' && this.special && this.special.soulGain) {
             this.souls = Math.min((this.souls || 0) + this.special.soulGain, this.special.maxSouls || 60);
+        }
+
+        // T4 Soul Siphon (necro): next shot deals +30% damage
+        if (this.special && this.special.t4SoulSiphon) {
+            this.special.t4SoulCharge = true;
+        }
+
+        // T4 Overload (lightning): 40% chance on kill to chain to nearest enemy
+        if (this.special && this.special.t4ChainKill && Math.random() < this.special.t4ChainKill) {
+            let nearest = null, minD = Infinity;
+            for (const e of GameState.enemies) {
+                if (e.alive && e !== enemy) {
+                    const d = dist(this, e);
+                    if (d < minD) { minD = d; nearest = e; }
+                }
+            }
+            if (nearest) {
+                const chainDmg = this.getEffectiveDamage() * 0.5;
+                nearest.takeDamage(chainDmg, this);
+                Effects.spawnBeam(enemy.x, enemy.y, nearest.x, nearest.y, '#ffe040', 2, 0.12);
+                if (!nearest.alive) this.recordKill(nearest);
+            }
         }
 
         // Reset streak if we miss (handled externally)
@@ -1767,7 +1986,7 @@ class Tower {
         }
         // Start confirmation timer
         this.sellConfirmActive = true;
-        this.sellConfirmTimer = 3.0; // 3 second window to confirm
+        this.sellConfirmTimer = CONFIG.SELL_CONFIRM_WINDOW;
         return false;
     }
 

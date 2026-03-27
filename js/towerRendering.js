@@ -40,6 +40,22 @@ const TowerRenderer = {
             ctx.shadowBlur = 15 + Math.sin(t * 10) * 5;
         }
 
+        // Synergy discovery pulse
+        if (tower.synergyPulse && tower.synergyPulse.timer > 0) {
+            const pct = tower.synergyPulse.timer / 1.2;
+            const radius = ts * 0.7 + (1 - pct) * ts * 0.5;
+            ctx.save();
+            ctx.globalAlpha = pct * 0.7;
+            ctx.strokeStyle = tower.synergyPulse.color;
+            ctx.shadowColor = tower.synergyPulse.color;
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // Mastery glow effect (drawn before tower so it appears behind/around it)
         this._drawMasteryGlow(ctx, tower, x, y, ts, t);
 

@@ -1930,6 +1930,9 @@ const WaveSystem = {
         waveBonus += this.getCurrentTacticalModifiers().waveBonusFlat || 0;
         waveBonus = Math.max(0, Math.floor(waveBonus));
         GameState.gold += waveBonus;
+        if (waveBonus > 0) {
+            Effects.addFloatingText(logicalWidth / 2, 46, `+${waveBonus}g Wave Bonus`, '#ffd700', 13);
+        }
 
         // Gold rush
         if (GameState.researchBonuses.goldRush && GameState.wave % 5 === 0) {

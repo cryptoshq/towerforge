@@ -26,6 +26,7 @@ const FIXED_STEP_MS = 1000 / 60;
 const MAX_CATCHUP_MS = 2000;
 const MAX_BACKGROUND_CATCHUP_MS = 10 * 60 * 1000;
 const BACKGROUND_CATCHUP_STEP_MS = 100;
+const LONG_FRAME_THRESHOLD = 0.1;
 
 // Game session tracking
 let sessionStartTime = 0;
@@ -119,7 +120,14 @@ async function initGame() {
     MenuSystem.showScreen('menu');
 
     // Resume audio context on first user interaction (browser policy)
-    const resumeAudio = () => Audio.unlockFromGesture();
+    const audioHint = document.getElementById('audio-unlock-hint');
+    const resumeAudio = () => {
+        Audio.unlockFromGesture();
+        if (audioHint) {
+            audioHint.classList.add('hidden');
+            setTimeout(() => audioHint.remove(), 600);
+        }
+    };
     document.addEventListener('click', resumeAudio, { once: true, capture: true });
     document.addEventListener('keydown', resumeAudio, { once: true, capture: true });
     document.addEventListener('touchstart', resumeAudio, { once: true, capture: true });
@@ -456,7 +464,7 @@ function gameLoop(timestamp) {
     lastFrameTime = timestamp;
 
     // Detect GC pauses / long frames
-    if (rawDt > 0.1) {
+    if (rawDt > LONG_FRAME_THRESHOLD) {
         longFrameCount++;
         gcPauseDetected = true;
         if (typeof DebugLog !== 'undefined') {
@@ -518,13 +526,18 @@ function updateGame(rawDt) {
     // ===== ENEMIES =====
     for (let i = GameState.enemies.length - 1; i >= 0; i--) {
         const e = GameState.enemies[i];
-        if (!e.update(dt)) {
-            if (e.reached && !e.alive) {
-                handleEnemyLeak(e);
+        try {
+            if (!e.update(dt)) {
+                if (e.reached && !e.alive) {
+                    handleEnemyLeak(e);
+                }
+                if (!e.alive) {
+                    GameState.enemies.splice(i, 1);
+                }
             }
-            if (!e.alive) {
-                GameState.enemies.splice(i, 1);
-            }
+        } catch (err) {
+            console.error('[TowerForge] Enemy update error:', err);
+            GameState.enemies.splice(i, 1);
         }
     }
 
@@ -555,12 +568,21 @@ function updateGame(rawDt) {
 
     // ===== TOWERS =====
     for (const tower of GameState.towers) {
-        tower.update(dt);
+        try {
+            tower.update(dt);
+        } catch (err) {
+            console.error('[TowerForge] Tower update error:', err);
+        }
     }
 
     // ===== PROJECTILES =====
     for (let i = GameState.projectiles.length - 1; i >= 0; i--) {
-        if (!GameState.projectiles[i].update(dt)) {
+        try {
+            if (!GameState.projectiles[i].update(dt)) {
+                GameState.projectiles.splice(i, 1);
+            }
+        } catch (err) {
+            console.error('[TowerForge] Projectile update error:', err);
             GameState.projectiles.splice(i, 1);
         }
     }
@@ -718,8 +740,10 @@ function handleEnemyLeak(enemy) {
             );
         }
 
-        // Flash screen red
-        GameState.screenFlash = { color: '#ff0000', alpha: 0.3, timer: 0.5 };
+        // Flash screen red — scale intensity/duration with lives lost
+        const flashAlpha = Math.min(0.18 + lifeLoss * 0.07, 0.55);
+        const flashDuration = Math.min(0.45 + lifeLoss * 0.12, 1.2);
+        GameState.screenFlash = { color: '#ff0000', alpha: flashAlpha, timer: flashDuration };
 
         // Last Stand trigger: once health drops to 5 or below, grant timed global damage boost.
         if (rb.lastStand && GameState.lives <= 5 && GameState.lastStandTimer <= 0) {
@@ -1130,6 +1154,13 @@ function gameOver() {
     if (statsEl) {
         const sessionTime = (performance.now() - sessionStartTime - totalPauseTime) / 1000;
         const endlessBest = (GameState.metaProgress.endlessBestDepthByMap || [])[GameState.mapIndex] || 0;
+        const activeDoctrine = GameState.getActiveDoctrine ? GameState.getActiveDoctrine() : null;
+        const doctrineHTML = activeDoctrine
+            ? `<div class="stat-row doctrine-stat-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px">
+                <span class="sr-label" style="color:${activeDoctrine.style?.accent || '#8fd8ff'}">${activeDoctrine.icon} ${activeDoctrine.name}</span>
+                <span class="sr-value" style="font-size:10px;color:#aaa">${activeDoctrine.drawbackText}</span>
+               </div>`
+            : '';
         statsEl.innerHTML = `
             <div class="stat-row"><span class="sr-label">Total Kills</span><span class="sr-value">${GameState.stats.totalKills}</span></div>
             <div class="stat-row"><span class="sr-label">Boss Kills</span><span class="sr-value">${GameState.stats.bossKills}</span></div>
@@ -1142,6 +1173,7 @@ function gameOver() {
             ${weeklyResult.active ? `<div class="stat-row"><span class="sr-label">Weekly Challenge</span><span class="sr-value">${GameState.weeklyChallengeRun.weekId || 'Active'} | Best ${weeklyResult.record.bestScore || 0}</span></div>` : ''}
             <div class="stat-row"><span class="sr-label">Leaks</span><span class="sr-value" style="color:#ff4040">${GameState.stats.leaksThisGame}</span></div>
             <div class="stat-row"><span class="sr-label">Max Combo</span><span class="sr-value">${typeof KillFeedback !== 'undefined' ? KillFeedback.maxCombo : 0}x</span></div>
+            ${doctrineHTML}
         `;
         // Append detailed post-game stats
         if (typeof JuiceFeatures !== 'undefined') {
@@ -1279,6 +1311,13 @@ function victory() {
     // Show victory screen
     const statsEl = document.getElementById('victory-stats');
     if (statsEl) {
+        const victoryDoctrine = GameState.getActiveDoctrine ? GameState.getActiveDoctrine() : null;
+        const victoryDoctrineHTML = victoryDoctrine
+            ? `<div class="stat-row" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px">
+                <span class="sr-label" style="color:${victoryDoctrine.style?.accent || '#8fd8ff'}">${victoryDoctrine.icon} ${victoryDoctrine.name}</span>
+                <span class="sr-value" style="font-size:10px;color:#aaa">${victoryDoctrine.bonusText}</span>
+               </div>`
+            : '';
         statsEl.innerHTML = `
             <div class="stat-row"><span class="sr-label">Total Kills</span><span class="sr-value">${GameState.stats.totalKills}</span></div>
             <div class="stat-row"><span class="sr-label">Boss Kills</span><span class="sr-value">${GameState.stats.bossKills}</span></div>
@@ -1292,6 +1331,7 @@ function victory() {
             ${weeklyResult.active ? `<div class="stat-row"><span class="sr-label">Weekly Challenge</span><span class="sr-value">${GameState.weeklyChallengeRun.weekId || 'Active'} | Best ${weeklyResult.record.bestScore || 0}</span></div>` : ''}
             <div class="stat-row"><span class="sr-label">Leaks</span><span class="sr-value" style="color:${GameState.stats.leaksThisGame === 0 ? '#40ff80' : '#ff4040'}">${GameState.stats.leaksThisGame}</span></div>
             <div class="stat-row"><span class="sr-label">Max Combo</span><span class="sr-value">${typeof KillFeedback !== 'undefined' ? KillFeedback.maxCombo : 0}x</span></div>
+            ${victoryDoctrineHTML}
         `;
         // Append detailed post-game stats
         if (typeof JuiceFeatures !== 'undefined') {
