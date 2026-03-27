@@ -118,6 +118,7 @@ function _lsDismiss() {
 async function initGame() {
     console.log('%c[TowerForge] Initializing...', 'color: #ffd700; font-weight: bold');
     _lsStartTime = performance.now();
+    const initStart = _lsStartTime;
 
     _lsProgress(10, 'Loading save data...');
     // Load persistent data (research, achievements, settings, unlocks)
