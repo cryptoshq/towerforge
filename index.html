@@ -14,22 +14,59 @@
     <!-- Loading Screen -->
     <div id="loading-screen">
         <div class="ls-bg" aria-hidden="true"></div>
+        <div class="ls-particles" aria-hidden="true"></div>
+        <!-- Screen corner HUD markers -->
+        <div class="ls-hud-corner ls-hud-tl" aria-hidden="true"></div>
+        <div class="ls-hud-corner ls-hud-tr" aria-hidden="true"></div>
+        <div class="ls-hud-corner ls-hud-bl" aria-hidden="true"></div>
+        <div class="ls-hud-corner ls-hud-br" aria-hidden="true"></div>
+
         <div class="ls-content">
-            <div class="ls-rings" aria-hidden="true">
+            <!-- Emblem: three rings + tower icon -->
+            <div class="ls-emblem" aria-hidden="true">
                 <span class="ls-ring ls-ring-a"></span>
                 <span class="ls-ring ls-ring-b"></span>
                 <span class="ls-ring ls-ring-c"></span>
-                <span class="ls-ring-center"></span>
+                <div class="ls-emblem-core">
+                    <svg class="ls-tower-svg" viewBox="0 0 40 48" fill="none" aria-hidden="true">
+                        <!-- Tower silhouette -->
+                        <rect x="13" y="30" width="14" height="18" rx="1.5" fill="currentColor" opacity="0.85"/>
+                        <rect x="10" y="20" width="20" height="12" rx="1.5" fill="currentColor" opacity="0.75"/>
+                        <rect x="14" y="9"  width="12" height="13" rx="1.5" fill="currentColor" opacity="0.90"/>
+                        <rect x="17" y="1"  width="6"  height="10" rx="1"   fill="currentColor"/>
+                        <!-- Battlements -->
+                        <rect x="9"  y="17" width="4" height="5" rx="1" fill="currentColor" opacity="0.65"/>
+                        <rect x="27" y="17" width="4" height="5" rx="1" fill="currentColor" opacity="0.65"/>
+                        <!-- Arrow slit -->
+                        <rect x="18" y="23" width="4" height="6" rx="1" fill="rgba(0,0,0,0.5)"/>
+                    </svg>
+                </div>
             </div>
+
+            <!-- Brand -->
             <div class="ls-brand">
                 <p class="ls-kicker">Command Nexus</p>
                 <h1 class="ls-title">TowerForge</h1>
+                <p class="ls-tagline">Deploy &middot; Upgrade &middot; Dominate</p>
             </div>
-            <div class="ls-bar-wrap">
-                <div class="ls-bar" id="ls-bar"></div>
+
+            <!-- Progress -->
+            <div class="ls-progress-block">
+                <p class="ls-welcome" id="ls-welcome"></p>
+                <div class="ls-bar-row">
+                    <div class="ls-bar-wrap">
+                        <div class="ls-bar" id="ls-bar"></div>
+                    </div>
+                    <span class="ls-pct" id="ls-pct">0%</span>
+                </div>
+                <p class="ls-status" id="ls-status">Initializing systems...</p>
             </div>
-            <p class="ls-welcome" id="ls-welcome"></p>
-            <p class="ls-status" id="ls-status">Initializing systems...</p>
+
+            <!-- Tip -->
+            <div class="ls-tip-block">
+                <span class="ls-tip-label">TIP</span>
+                <span class="ls-tip-text" id="ls-tip">Place towers near path bends for maximum coverage.</span>
+            </div>
         </div>
     </div>
 

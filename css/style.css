@@ -5,198 +5,258 @@
 
 /* ===== LOADING SCREEN ===== */
 #loading-screen {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
     overflow: hidden;
-    /* Matches main menu background exactly */
     background:
-        radial-gradient(58% 62% at 12% -8%,  rgba(98,  210, 255, 0.20), transparent 72%),
-        radial-gradient(50% 56% at 88%   0%,  rgba(132, 184, 255, 0.17), transparent 70%),
-        radial-gradient(56% 72% at 52% 118%,  rgba(46,  102, 156, 0.24), transparent 80%),
+        radial-gradient(58% 62% at 12% -8%,  rgba(98,  210, 255, 0.22), transparent 72%),
+        radial-gradient(50% 56% at 88%   0%,  rgba(132, 184, 255, 0.18), transparent 70%),
+        radial-gradient(56% 72% at 52% 118%,  rgba(46,  102, 156, 0.26), transparent 80%),
         linear-gradient(168deg, #050b14 0%, #071221 38%, #07192a 66%, #040b14 100%);
-    transition: opacity 0.65s ease, visibility 0.65s ease;
+    transition: opacity 0.75s ease, visibility 0.75s ease;
 }
-#loading-screen.ls-hidden {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-}
+#loading-screen.ls-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
-/* Grid overlay — identical to #main-menu::before */
+/* Animated grid overlay */
 #loading-screen::before {
-    content: '';
-    position: absolute; inset: 0; z-index: 0;
+    content: ''; position: absolute; inset: 0; z-index: 0;
     background:
-        repeating-linear-gradient(90deg, rgba(142,190,232,0.06) 0 1px, transparent 1px 68px),
-        repeating-linear-gradient(0deg,  rgba(142,190,232,0.04) 0 1px, transparent 1px 58px);
-    mask-image: linear-gradient(180deg, rgba(0,0,0,0.7), transparent 90%);
-    opacity: 0.38;
+        repeating-linear-gradient(90deg, rgba(142,190,232,0.07) 0 1px, transparent 1px 68px),
+        repeating-linear-gradient(0deg,  rgba(142,190,232,0.05) 0 1px, transparent 1px 58px);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), transparent 92%);
     pointer-events: none;
 }
-
-/* Crown glow — mirrors main menu's animated top bloom */
+/* Top crown bloom — animated */
 #loading-screen::after {
-    content: '';
-    position: absolute;
-    inset: -18% -10% auto; height: 340px; z-index: 0;
+    content: ''; position: absolute;
+    inset: -18% -10% auto; height: 380px; z-index: 0;
     background:
-        radial-gradient(ellipse at 50% 40%, rgba(156,226,255,0.28), transparent 66%),
-        radial-gradient(ellipse at 22% 50%, rgba(140,188,255,0.16), transparent 72%);
-    filter: blur(34px);
+        radial-gradient(ellipse at 50% 40%, rgba(156,226,255,0.32), transparent 62%),
+        radial-gradient(ellipse at 22% 50%, rgba(140,188,255,0.18), transparent 70%),
+        radial-gradient(ellipse at 78% 50%, rgba(100,160,255,0.14), transparent 70%);
+    filter: blur(38px);
     animation: mmScanDrift 12s ease-in-out infinite;
     pointer-events: none;
 }
 
-/* Scan-line texture overlay */
+/* Scanline texture */
 .ls-bg {
     position: absolute; inset: 0; z-index: 0;
-    background: repeating-linear-gradient(
-        0deg, transparent 0, transparent 3px,
-        rgba(0,0,0,0.025) 3px, rgba(0,0,0,0.025) 4px
-    );
+    background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 4px);
     pointer-events: none;
 }
 
-/* Main content column */
+/* Floating particles — pure CSS */
+.ls-particles { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ls-particles::before,
+.ls-particles::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(127,210,255,0.25);
+    animation: ls-float 8s ease-in-out infinite;
+}
+.ls-particles::before { width: 4px; height: 4px; left: 20%; top: 65%; animation-duration: 9s; }
+.ls-particles::after  { width: 3px; height: 3px; left: 74%; top: 30%; animation-duration: 11s; animation-delay: -3s; }
+@keyframes ls-float {
+    0%,100% { transform: translateY(0) scale(1); opacity: 0.4; }
+    50%      { transform: translateY(-28px) scale(1.3); opacity: 0.9; }
+}
+
+/* ── Screen corner HUD markers ── */
+.ls-hud-corner {
+    position: absolute; width: 28px; height: 28px; z-index: 2; pointer-events: none;
+    opacity: 0.55;
+}
+.ls-hud-corner::before,
+.ls-hud-corner::after { content: ''; position: absolute; background: #7fd2ff; border-radius: 1px; }
+.ls-hud-corner::before { width: 100%; height: 1.5px; top: 0; left: 0; }
+.ls-hud-corner::after  { width: 1.5px; height: 100%; top: 0; left: 0; }
+.ls-hud-tl { top: 20px; left: 20px; }
+.ls-hud-tr { top: 20px; right: 20px; transform: scaleX(-1); }
+.ls-hud-bl { bottom: 20px; left: 20px; transform: scaleY(-1); }
+.ls-hud-br { bottom: 20px; right: 20px; transform: scale(-1); }
+
+/* ── Main content column ── */
 .ls-content {
     position: relative; z-index: 1;
     display: flex; flex-direction: column;
-    align-items: center; gap: 18px;
-    padding: 48px 64px;
+    align-items: center; gap: 0;
+    padding: 52px 72px 44px;
+    animation: ls-content-in 0.7s ease both;
+}
+@keyframes ls-content-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Corner bracket decoration */
-.ls-content::before {
-    content: '';
-    position: absolute; inset: 0;
-    background:
-        linear-gradient(to right,  rgba(127,210,255,0.5) 20px, transparent 20px) 0   0   / 20px 1px no-repeat,
-        linear-gradient(to bottom, rgba(127,210,255,0.5) 20px, transparent 20px) 0   0   / 1px 20px no-repeat,
-        linear-gradient(to left,   rgba(127,210,255,0.5) 20px, transparent 20px) 100% 0   / 20px 1px no-repeat,
-        linear-gradient(to bottom, rgba(127,210,255,0.5) 20px, transparent 20px) 100% 0   / 1px 20px no-repeat,
-        linear-gradient(to right,  rgba(127,210,255,0.5) 20px, transparent 20px) 0   100% / 20px 1px no-repeat,
-        linear-gradient(to top,    rgba(127,210,255,0.5) 20px, transparent 20px) 0   100% / 1px 20px no-repeat,
-        linear-gradient(to left,   rgba(127,210,255,0.5) 20px, transparent 20px) 100% 100% / 20px 1px no-repeat,
-        linear-gradient(to top,    rgba(127,210,255,0.5) 20px, transparent 20px) 100% 100% / 1px 20px no-repeat;
-    pointer-events: none;
-}
-
-/* Spinner rings — blue/cyan palette to match UI */
-.ls-rings {
-    position: relative; width: 88px; height: 88px;
+/* ── Emblem (rings + tower icon) ── */
+.ls-emblem {
+    position: relative; width: 148px; height: 148px;
+    margin-bottom: 28px; flex-shrink: 0;
 }
 .ls-ring {
     position: absolute; border-radius: 50%;
-    border: 2px solid transparent;
+    border: 1.5px solid transparent;
 }
 .ls-ring-a {
     inset: 0;
-    border-top-color:   rgba(127, 210, 255, 0.88);
-    border-right-color: rgba(127, 210, 255, 0.20);
-    animation: ls-spin 1.6s linear infinite;
-}
-.ls-ring-b {
-    inset: 11px;
-    border-bottom-color: rgba(169, 215, 255, 0.72);
-    border-left-color:   rgba(169, 215, 255, 0.16);
-    animation: ls-spin 1.1s linear infinite reverse;
-}
-.ls-ring-c {
-    inset: 24px;
-    border-top-color:   rgba(245, 200, 60, 0.55);
-    border-right-color: rgba(245, 200, 60, 0.10);
+    border-top-color:   rgba(127,210,255,0.90);
+    border-right-color: rgba(127,210,255,0.18);
+    border-bottom-color: rgba(127,210,255,0.06);
     animation: ls-spin 2.2s linear infinite;
 }
-/* Pulsing center dot */
-.ls-ring-center {
-    position: absolute;
-    inset: 38px;
-    border-radius: 50%;
-    background: rgba(127, 210, 255, 0.55);
-    box-shadow: 0 0 8px rgba(127,210,255,0.9), 0 0 18px rgba(127,210,255,0.4);
-    animation: ls-center-pulse 2.2s ease-in-out infinite;
+.ls-ring-b {
+    inset: 16px;
+    border: 1px solid transparent;
+    border-bottom-color: rgba(169,215,255,0.75);
+    border-left-color:   rgba(169,215,255,0.15);
+    animation: ls-spin 1.5s linear infinite reverse;
 }
-@keyframes ls-center-pulse {
-    0%, 100% { opacity: 0.5; transform: scale(0.9); }
-    50%       { opacity: 1;   transform: scale(1.2); }
+.ls-ring-c {
+    inset: 34px;
+    border-top-color:   rgba(245,200,60,0.60);
+    border-right-color: rgba(245,200,60,0.12);
+    animation: ls-spin 3.0s linear infinite;
+}
+/* Tower icon centered inside rings */
+.ls-emblem-core {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.ls-tower-svg {
+    width: 40px; height: 46px;
+    color: #7fd2ff;
+    filter: drop-shadow(0 0 10px rgba(127,210,255,0.80)) drop-shadow(0 0 24px rgba(127,210,255,0.35));
+    animation: ls-tower-pulse 3s ease-in-out infinite;
+}
+@keyframes ls-tower-pulse {
+    0%,100% { opacity: 0.80; filter: drop-shadow(0 0 10px rgba(127,210,255,0.70)); }
+    50%      { opacity: 1;    filter: drop-shadow(0 0 18px rgba(127,210,255,1.00)) drop-shadow(0 0 36px rgba(127,210,255,0.40)); }
 }
 @keyframes ls-spin { to { transform: rotate(360deg); } }
 
-/* Brand block */
-.ls-brand { text-align: center; }
-
-/* Kicker pill — identical style to mm-kicker */
+/* ── Brand ── */
+.ls-brand { text-align: center; margin-bottom: 8px; }
 .ls-kicker {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 4px 10px 4px 8px; border-radius: 999px;
+    padding: 4px 12px 4px 10px; border-radius: 999px;
     border: 1px solid rgba(146,198,242,0.38);
-    background: rgba(10,24,40,0.56);
+    background: rgba(10,24,40,0.60);
     font-family: 'Share Tech Mono', monospace;
     font-size: 10px; color: #a9d7ff;
-    letter-spacing: 1.7px; text-transform: uppercase;
-    margin-bottom: 10px;
+    letter-spacing: 1.8px; text-transform: uppercase;
+    margin-bottom: 12px;
 }
 .ls-kicker::before {
     content: '';
-    display: inline-block;
     width: 7px; height: 7px; border-radius: 50%;
     background: #7fd2ff;
-    box-shadow: 0 0 10px rgba(127,210,255,0.8);
+    box-shadow: 0 0 10px rgba(127,210,255,0.85);
     flex-shrink: 0;
+    animation: ls-dot-blink 2s ease-in-out infinite;
 }
-
-/* Title — gradient text matching mm-title */
+@keyframes ls-dot-blink {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
 .ls-title {
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(36px, 5.2vw, 64px); font-weight: 900;
-    letter-spacing: 2.2px;
-    background: linear-gradient(180deg, #f8fdff 0%, #e9f4ff 46%, #cddff0 100%);
+    font-size: clamp(40px, 5.5vw, 68px); font-weight: 900;
+    letter-spacing: 3px; line-height: 1;
+    background: linear-gradient(175deg, #ffffff 0%, #e8f4ff 40%, #b8d8f0 100%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: ls-title-breathe 7s ease-in-out infinite;
+    animation: ls-title-breathe 6s ease-in-out infinite;
 }
 @keyframes ls-title-breathe {
-    0%, 100% { filter: drop-shadow(0 0 22px rgba(146,208,255,0.22)); }
-    50%       { filter: drop-shadow(0 0 36px rgba(146,208,255,0.44)); }
+    0%,100% { filter: drop-shadow(0 0 20px rgba(146,208,255,0.20)); }
+    50%      { filter: drop-shadow(0 0 40px rgba(146,208,255,0.50)); }
+}
+.ls-tagline {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: rgba(169,215,255,0.50);
+    letter-spacing: 3.5px; text-transform: uppercase;
+    margin-top: 8px;
 }
 
-/* Progress bar — wider, cyan glow */
-.ls-bar-wrap {
-    width: 300px; height: 2px;
-    background: rgba(127,210,255,0.10);
-    border-radius: 99px; overflow: hidden;
-    margin-top: 2px;
+/* ── Progress block ── */
+.ls-progress-block {
+    width: 380px; margin-top: 24px;
+    display: flex; flex-direction: column; gap: 8px;
 }
-.ls-bar {
-    height: 100%; width: 0%;
-    background: linear-gradient(90deg, #1e6bcc, #4ab8ff, #9be4ff);
-    border-radius: 99px;
-    transition: width 0.35s ease;
-    box-shadow: 0 0 10px rgba(127,210,255,0.65), 0 0 20px rgba(127,210,255,0.2);
-}
-
-/* Welcome text — cyan, matches kicker tone */
 .ls-welcome {
     font-family: 'Share Tech Mono', monospace;
     font-size: 12px; color: #7fd2ff;
     letter-spacing: 2.8px; text-transform: uppercase;
-    min-height: 18px;
-    opacity: 0;
-    transition: opacity 0.6s ease;
-    text-shadow: 0 0 10px rgba(127,210,255,0.45);
+    text-align: center; min-height: 18px;
+    opacity: 0; transition: opacity 0.7s ease;
+    text-shadow: 0 0 12px rgba(127,210,255,0.55);
 }
 .ls-welcome.visible { opacity: 1; }
-
-/* Status line */
+/* Bar row: bar + percentage */
+.ls-bar-row {
+    display: flex; align-items: center; gap: 10px;
+}
+.ls-bar-wrap {
+    flex: 1; height: 7px;
+    background: rgba(127,210,255,0.08);
+    border: 1px solid rgba(127,210,255,0.14);
+    border-radius: 99px; overflow: hidden;
+}
+.ls-bar {
+    height: 100%; width: 0%; position: relative;
+    background: linear-gradient(90deg, #1455aa, #2e8fd4, #5ccfff, #a8eaff);
+    border-radius: 99px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 12px rgba(127,210,255,0.70), 0 0 28px rgba(127,210,255,0.25);
+}
+/* Animated shimmer on bar */
+.ls-bar::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.30) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: ls-bar-shimmer 1.8s linear infinite;
+}
+@keyframes ls-bar-shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+}
+.ls-pct {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; color: rgba(169,215,255,0.65);
+    letter-spacing: 1px; min-width: 34px; text-align: right;
+}
 .ls-status {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 10px; color: rgba(169,215,255,0.42);
+    font-size: 10px; color: rgba(169,215,255,0.38);
     letter-spacing: 2px; text-transform: uppercase;
+    text-align: left; min-height: 15px;
 }
+
+/* ── Tip block ── */
+.ls-tip-block {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-top: 20px; width: 380px;
+    padding: 7px 12px;
+    border: 1px solid rgba(127,210,255,0.10);
+    border-radius: 4px;
+    background: rgba(10,24,40,0.45);
+}
+.ls-tip-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    color: #ffd050; letter-spacing: 2px;
+    flex-shrink: 0;
+}
+.ls-tip-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9.5px; color: rgba(169,215,255,0.55);
+    letter-spacing: 0.8px; line-height: 1.5;
+    transition: opacity 0.4s ease;
+}
+.ls-tip-text.fade { opacity: 0; }
 
 /* ===== SETTINGS ===== */
 #settings-screen {

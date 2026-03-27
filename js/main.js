@@ -90,28 +90,62 @@ function processWeeklyChallengeResult(isVictory) {
 
 // ===== GAME INIT =====
 let _lsStartTime = 0;
-const LS_MIN_MS = 1800; // minimum loading screen time in ms
+const LS_MIN_MS = 2200; // minimum loading screen time in ms
+
+// Rotating gameplay tips shown during load
+const LS_TIPS = [
+    'Place towers near path bends for overlapping coverage.',
+    'Upgrade towers rather than spamming — Tier 4 passives unlock powerful effects.',
+    'Synergies activate when specific tower types are placed near each other.',
+    'Boost towers amplify nearby allies — position them at the center of your cluster.',
+    'Elites have bonus HP and traits — save crowd-control for them.',
+    'Arrow towers gain Pierce at Tier 4 — great for dense corridor lanes.',
+    'Ice + Lightning towers near each other unlock the Superconductor synergy.',
+    'Sell early towers to fund upgraded replacements mid-run.',
+    'Research points carry over between runs — invest in permanent upgrades.',
+    'Boss waves every 10 rounds — prepare a kill zone before they arrive.',
+    'Formations: 5+ towers in a cluster grant a stacking damage bonus.',
+    'Necro towers gain strength from every kill — place them on heavy-traffic lanes.',
+];
+let _lsTipInterval = null;
 
 function _lsProgress(pct, msg) {
     const bar = document.getElementById('ls-bar');
     const status = document.getElementById('ls-status');
+    const pctEl = document.getElementById('ls-pct');
     if (bar) bar.style.width = pct + '%';
     if (status) status.textContent = msg;
+    if (pctEl) pctEl.textContent = Math.round(pct) + '%';
 }
 
 function _lsWelcome(msg) {
     const el = document.getElementById('ls-welcome');
     if (!el) return;
     el.textContent = msg;
-    // slight delay so CSS transition fires
     requestAnimationFrame(() => el.classList.add('visible'));
 }
 
+function _lsStartTips() {
+    const tipEl = document.getElementById('ls-tip');
+    if (!tipEl) return;
+    let idx = Math.floor(Math.random() * LS_TIPS.length);
+    tipEl.textContent = LS_TIPS[idx];
+    _lsTipInterval = setInterval(() => {
+        tipEl.classList.add('fade');
+        setTimeout(() => {
+            idx = (idx + 1) % LS_TIPS.length;
+            tipEl.textContent = LS_TIPS[idx];
+            tipEl.classList.remove('fade');
+        }, 400);
+    }, 2800);
+}
+
 function _lsDismiss() {
+    if (_lsTipInterval) { clearInterval(_lsTipInterval); _lsTipInterval = null; }
     const ls = document.getElementById('loading-screen');
     if (ls) {
         ls.classList.add('ls-hidden');
-        setTimeout(() => { if (ls.parentNode) ls.remove(); }, 540);
+        setTimeout(() => { if (ls.parentNode) ls.remove(); }, 650);
     }
 }
 
@@ -119,6 +153,9 @@ async function initGame() {
     console.log('%c[TowerForge] Initializing...', 'color: #ffd700; font-weight: bold');
     _lsStartTime = performance.now();
     const initStart = _lsStartTime;
+
+    // Start tip rotation immediately
+    _lsStartTips();
 
     _lsProgress(10, 'Loading save data...');
     // Load persistent data (research, achievements, settings, unlocks)
