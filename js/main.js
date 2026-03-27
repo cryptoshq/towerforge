@@ -89,25 +89,46 @@ function processWeeklyChallengeResult(isVictory) {
 }
 
 // ===== GAME INIT =====
+function _lsProgress(pct, msg) {
+    const bar = document.getElementById('ls-bar');
+    const status = document.getElementById('ls-status');
+    if (bar) bar.style.width = pct + '%';
+    if (status) status.textContent = msg;
+}
+
+function _lsDismiss() {
+    const ls = document.getElementById('loading-screen');
+    if (ls) {
+        ls.classList.add('ls-hidden');
+        setTimeout(() => ls.remove(), 520);
+    }
+}
+
 async function initGame() {
     console.log('%c[TowerForge] Initializing...', 'color: #ffd700; font-weight: bold');
     const initStart = performance.now();
 
+    _lsProgress(10, 'Loading save data...');
     // Load persistent data (research, achievements, settings, unlocks)
     SaveSystem.loadPersistent();
 
+    _lsProgress(28, 'Starting audio engine...');
     // Init audio system
     Audio.init();
 
+    _lsProgress(46, 'Building render pipeline...');
     // Init canvas and rendering pipeline
     await initCanvas();
 
+    _lsProgress(64, 'Setting up interface...');
     // Init menu system (DOM setup, button bindings)
     MenuSystem.init();
 
+    _lsProgress(78, 'Binding controls...');
     // Init input handler (keyboard, mouse, touch)
     Input.init();
 
+    _lsProgress(90, 'Generating tower icons...');
     // Pre-render tower icons to offscreen canvases
     TowerIcons.init();
 
@@ -115,6 +136,11 @@ async function initGame() {
     if (typeof TutorialSystem !== 'undefined') {
         TutorialSystem.init();
     }
+
+    _lsProgress(100, 'Ready.');
+    // Brief pause so the 100% fills visibly, then dismiss
+    await new Promise(r => setTimeout(r, 320));
+    _lsDismiss();
 
     // Start on main menu
     MenuSystem.showScreen('menu');

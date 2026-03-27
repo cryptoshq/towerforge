@@ -11,6 +11,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="ls-bg"></div>
+        <div class="ls-content">
+            <div class="ls-rings" aria-hidden="true">
+                <span class="ls-ring ls-ring-a"></span>
+                <span class="ls-ring ls-ring-b"></span>
+                <span class="ls-ring ls-ring-c"></span>
+            </div>
+            <div class="ls-brand">
+                <p class="ls-kicker">Command Nexus</p>
+                <h1 class="ls-title">TowerForge</h1>
+            </div>
+            <div class="ls-bar-wrap">
+                <div class="ls-bar" id="ls-bar"></div>
+            </div>
+            <p class="ls-status" id="ls-status">Initializing systems...</p>
+        </div>
+    </div>
+
     <!-- Main Menu -->
     <div id="main-menu" class="screen active">
         <div class="menu-bg"></div>
