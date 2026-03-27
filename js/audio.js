@@ -1511,8 +1511,11 @@ const Audio = {
                 this._tone(600 * pitchMult, 0.03, effectiveVol * 0.2 * volMult, 'sine');
                 break;
             case 'place':
-                this._tone(300 * pitchMult, 0.1, effectiveVol * volMult, 'triangle');
-                this._tone(500 * pitchMult, 0.1, effectiveVol * 0.7 * volMult, 'triangle', 0.05);
+                // Bright satisfying "thock" — deep impact + high sparkle
+                this._tone(180 * pitchMult, 0.12, effectiveVol * 0.9 * volMult, 'triangle');
+                this._tone(520 * pitchMult, 0.09, effectiveVol * 0.65 * volMult, 'square', 0.02);
+                this._tone(1100 * pitchMult, 0.07, effectiveVol * 0.45 * volMult, 'sine', 0.04);
+                this._tone(2200 * pitchMult, 0.05, effectiveVol * 0.25 * volMult, 'sine', 0.06);
                 break;
             case 'sell':
                 this._tone(800 * pitchMult, 0.05, effectiveVol * volMult, 'square');
@@ -1520,9 +1523,12 @@ const Audio = {
                 this._tone(1200 * pitchMult, 0.05, effectiveVol * 0.6 * volMult, 'square', 0.1);
                 break;
             case 'upgrade':
-                this._tone(400 * pitchMult, 0.1, effectiveVol * volMult, 'sine');
-                this._tone(600 * pitchMult, 0.1, effectiveVol * volMult, 'sine', 0.08);
-                this._tone(800 * pitchMult, 0.15, effectiveVol * volMult, 'sine', 0.16);
+                // Rising 4-note chime — triumphant ascending sequence
+                this._tone(500 * pitchMult, 0.09, effectiveVol * 0.6 * volMult, 'sine');
+                this._tone(700 * pitchMult, 0.09, effectiveVol * 0.75 * volMult, 'sine', 0.09);
+                this._tone(900 * pitchMult, 0.11, effectiveVol * 0.9 * volMult, 'sine', 0.18);
+                this._tone(1300 * pitchMult, 0.18, effectiveVol * 1.0 * volMult, 'sine', 0.28);
+                this._tone(1800 * pitchMult, 0.12, effectiveVol * 0.6 * volMult, 'sine', 0.30);
                 break;
             case 'arrow':
                 this._noisePooled('arrow', 0.06, effectiveVol * 0.4 * volMult, 1200 * pitchMult * brightnessMult);
@@ -1584,8 +1590,11 @@ const Audio = {
                 this._cryoFreeze(effectiveVol * volMult);
                 break;
             case 'crit':
-                this._tone(1000 * pitchMult, 0.08, effectiveVol * 0.6 * volMult, 'square');
-                this._noise(0.05, effectiveVol * 0.4 * volMult, 2000 * pitchMult * brightnessMult);
+                // Sharp crack + high glitter — punchy and satisfying
+                this._noise(0.035, effectiveVol * 0.85 * volMult, 1800 * pitchMult * brightnessMult);
+                this._tone(1500 * pitchMult, 0.05, effectiveVol * 0.7 * volMult, 'square');
+                this._tone(2400 * pitchMult, 0.07, effectiveVol * 0.5 * volMult, 'sine', 0.015);
+                this._tone(3200 * pitchMult, 0.04, effectiveVol * 0.3 * volMult, 'sine', 0.025);
                 break;
             case 'nuke':
                 this._noise(0.5, effectiveVol, 100);

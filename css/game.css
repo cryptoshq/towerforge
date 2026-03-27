@@ -364,16 +364,18 @@
 
 /* T4 Passive badge */
 .t4-passive-badge {
-    display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;
-    margin-top: 6px; padding: 5px 7px;
-    background: rgba(160,80,255,0.10);
-    border: 1px solid rgba(160,80,255,0.30);
+    display: flex; align-items: flex-start; flex-direction: column; gap: 2px;
+    margin-top: 8px; padding: 6px 9px;
+    background: linear-gradient(135deg, rgba(160,80,255,0.18), rgba(100,40,200,0.10));
+    border: 1px solid rgba(190,110,255,0.50);
+    border-left: 3px solid #b060ff;
     border-radius: 5px;
     grid-column: 1 / -1;
+    box-shadow: 0 0 8px rgba(180,80,255,0.15);
 }
-.t4-passive-icon { font-size: 9px; color: #c080ff; }
-.t4-passive-name { font-size: 10px; color: #d090ff; font-weight: 700; }
-.t4-passive-desc { font-size: 9px; color: #9060cc; line-height: 1.3; }
+.t4-passive-icon { font-size: 11px; color: #c880ff; margin-right: 4px; }
+.t4-passive-name { font-size: 11px; color: #e0a0ff; font-weight: 700; letter-spacing: 0.3px; }
+.t4-passive-desc { font-size: 9.5px; color: #a870e0; line-height: 1.4; margin-top: 1px; }
 
 .mastery-header {
     display: flex; justify-content: space-between;

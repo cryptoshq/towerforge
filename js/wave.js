@@ -490,19 +490,22 @@ const WaveSystem = {
 
     // Calculate difficulty scaling for a given wave number
     _calculateDifficultyScale(waveNum) {
-        // Every wave increases difficulty slightly, with jumps every 5 waves
-        const baseHpMult = 1.0 + (waveNum - 1) * 0.04;
-        const baseSpeedMult = 1.0 + (waveNum - 1) * 0.008;
-        const baseArmorMult = 1.0 + (waveNum - 1) * 0.03;
+        // Steeper linear scaling + bigger 5-wave jumps + exponential ramp after wave 10
+        const baseHpMult = 1.0 + (waveNum - 1) * 0.06;
+        const baseSpeedMult = 1.0 + (waveNum - 1) * 0.012;
+        const baseArmorMult = 1.0 + (waveNum - 1) * 0.04;
 
         // Every 5 waves, a bigger jump
         const fiveWaveJumps = Math.floor(waveNum / 5);
-        const hpJump = fiveWaveJumps * 0.1;
-        const speedJump = fiveWaveJumps * 0.02;
-        const armorJump = fiveWaveJumps * 0.05;
+        const hpJump = fiveWaveJumps * 0.15;
+        const speedJump = fiveWaveJumps * 0.03;
+        const armorJump = fiveWaveJumps * 0.07;
+
+        // Exponential ramp past wave 10 — makes late game punishing
+        const expBonus = waveNum > 10 ? Math.pow(1.06, waveNum - 10) - 1 : 0;
 
         return {
-            hpMult: baseHpMult + hpJump,
+            hpMult: baseHpMult + hpJump + expBonus,
             speedMult: baseSpeedMult + speedJump,
             armorMult: baseArmorMult + armorJump,
         };
@@ -511,10 +514,10 @@ const WaveSystem = {
     // Determine if an enemy should be promoted to elite
     _shouldBeElite(waveNum, enemyType) {
         if (enemyType === 'boss') return false; // Bosses are already special
-        if (enemyType === 'swarm') return false; // Swarmlings too weak
-        // Chance increases with wave number
-        const baseChance = 0.02 + (waveNum - 1) * 0.008;
-        const chance = Math.min(baseChance, 0.25); // Cap at 25%
+        if (enemyType === 'swarm' || enemyType === 'swarmfast') return false; // Too numerous
+        // Chance increases with wave number — noticeable from wave 3+
+        const baseChance = 0.05 + (waveNum - 1) * 0.012;
+        const chance = Math.min(baseChance, 0.40); // Cap at 40%
         return Math.random() < chance;
     },
 
@@ -2037,6 +2040,9 @@ const WaveSystem = {
         const diffPreset = CONFIG.DIFFICULTY_PRESETS[GameState.settings.difficulty] || CONFIG.DIFFICULTY_PRESETS.normal;
         enemy.baseSpeed *= this.difficultyScale.speedMult * diffPreset.enemySpeedMult;
         enemy.speed = enemy.baseSpeed;
+        // Apply wave-level HP scaling (was missing — this makes late waves genuinely harder)
+        enemy.maxHp *= this.difficultyScale.hpMult;
+        enemy.hp = enemy.maxHp;
         enemy.maxHp *= diffPreset.enemyHpMult;
         enemy.hp = enemy.maxHp;
         enemy.maxHp *= tacticalMods.enemyHpMult;

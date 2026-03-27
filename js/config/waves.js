@@ -9,7 +9,10 @@ export function generateWaves(mapIndex, waveCount) {
     for (let w = 1; w <= waveCount; w++) {
         const wave = { enemies: [], delay: 0.6 };
         const diff = diffGroup * 0.3 + (mapIndex % 5) * 0.08;
-        const hpScale = 1 + (w - 1) * 0.20 + diff * 0.20;
+        // Steeper HP scaling: 28% per wave + exponential kicker past wave 8
+        const linearScale = 1 + (w - 1) * 0.28 + diff * 0.25;
+        const expKicker = w > 8 ? Math.pow(1.04, w - 8) - 1 : 0;
+        const hpScale = linearScale + expKicker;
         const countBase = Math.floor(6 + w * 1.5 + diff * 2.5);
 
         if (diffGroup === 0) {

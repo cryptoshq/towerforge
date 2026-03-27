@@ -13,6 +13,20 @@ const TowerRenderer = {
 
         ctx.save();
 
+        // Placement bounce: spring scale-in from 0 → 1.15 → 1.0
+        if (tower.placeBounce > 0) {
+            const p = 1 - tower.placeBounce; // 0 = just placed, 1 = settled
+            let tileScale;
+            if (p < 0.55) {
+                tileScale = (p / 0.55) * 1.18; // scale up with overshoot
+            } else {
+                tileScale = 1.18 - ((p - 0.55) / 0.45) * 0.18; // ease back to 1.0
+            }
+            ctx.translate(x, y);
+            ctx.scale(tileScale, tileScale);
+            ctx.translate(-x, -y);
+        }
+
         // Disabled overlay
         if (tower.disabled) {
             ctx.globalAlpha = 0.5;
@@ -75,6 +89,20 @@ const TowerRenderer = {
             ctx.strokeStyle = '#ffd700';
             ctx.lineWidth = 2;
             ctx.strokeRect(x - ts / 2 + 2, y - ts / 2 + 2, ts - 4, ts - 4);
+        }
+
+        // Upgrade flash: bright white burst that fades out
+        if (tower.upgradeFlash > 0) {
+            const flashAlpha = tower.upgradeFlash * 0.75;
+            ctx.save();
+            ctx.globalAlpha = flashAlpha;
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#ffd700';
+            ctx.shadowBlur = 20 * tower.upgradeFlash;
+            ctx.beginPath();
+            ctx.arc(x, y, ts * 0.58, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
 
         ctx.restore();

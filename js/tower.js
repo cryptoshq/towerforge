@@ -169,6 +169,8 @@ class Tower {
         this.placedTime = GameState.time;
         this.angle = 0;
         this.animTimer = 0;
+        this.placeBounce = 1.0;  // 1 = freshly placed (scale-in animation), 0 = settled
+        this.upgradeFlash = 0;   // 0-1: white glow flash on upgrade
 
         // Synergy cache (recalculated periodically)
         this.activeSynergies = [];
@@ -804,6 +806,10 @@ class Tower {
         if (this.synergyPulse && this.synergyPulse.timer > 0) {
             this.synergyPulse.timer = Math.max(0, this.synergyPulse.timer - dt);
         }
+        // Placement bounce animation
+        if (this.placeBounce > 0) this.placeBounce = Math.max(0, this.placeBounce - dt * 3.5);
+        // Upgrade white flash
+        if (this.upgradeFlash > 0) this.upgradeFlash = Math.max(0, this.upgradeFlash - dt * 3.5);
 
         // Update synergies periodically (every 2 seconds)
         this.synergyUpdateTimer -= dt;
@@ -1923,6 +1929,7 @@ class Tower {
         }
 
         // Effects
+        this.upgradeFlash = 1.0;
         Effects.spawnExplosion(this.x, this.y, '#ffd700', 15, { speed: 1.5, glow: true });
         Audio.play('upgrade');
 
