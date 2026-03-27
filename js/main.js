@@ -89,6 +89,9 @@ function processWeeklyChallengeResult(isVictory) {
 }
 
 // ===== GAME INIT =====
+let _lsStartTime = 0;
+const LS_MIN_MS = 1800; // minimum loading screen time in ms
+
 function _lsProgress(pct, msg) {
     const bar = document.getElementById('ls-bar');
     const status = document.getElementById('ls-status');
@@ -96,21 +99,35 @@ function _lsProgress(pct, msg) {
     if (status) status.textContent = msg;
 }
 
+function _lsWelcome(msg) {
+    const el = document.getElementById('ls-welcome');
+    if (!el) return;
+    el.textContent = msg;
+    // slight delay so CSS transition fires
+    requestAnimationFrame(() => el.classList.add('visible'));
+}
+
 function _lsDismiss() {
     const ls = document.getElementById('loading-screen');
     if (ls) {
         ls.classList.add('ls-hidden');
-        setTimeout(() => ls.remove(), 520);
+        setTimeout(() => { if (ls.parentNode) ls.remove(); }, 540);
     }
 }
 
 async function initGame() {
     console.log('%c[TowerForge] Initializing...', 'color: #ffd700; font-weight: bold');
-    const initStart = performance.now();
+    _lsStartTime = performance.now();
 
     _lsProgress(10, 'Loading save data...');
     // Load persistent data (research, achievements, settings, unlocks)
     SaveSystem.loadPersistent();
+
+    // Show welcome message based on save state
+    const isReturning = GameState.metaProgress &&
+        (GameState.metaProgress.totalVictories > 0 ||
+         (typeof GameState.researchPoints === 'number' && GameState.researchPoints > 0));
+    _lsWelcome(isReturning ? 'Welcome back, Commander' : 'Welcome, Commander');
 
     _lsProgress(28, 'Starting audio engine...');
     // Init audio system
@@ -137,9 +154,13 @@ async function initGame() {
         TutorialSystem.init();
     }
 
-    _lsProgress(100, 'Ready.');
-    // Brief pause so the 100% fills visibly, then dismiss
-    await new Promise(r => setTimeout(r, 320));
+    _lsProgress(100, 'Systems online.');
+
+    // Ensure loading screen is visible for at least LS_MIN_MS
+    const elapsed = performance.now() - _lsStartTime;
+    const remaining = Math.max(0, LS_MIN_MS - elapsed);
+    await new Promise(r => setTimeout(r, remaining + 180));
+
     _lsDismiss();
 
     // Start on main menu

@@ -599,33 +599,37 @@ if (_origPlaceTowerForBuild) {
 // =========================================================================
 // INTEGRATION: Hook into Tower.sell for sell animation
 // =========================================================================
-const _originalTowerSell = Tower.prototype.sell;
-Tower.prototype.sell = function() {
-    // Capture position before the tower is removed
-    SellAnimation.start(this);
-    _originalTowerSell.call(this);
-};
+if (typeof Tower !== 'undefined' && Tower.prototype && typeof Tower.prototype.sell === 'function') {
+    const _originalTowerSell = Tower.prototype.sell;
+    Tower.prototype.sell = function() {
+        SellAnimation.start(this);
+        _originalTowerSell.call(this);
+    };
+}
 
 // =========================================================================
 // INTEGRATION: Hook into Tower.update for barrel tracking
 // =========================================================================
-const _originalTowerUpdate = Tower.prototype.update;
-Tower.prototype.update = function(dt) {
-    _originalTowerUpdate.call(this, dt);
-    BarrelTracking.updateAngle(this, dt);
-};
+if (typeof Tower !== 'undefined' && Tower.prototype && typeof Tower.prototype.update === 'function') {
+    const _originalTowerUpdate = Tower.prototype.update;
+    Tower.prototype.update = function(dt) {
+        _originalTowerUpdate.call(this, dt);
+        BarrelTracking.updateAngle(this, dt);
+    };
+}
 
 // =========================================================================
 // INTEGRATION: Hook into projectile hit for impact particles
 // =========================================================================
-const _originalProjectileHit = Projectile.prototype.hit;
-Projectile.prototype.hit = function(enemy) {
-    // Spawn type-specific impact particles at contact point
-    if (this.tower && this.tower.type) {
-        ImpactParticles.spawn(this.x, this.y, this.tower.type);
-    }
-    _originalProjectileHit.call(this, enemy);
-};
+if (typeof Projectile !== 'undefined' && Projectile.prototype && typeof Projectile.prototype.hit === 'function') {
+    const _originalProjectileHit = Projectile.prototype.hit;
+    Projectile.prototype.hit = function(enemy) {
+        if (this.tower && this.tower.type) {
+            ImpactParticles.spawn(this.x, this.y, this.tower.type);
+        }
+        _originalProjectileHit.call(this, enemy);
+    };
+}
 
 // =========================================================================
 // MASTER MODULE: TowerPolish — update & draw integrated with game loop

@@ -88,6 +88,16 @@
     transition: width 0.3s ease;
     box-shadow: 0 0 8px rgba(160,96,255,0.6);
 }
+.ls-welcome {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: #a0c8ff;
+    letter-spacing: 3px; text-transform: uppercase;
+    min-height: 18px;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    text-shadow: 0 0 12px rgba(80, 160, 255, 0.5);
+}
+.ls-welcome.visible { opacity: 1; }
 .ls-status {
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px; color: #7070aa;
