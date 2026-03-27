@@ -8,9 +8,9 @@ export function generateWaves(mapIndex, waveCount) {
 
     for (let w = 1; w <= waveCount; w++) {
         const wave = { enemies: [], delay: 0.6 };
-        const diff = diffGroup * 0.3 + (mapIndex % 5) * 0.06;
-        const hpScale = 1 + (w - 1) * 0.12 + diff * 0.15;
-        const countBase = Math.floor(5 + w * 1.2 + diff * 2);
+        const diff = diffGroup * 0.3 + (mapIndex % 5) * 0.08;
+        const hpScale = 1 + (w - 1) * 0.20 + diff * 0.20;
+        const countBase = Math.floor(6 + w * 1.5 + diff * 2.5);
 
         if (diffGroup === 0) {
             // ===== EASY: Grunt, Scout, Swarmling, Medic, Boss =====
