@@ -11,29 +11,83 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(ellipse at 30% 20%, #2a2a60 0%, #1a1a40 40%, #181830 70%);
-    transition: opacity 0.5s ease, visibility 0.5s ease;
+    overflow: hidden;
+    /* Matches main menu background exactly */
+    background:
+        radial-gradient(58% 62% at 12% -8%,  rgba(98,  210, 255, 0.20), transparent 72%),
+        radial-gradient(50% 56% at 88%   0%,  rgba(132, 184, 255, 0.17), transparent 70%),
+        radial-gradient(56% 72% at 52% 118%,  rgba(46,  102, 156, 0.24), transparent 80%),
+        linear-gradient(168deg, #050b14 0%, #071221 38%, #07192a 66%, #040b14 100%);
+    transition: opacity 0.65s ease, visibility 0.65s ease;
 }
 #loading-screen.ls-hidden {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
 }
-.ls-bg {
-    position: absolute; inset: 0;
+
+/* Grid overlay — identical to #main-menu::before */
+#loading-screen::before {
+    content: '';
+    position: absolute; inset: 0; z-index: 0;
     background:
-        radial-gradient(circle at 80% 80%, rgba(60,40,120,0.18) 0%, transparent 55%),
-        radial-gradient(circle at 20% 30%, rgba(40,60,120,0.15) 0%, transparent 50%);
+        repeating-linear-gradient(90deg, rgba(142,190,232,0.06) 0 1px, transparent 1px 68px),
+        repeating-linear-gradient(0deg,  rgba(142,190,232,0.04) 0 1px, transparent 1px 58px);
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.7), transparent 90%);
+    opacity: 0.38;
     pointer-events: none;
 }
-.ls-content {
-    position: relative;
-    display: flex; flex-direction: column;
-    align-items: center; gap: 20px;
-    z-index: 1;
+
+/* Crown glow — mirrors main menu's animated top bloom */
+#loading-screen::after {
+    content: '';
+    position: absolute;
+    inset: -18% -10% auto; height: 340px; z-index: 0;
+    background:
+        radial-gradient(ellipse at 50% 40%, rgba(156,226,255,0.28), transparent 66%),
+        radial-gradient(ellipse at 22% 50%, rgba(140,188,255,0.16), transparent 72%);
+    filter: blur(34px);
+    animation: mmScanDrift 12s ease-in-out infinite;
+    pointer-events: none;
 }
+
+/* Scan-line texture overlay */
+.ls-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background: repeating-linear-gradient(
+        0deg, transparent 0, transparent 3px,
+        rgba(0,0,0,0.025) 3px, rgba(0,0,0,0.025) 4px
+    );
+    pointer-events: none;
+}
+
+/* Main content column */
+.ls-content {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 18px;
+    padding: 48px 64px;
+}
+
+/* Corner bracket decoration */
+.ls-content::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+        linear-gradient(to right,  rgba(127,210,255,0.5) 20px, transparent 20px) 0   0   / 20px 1px no-repeat,
+        linear-gradient(to bottom, rgba(127,210,255,0.5) 20px, transparent 20px) 0   0   / 1px 20px no-repeat,
+        linear-gradient(to left,   rgba(127,210,255,0.5) 20px, transparent 20px) 100% 0   / 20px 1px no-repeat,
+        linear-gradient(to bottom, rgba(127,210,255,0.5) 20px, transparent 20px) 100% 0   / 1px 20px no-repeat,
+        linear-gradient(to right,  rgba(127,210,255,0.5) 20px, transparent 20px) 0   100% / 20px 1px no-repeat,
+        linear-gradient(to top,    rgba(127,210,255,0.5) 20px, transparent 20px) 0   100% / 1px 20px no-repeat,
+        linear-gradient(to left,   rgba(127,210,255,0.5) 20px, transparent 20px) 100% 100% / 20px 1px no-repeat,
+        linear-gradient(to top,    rgba(127,210,255,0.5) 20px, transparent 20px) 100% 100% / 1px 20px no-repeat;
+    pointer-events: none;
+}
+
+/* Spinner rings — blue/cyan palette to match UI */
 .ls-rings {
-    position: relative; width: 96px; height: 96px; margin-bottom: 4px;
+    position: relative; width: 88px; height: 88px;
 }
 .ls-ring {
     position: absolute; border-radius: 50%;
@@ -41,67 +95,107 @@
 }
 .ls-ring-a {
     inset: 0;
-    border-top-color: rgba(160,120,255,0.8);
-    border-right-color: rgba(160,120,255,0.3);
-    animation: ls-spin 1.4s linear infinite;
+    border-top-color:   rgba(127, 210, 255, 0.88);
+    border-right-color: rgba(127, 210, 255, 0.20);
+    animation: ls-spin 1.6s linear infinite;
 }
 .ls-ring-b {
-    inset: 12px;
-    border-bottom-color: rgba(80,160,255,0.7);
-    border-left-color: rgba(80,160,255,0.2);
-    animation: ls-spin 1.0s linear infinite reverse;
+    inset: 11px;
+    border-bottom-color: rgba(169, 215, 255, 0.72);
+    border-left-color:   rgba(169, 215, 255, 0.16);
+    animation: ls-spin 1.1s linear infinite reverse;
 }
 .ls-ring-c {
-    inset: 26px;
-    border-top-color: rgba(245,200,60,0.6);
-    animation: ls-spin 1.8s linear infinite;
+    inset: 24px;
+    border-top-color:   rgba(245, 200, 60, 0.55);
+    border-right-color: rgba(245, 200, 60, 0.10);
+    animation: ls-spin 2.2s linear infinite;
+}
+/* Pulsing center dot */
+.ls-ring-center {
+    position: absolute;
+    inset: 38px;
+    border-radius: 50%;
+    background: rgba(127, 210, 255, 0.55);
+    box-shadow: 0 0 8px rgba(127,210,255,0.9), 0 0 18px rgba(127,210,255,0.4);
+    animation: ls-center-pulse 2.2s ease-in-out infinite;
+}
+@keyframes ls-center-pulse {
+    0%, 100% { opacity: 0.5; transform: scale(0.9); }
+    50%       { opacity: 1;   transform: scale(1.2); }
 }
 @keyframes ls-spin { to { transform: rotate(360deg); } }
+
+/* Brand block */
 .ls-brand { text-align: center; }
+
+/* Kicker pill — identical style to mm-kicker */
 .ls-kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 8px; border-radius: 999px;
+    border: 1px solid rgba(146,198,242,0.38);
+    background: rgba(10,24,40,0.56);
     font-family: 'Share Tech Mono', monospace;
-    font-size: 11px; color: #8888bb;
-    letter-spacing: 5px; text-transform: uppercase;
-    margin-bottom: 6px;
+    font-size: 10px; color: #a9d7ff;
+    letter-spacing: 1.7px; text-transform: uppercase;
+    margin-bottom: 10px;
 }
+.ls-kicker::before {
+    content: '';
+    display: inline-block;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #7fd2ff;
+    box-shadow: 0 0 10px rgba(127,210,255,0.8);
+    flex-shrink: 0;
+}
+
+/* Title — gradient text matching mm-title */
 .ls-title {
     font-family: 'Orbitron', sans-serif;
-    font-size: 42px; font-weight: 900;
-    color: #fff;
-    letter-spacing: 6px;
-    text-shadow: 0 0 30px rgba(90,90,255,0.6), 0 0 60px rgba(90,90,255,0.3);
-    animation: ls-glow 3s ease-in-out infinite;
+    font-size: clamp(36px, 5.2vw, 64px); font-weight: 900;
+    letter-spacing: 2.2px;
+    background: linear-gradient(180deg, #f8fdff 0%, #e9f4ff 46%, #cddff0 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: ls-title-breathe 7s ease-in-out infinite;
 }
-@keyframes ls-glow {
-    0%, 100% { text-shadow: 0 0 28px rgba(90,90,255,0.6), 0 0 55px rgba(90,90,255,0.3); }
-    50%       { text-shadow: 0 0 42px rgba(120,120,255,0.85), 0 0 80px rgba(100,100,255,0.45); }
+@keyframes ls-title-breathe {
+    0%, 100% { filter: drop-shadow(0 0 22px rgba(146,208,255,0.22)); }
+    50%       { filter: drop-shadow(0 0 36px rgba(146,208,255,0.44)); }
 }
+
+/* Progress bar — wider, cyan glow */
 .ls-bar-wrap {
-    width: 220px; height: 3px;
-    background: rgba(255,255,255,0.08);
+    width: 300px; height: 2px;
+    background: rgba(127,210,255,0.10);
     border-radius: 99px; overflow: hidden;
+    margin-top: 2px;
 }
 .ls-bar {
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, #5858cc, #a060ff, #ffd700);
+    background: linear-gradient(90deg, #1e6bcc, #4ab8ff, #9be4ff);
     border-radius: 99px;
-    transition: width 0.3s ease;
-    box-shadow: 0 0 8px rgba(160,96,255,0.6);
+    transition: width 0.35s ease;
+    box-shadow: 0 0 10px rgba(127,210,255,0.65), 0 0 20px rgba(127,210,255,0.2);
 }
+
+/* Welcome text — cyan, matches kicker tone */
 .ls-welcome {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 13px; color: #a0c8ff;
-    letter-spacing: 3px; text-transform: uppercase;
+    font-size: 12px; color: #7fd2ff;
+    letter-spacing: 2.8px; text-transform: uppercase;
     min-height: 18px;
     opacity: 0;
-    transition: opacity 0.5s ease;
-    text-shadow: 0 0 12px rgba(80, 160, 255, 0.5);
+    transition: opacity 0.6s ease;
+    text-shadow: 0 0 10px rgba(127,210,255,0.45);
 }
 .ls-welcome.visible { opacity: 1; }
+
+/* Status line */
 .ls-status {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 11px; color: #7070aa;
-    letter-spacing: 2px;
+    font-size: 10px; color: rgba(169,215,255,0.42);
+    letter-spacing: 2px; text-transform: uppercase;
 }
 
 /* ===== SETTINGS ===== */
