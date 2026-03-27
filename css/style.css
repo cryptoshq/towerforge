@@ -3,257 +3,283 @@
 @import url("screens.css");
 @import url("game.css");
 
-/* ===== LOADING SCREEN ===== */
+/* ================================================================
+   LOADING SCREEN — full-bleed dramatic redesign
+   ================================================================ */
 #loading-screen {
     position: fixed; inset: 0; z-index: 9999;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden;
-    background:
-        radial-gradient(58% 62% at 12% -8%,  rgba(98,  210, 255, 0.22), transparent 72%),
-        radial-gradient(50% 56% at 88%   0%,  rgba(132, 184, 255, 0.18), transparent 70%),
-        radial-gradient(56% 72% at 52% 118%,  rgba(46,  102, 156, 0.26), transparent 80%),
-        linear-gradient(168deg, #050b14 0%, #071221 38%, #07192a 66%, #040b14 100%);
-    transition: opacity 0.75s ease, visibility 0.75s ease;
+    background: #030a14;
+    transition: opacity 0.9s ease, visibility 0.9s ease;
 }
 #loading-screen.ls-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
-/* Animated grid overlay */
+/* Deep space base gradient */
 #loading-screen::before {
-    content: ''; position: absolute; inset: 0; z-index: 0;
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
     background:
-        repeating-linear-gradient(90deg, rgba(142,190,232,0.07) 0 1px, transparent 1px 68px),
-        repeating-linear-gradient(0deg,  rgba(142,190,232,0.05) 0 1px, transparent 1px 58px);
-    mask-image: linear-gradient(180deg, rgba(0,0,0,0.8), transparent 92%);
-    pointer-events: none;
+        radial-gradient(ellipse 90% 60% at 50% 0%,   rgba(20, 80,180,0.28) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 80% at 0%   60%,  rgba(0, 60,160,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 55% 70% at 100% 40%,  rgba(0, 40,120,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 50% at 50% 100%,  rgba(10,30, 90,0.22) 0%, transparent 70%);
 }
-/* Top crown bloom — animated */
+
+/* Dot-grid overlay — fills the whole screen with subtle depth */
 #loading-screen::after {
-    content: ''; position: absolute;
-    inset: -18% -10% auto; height: 380px; z-index: 0;
-    background:
-        radial-gradient(ellipse at 50% 40%, rgba(156,226,255,0.32), transparent 62%),
-        radial-gradient(ellipse at 22% 50%, rgba(140,188,255,0.18), transparent 70%),
-        radial-gradient(ellipse at 78% 50%, rgba(100,160,255,0.14), transparent 70%);
-    filter: blur(38px);
-    animation: mmScanDrift 12s ease-in-out infinite;
-    pointer-events: none;
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+        radial-gradient(circle, rgba(80,160,255,0.22) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    animation: ls-dots-breathe 5s ease-in-out infinite;
+}
+@keyframes ls-dots-breathe {
+    0%,100% { opacity: 0.45; }
+    50%      { opacity: 0.85; }
 }
 
-/* Scanline texture */
+/* ── Aurora orbs — large blurred light sources that slowly drift ── */
+.ls-orb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(80px); z-index: 0; }
+.ls-orb-1 {
+    width: 600px; height: 500px; top: -15%; left: -10%;
+    background: radial-gradient(circle, rgba(20,80,220,0.22), transparent 65%);
+    animation: ls-orb-a 11s ease-in-out infinite;
+}
+.ls-orb-2 {
+    width: 500px; height: 400px; bottom: -12%; right: -8%;
+    background: radial-gradient(circle, rgba(0,160,220,0.18), transparent 65%);
+    animation: ls-orb-b 14s ease-in-out infinite;
+}
+.ls-orb-3 {
+    width: 320px; height: 280px; top: 38%; left: 58%;
+    background: radial-gradient(ellipse, rgba(80,40,200,0.14), transparent 65%);
+    animation: ls-orb-a 9s ease-in-out infinite; animation-delay: -5s;
+}
+@keyframes ls-orb-a { 0%,100%{transform:translate(0,0) scale(1);}   50%{transform:translate(40px,-30px) scale(1.08);} }
+@keyframes ls-orb-b { 0%,100%{transform:translate(0,0) scale(1);}   50%{transform:translate(-35px,25px) scale(1.06);} }
+
+/* ── Horizontal scan sweep ── */
+.ls-scan {
+    position: absolute; left: 0; right: 0; height: 150px; z-index: 1; pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(80,180,255,0.045) 50%, transparent);
+    animation: ls-scan-sweep 6s linear infinite;
+}
+@keyframes ls-scan-sweep { from { top: -150px; } to { top: 100%; } }
+
+/* ── Scanline texture ── */
 .ls-bg {
-    position: absolute; inset: 0; z-index: 0;
-    background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(0,0,0,0.02) 3px, rgba(0,0,0,0.02) 4px);
-    pointer-events: none;
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent 0, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
 }
 
-/* Floating particles — pure CSS */
-.ls-particles { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.ls-particles::before,
-.ls-particles::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(127,210,255,0.25);
-    animation: ls-float 8s ease-in-out infinite;
-}
-.ls-particles::before { width: 4px; height: 4px; left: 20%; top: 65%; animation-duration: 9s; }
-.ls-particles::after  { width: 3px; height: 3px; left: 74%; top: 30%; animation-duration: 11s; animation-delay: -3s; }
-@keyframes ls-float {
-    0%,100% { transform: translateY(0) scale(1); opacity: 0.4; }
-    50%      { transform: translateY(-28px) scale(1.3); opacity: 0.9; }
-}
-
-/* ── Screen corner HUD markers ── */
+/* ── HUD corner brackets ── */
 .ls-hud-corner {
-    position: absolute; width: 28px; height: 28px; z-index: 2; pointer-events: none;
-    opacity: 0.55;
+    position: absolute; width: 40px; height: 40px; z-index: 3; pointer-events: none;
 }
 .ls-hud-corner::before,
-.ls-hud-corner::after { content: ''; position: absolute; background: #7fd2ff; border-radius: 1px; }
-.ls-hud-corner::before { width: 100%; height: 1.5px; top: 0; left: 0; }
-.ls-hud-corner::after  { width: 1.5px; height: 100%; top: 0; left: 0; }
-.ls-hud-tl { top: 20px; left: 20px; }
-.ls-hud-tr { top: 20px; right: 20px; transform: scaleX(-1); }
-.ls-hud-bl { bottom: 20px; left: 20px; transform: scaleY(-1); }
-.ls-hud-br { bottom: 20px; right: 20px; transform: scale(-1); }
+.ls-hud-corner::after {
+    content: ''; position: absolute;
+    background: #5bc8f5; border-radius: 1px;
+    box-shadow: 0 0 8px rgba(91,200,245,0.7), 0 0 20px rgba(91,200,245,0.3);
+}
+.ls-hud-corner::before { width: 100%; height: 2px; top: 0; left: 0; }
+.ls-hud-corner::after  { width: 2px; height: 100%; top: 0; left: 0; }
+.ls-hud-tl { top: 22px; left: 22px; }
+.ls-hud-tr { top: 22px; right: 22px; transform: scaleX(-1); }
+.ls-hud-bl { bottom: 22px; left: 22px; transform: scaleY(-1); }
+.ls-hud-br { bottom: 22px; right: 22px; transform: scale(-1); }
 
-/* ── Main content column ── */
+/* ── Content column ── */
 .ls-content {
-    position: relative; z-index: 1;
-    display: flex; flex-direction: column;
-    align-items: center; gap: 0;
-    padding: 52px 72px 44px;
-    animation: ls-content-in 0.7s ease both;
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+    animation: ls-content-in 0.9s cubic-bezier(0.16,1,0.3,1) both;
 }
 @keyframes ls-content-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(24px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
-/* ── Emblem (rings + tower icon) ── */
+/* ── Emblem ── 220px, 4 rings + sonar pulse */
 .ls-emblem {
-    position: relative; width: 148px; height: 148px;
-    margin-bottom: 28px; flex-shrink: 0;
+    position: relative; width: 220px; height: 220px; margin-bottom: 30px;
 }
-.ls-ring {
-    position: absolute; border-radius: 50%;
-    border: 1.5px solid transparent;
+/* Sonar ping — expands outward from center */
+.ls-sonar {
+    position: absolute; top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 1.5px solid rgba(91,200,245,0.75);
+    transform: translate(-50%,-50%);
+    animation: ls-sonar-out 2.6s ease-out infinite;
 }
+@keyframes ls-sonar-out {
+    0%   { width:  56px; height:  56px; margin: -28px;  opacity: 0.9; }
+    100% { width: 360px; height: 360px; margin: -180px; opacity: 0; }
+}
+/* Second delayed sonar */
+.ls-sonar-2 {
+    position: absolute; top: 50%; left: 50%;
+    border-radius: 50%;
+    border: 1px solid rgba(91,200,245,0.40);
+    transform: translate(-50%,-50%);
+    animation: ls-sonar-out 2.6s ease-out infinite;
+    animation-delay: -1.3s;
+}
+.ls-ring { position: absolute; border-radius: 50%; }
 .ls-ring-a {
     inset: 0;
-    border-top-color:   rgba(127,210,255,0.90);
-    border-right-color: rgba(127,210,255,0.18);
-    border-bottom-color: rgba(127,210,255,0.06);
-    animation: ls-spin 2.2s linear infinite;
+    border: 2px solid transparent;
+    border-top-color:    rgba(91,200,245,0.95);
+    border-right-color:  rgba(91,200,245,0.20);
+    box-shadow: 0 0 18px rgba(91,200,245,0.15);
+    animation: ls-spin 2.5s linear infinite;
 }
 .ls-ring-b {
-    inset: 16px;
-    border: 1px solid transparent;
-    border-bottom-color: rgba(169,215,255,0.75);
-    border-left-color:   rgba(169,215,255,0.15);
-    animation: ls-spin 1.5s linear infinite reverse;
+    inset: 22px;
+    border: 1.5px solid transparent;
+    border-bottom-color: rgba(169,230,255,0.85);
+    border-left-color:   rgba(169,230,255,0.15);
+    animation: ls-spin 1.7s linear infinite reverse;
 }
 .ls-ring-c {
-    inset: 34px;
-    border-top-color:   rgba(245,200,60,0.60);
-    border-right-color: rgba(245,200,60,0.12);
-    animation: ls-spin 3.0s linear infinite;
+    inset: 46px;
+    border: 2px solid transparent;
+    border-top-color:    rgba(245,200,60,0.75);
+    border-right-color:  rgba(245,200,60,0.12);
+    animation: ls-spin 3.8s linear infinite;
 }
-/* Tower icon centered inside rings */
+.ls-ring-d {
+    inset: 70px;
+    border: 1px solid transparent;
+    border-bottom-color: rgba(180,120,255,0.65);
+    border-right-color:  rgba(180,120,255,0.12);
+    animation: ls-spin 2.2s linear infinite reverse;
+}
 .ls-emblem-core {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
 }
 .ls-tower-svg {
-    width: 40px; height: 46px;
+    width: 56px; height: 64px;
     color: #7fd2ff;
-    filter: drop-shadow(0 0 10px rgba(127,210,255,0.80)) drop-shadow(0 0 24px rgba(127,210,255,0.35));
-    animation: ls-tower-pulse 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 16px rgba(127,210,255,1.0)) drop-shadow(0 0 40px rgba(127,210,255,0.55));
+    animation: ls-tower-pulse 2.8s ease-in-out infinite;
 }
 @keyframes ls-tower-pulse {
-    0%,100% { opacity: 0.80; filter: drop-shadow(0 0 10px rgba(127,210,255,0.70)); }
-    50%      { opacity: 1;    filter: drop-shadow(0 0 18px rgba(127,210,255,1.00)) drop-shadow(0 0 36px rgba(127,210,255,0.40)); }
+    0%,100% { opacity: 0.82; filter: drop-shadow(0 0 12px rgba(127,210,255,0.80)) drop-shadow(0 0 30px rgba(127,210,255,0.35)); }
+    50%      { opacity: 1;   filter: drop-shadow(0 0 22px rgba(127,210,255,1.00)) drop-shadow(0 0 55px rgba(127,210,255,0.65)) drop-shadow(0 0 4px #fff); }
 }
 @keyframes ls-spin { to { transform: rotate(360deg); } }
 
 /* ── Brand ── */
-.ls-brand { text-align: center; margin-bottom: 8px; }
+.ls-brand { text-align: center; margin-bottom: 4px; }
 .ls-kicker {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 4px 12px 4px 10px; border-radius: 999px;
-    border: 1px solid rgba(146,198,242,0.38);
-    background: rgba(10,24,40,0.60);
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 5px 14px 5px 11px; border-radius: 999px;
+    border: 1px solid rgba(91,200,245,0.35);
+    background: rgba(5,15,30,0.70);
     font-family: 'Share Tech Mono', monospace;
-    font-size: 10px; color: #a9d7ff;
-    letter-spacing: 1.8px; text-transform: uppercase;
-    margin-bottom: 12px;
+    font-size: 10px; color: #9dd8f8;
+    letter-spacing: 2.2px; text-transform: uppercase;
+    margin-bottom: 14px;
 }
 .ls-kicker::before {
     content: '';
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #7fd2ff;
-    box-shadow: 0 0 10px rgba(127,210,255,0.85);
-    flex-shrink: 0;
-    animation: ls-dot-blink 2s ease-in-out infinite;
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: #5bc8f5;
+    box-shadow: 0 0 12px rgba(91,200,245,0.95), 0 0 24px rgba(91,200,245,0.50);
+    animation: ls-dot-blink 1.8s ease-in-out infinite;
 }
-@keyframes ls-dot-blink {
-    0%,100% { opacity: 1; }
-    50%      { opacity: 0.4; }
-}
+@keyframes ls-dot-blink { 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
 .ls-title {
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(40px, 5.5vw, 68px); font-weight: 900;
-    letter-spacing: 3px; line-height: 1;
-    background: linear-gradient(175deg, #ffffff 0%, #e8f4ff 40%, #b8d8f0 100%);
+    font-size: clamp(52px, 7vw, 88px); font-weight: 900;
+    letter-spacing: 5px; line-height: 1; margin: 0;
+    background: linear-gradient(170deg, #ffffff 0%, #d0ecff 38%, #8ac4e0 85%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: ls-title-breathe 6s ease-in-out infinite;
+    animation: ls-title-glow 5s ease-in-out infinite;
 }
-@keyframes ls-title-breathe {
-    0%,100% { filter: drop-shadow(0 0 20px rgba(146,208,255,0.20)); }
-    50%      { filter: drop-shadow(0 0 40px rgba(146,208,255,0.50)); }
+@keyframes ls-title-glow {
+    0%,100% { filter: drop-shadow(0 0 18px rgba(91,200,245,0.30)) drop-shadow(0 3px 28px rgba(91,200,245,0.15)); }
+    50%      { filter: drop-shadow(0 0 36px rgba(91,200,245,0.65)) drop-shadow(0 3px 56px rgba(91,200,245,0.35)); }
 }
 .ls-tagline {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 10px; color: rgba(169,215,255,0.50);
-    letter-spacing: 3.5px; text-transform: uppercase;
-    margin-top: 8px;
+    font-size: 11px; color: rgba(169,215,255,0.42);
+    letter-spacing: 5px; text-transform: uppercase;
+    margin-top: 12px;
 }
 
 /* ── Progress block ── */
 .ls-progress-block {
-    width: 380px; margin-top: 24px;
-    display: flex; flex-direction: column; gap: 8px;
+    width: 440px; margin-top: 30px;
+    display: flex; flex-direction: column; gap: 10px;
 }
 .ls-welcome {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 12px; color: #7fd2ff;
-    letter-spacing: 2.8px; text-transform: uppercase;
-    text-align: center; min-height: 18px;
-    opacity: 0; transition: opacity 0.7s ease;
-    text-shadow: 0 0 12px rgba(127,210,255,0.55);
+    font-size: 13px; color: #7fd2ff;
+    letter-spacing: 3.2px; text-transform: uppercase;
+    text-align: center; min-height: 20px;
+    opacity: 0; transition: opacity 0.8s ease;
+    text-shadow: 0 0 16px rgba(127,210,255,0.70);
 }
 .ls-welcome.visible { opacity: 1; }
-/* Bar row: bar + percentage */
-.ls-bar-row {
-    display: flex; align-items: center; gap: 10px;
-}
+.ls-bar-row { display: flex; align-items: center; gap: 12px; }
 .ls-bar-wrap {
-    flex: 1; height: 7px;
-    background: rgba(127,210,255,0.08);
-    border: 1px solid rgba(127,210,255,0.14);
+    flex: 1; height: 10px;
+    background: rgba(91,200,245,0.06);
+    border: 1px solid rgba(91,200,245,0.20);
     border-radius: 99px; overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 12px rgba(91,200,245,0.08);
 }
 .ls-bar {
     height: 100%; width: 0%; position: relative;
-    background: linear-gradient(90deg, #1455aa, #2e8fd4, #5ccfff, #a8eaff);
+    background: linear-gradient(90deg, #0c3378 0%, #1565c0 25%, #2196f3 55%, #4dd0e8 80%, #80ffea 100%);
     border-radius: 99px;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 0 12px rgba(127,210,255,0.70), 0 0 28px rgba(127,210,255,0.25);
+    transition: width 0.45s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 0 16px rgba(91,200,245,0.90), 0 0 36px rgba(91,200,245,0.40), 0 0 60px rgba(91,200,245,0.15);
 }
-/* Animated shimmer on bar */
 .ls-bar::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.30) 50%, transparent 100%);
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.40) 50%, transparent 100%);
     background-size: 200% 100%;
-    animation: ls-bar-shimmer 1.8s linear infinite;
+    animation: ls-shimmer 1.6s linear infinite;
 }
-@keyframes ls-bar-shimmer {
-    from { background-position: -200% 0; }
-    to   { background-position:  200% 0; }
-}
+@keyframes ls-shimmer { from{background-position:-200% 0;} to{background-position:200% 0;} }
 .ls-pct {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 11px; color: rgba(169,215,255,0.65);
-    letter-spacing: 1px; min-width: 34px; text-align: right;
+    font-size: 12px; color: rgba(169,215,255,0.70);
+    letter-spacing: 1px; min-width: 40px; text-align: right;
 }
 .ls-status {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 10px; color: rgba(169,215,255,0.38);
-    letter-spacing: 2px; text-transform: uppercase;
-    text-align: left; min-height: 15px;
+    font-size: 10px; color: rgba(169,215,255,0.32);
+    letter-spacing: 2px; text-transform: uppercase; min-height: 15px;
 }
 
 /* ── Tip block ── */
 .ls-tip-block {
-    display: flex; align-items: baseline; gap: 8px;
-    margin-top: 20px; width: 380px;
-    padding: 7px 12px;
-    border: 1px solid rgba(127,210,255,0.10);
+    display: flex; align-items: baseline; gap: 10px;
+    margin-top: 22px; width: 440px;
+    padding: 9px 16px;
+    border: 1px solid rgba(91,200,245,0.14);
+    border-left: 3px solid rgba(91,200,245,0.40);
     border-radius: 4px;
-    background: rgba(10,24,40,0.45);
+    background: rgba(5,14,28,0.55);
 }
 .ls-tip-label {
     font-family: 'Share Tech Mono', monospace;
     font-size: 9px; font-weight: 700;
-    color: #ffd050; letter-spacing: 2px;
-    flex-shrink: 0;
+    color: #ffd050; letter-spacing: 2.5px; flex-shrink: 0;
+    text-shadow: 0 0 8px rgba(255,208,80,0.6);
 }
 .ls-tip-text {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 9.5px; color: rgba(169,215,255,0.55);
-    letter-spacing: 0.8px; line-height: 1.5;
+    font-size: 10px; color: rgba(169,215,255,0.52);
+    letter-spacing: 0.6px; line-height: 1.5;
     transition: opacity 0.4s ease;
 }
 .ls-tip-text.fade { opacity: 0; }

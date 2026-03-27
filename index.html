@@ -14,7 +14,12 @@
     <!-- Loading Screen -->
     <div id="loading-screen">
         <div class="ls-bg" aria-hidden="true"></div>
-        <div class="ls-particles" aria-hidden="true"></div>
+        <!-- Aurora orbs -->
+        <div class="ls-orb ls-orb-1" aria-hidden="true"></div>
+        <div class="ls-orb ls-orb-2" aria-hidden="true"></div>
+        <div class="ls-orb ls-orb-3" aria-hidden="true"></div>
+        <!-- Horizontal scan sweep -->
+        <div class="ls-scan" aria-hidden="true"></div>
         <!-- Screen corner HUD markers -->
         <div class="ls-hud-corner ls-hud-tl" aria-hidden="true"></div>
         <div class="ls-hud-corner ls-hud-tr" aria-hidden="true"></div>
@@ -22,11 +27,14 @@
         <div class="ls-hud-corner ls-hud-br" aria-hidden="true"></div>
 
         <div class="ls-content">
-            <!-- Emblem: three rings + tower icon -->
+            <!-- Emblem: sonar pulse + 4 rings + tower icon -->
             <div class="ls-emblem" aria-hidden="true">
+                <span class="ls-sonar"></span>
+                <span class="ls-sonar-2"></span>
                 <span class="ls-ring ls-ring-a"></span>
                 <span class="ls-ring ls-ring-b"></span>
                 <span class="ls-ring ls-ring-c"></span>
+                <span class="ls-ring ls-ring-d"></span>
                 <div class="ls-emblem-core">
                     <svg class="ls-tower-svg" viewBox="0 0 40 48" fill="none" aria-hidden="true">
                         <!-- Tower silhouette -->
